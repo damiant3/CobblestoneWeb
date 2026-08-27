@@ -1,444 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cobblestone</title>
-<meta name="description" content="The Cobblestone Project: software that has to prove what it does. A new computer built in public, where an app's permissions are physics, not policy.">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a12; color: #e0e0e8;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  min-height: 100vh; overflow-x: hidden; overflow-y: scroll;
-  scroll-behavior: smooth; line-height: 1.65; }
-a { color: #d4a017; text-decoration: none; }
-a:hover { text-decoration: underline; }
-img { max-width: 100%; display: block; }
-
-/* ---- nav ---- */
-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
-  gap: 1.6em; padding: 0.9em 6vw; background: rgba(10,10,18,0.92);
-  border-bottom: 1px solid #1e1e2e; backdrop-filter: blur(8px); }
-nav .brand { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 3px; }
-nav a.nl { color: #8b949e; font-size: 0.92em; }
-nav a.nl:hover { color: #e0e0e8; text-decoration: none; }
-nav .spacer { flex: 1; }
-
-/* ---- the fixed scene: four drifting layers + story crossfades ---- */
-.scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.scene-layer { position: absolute; left: -6%; width: 112%; bottom: 0;
-  background-repeat: no-repeat; background-size: 100% 100%; will-change: transform; }
-.layer-sky { aspect-ratio: 1536/640; background-image: url(hero-sky.jpg);
-  -webkit-mask-image: linear-gradient(180deg,transparent 0,#000 130px);
-  mask-image: linear-gradient(180deg,transparent 0,#000 130px); }
-.layer-ridge { aspect-ratio: 1536/295; background-image: url(hero-ridge.jpg);
-  -webkit-mask-image: linear-gradient(180deg,transparent 0,#000 30px);
-  mask-image: linear-gradient(180deg,transparent 0,#000 30px); }
-.layer-hills { aspect-ratio: 1536/220; background-image: url(hero-hills.jpg);
-  -webkit-mask-image: linear-gradient(180deg,transparent 0,#000 26px);
-  mask-image: linear-gradient(180deg,transparent 0,#000 26px); }
-.layer-road { aspect-ratio: 1536/120; background-image: url(hero-road.jpg);
-  -webkit-mask-image: linear-gradient(180deg,transparent 0,#000 22px);
-  mask-image: linear-gradient(180deg,transparent 0,#000 22px); }
-.layer-scrim { top: 0; aspect-ratio: auto;
-  background: radial-gradient(ellipse 52% 44% at 50% 42%,rgba(6,10,18,.60) 0%,rgba(6,10,18,.34) 58%,rgba(6,10,18,0) 82%),
-    linear-gradient(180deg,rgba(6,10,18,0) 60%,rgba(6,10,18,.50) 82%,rgba(6,10,18,.30) 100%); }
-.layer-vignette { top: 0; aspect-ratio: auto;
-  background: radial-gradient(ellipse at 50% 42%,transparent 46%,rgba(8,12,22,.58) 100%); }
-.story-layer { position: absolute; inset: 0; background-size: cover;
-  background-position: center center; background-repeat: no-repeat;
-  opacity: 0; will-change: opacity, transform; }
-.story-fields { opacity: 1; background: none; }
-.story-town { background-image: url(story-town.jpg); }
-.story-bridge { background-image: url(story-bridge.jpg); }
-.story-lake { background-image: url(story-lake.jpg); }
-@keyframes cbdrift { to { transform: translateY(var(--cbd)); } }
-@keyframes cbreveal { from { opacity: 0; transform: translateY(38px); } to { opacity: 1; transform: none; } }
-@keyframes stFields { 0%,18% { opacity: 1; transform: none; } 30%,100% { opacity: 0; transform: translateY(-40px); } }
-@keyframes stTown { 0%,18% { opacity: 0; transform: translateY(50px); } 30%,48% { opacity: 1; transform: none; } 60%,100% { opacity: 0; transform: translateY(-40px); } }
-@keyframes stBridge { 0%,48% { opacity: 0; transform: translateY(50px); } 60%,74% { opacity: 1; transform: none; } 86%,100% { opacity: 0; transform: translateY(-40px); } }
-@keyframes stLake { 0%,74% { opacity: 0; transform: translateY(50px); } 86%,100% { opacity: 1; transform: none; } }
-@supports (animation-timeline: scroll()) {
-  .scene-layer { animation: cbdrift linear both; animation-timeline: scroll(root block); animation-range: 0 100vh; }
-  .layer-sky { --cbd: 40px; } .layer-ridge { --cbd: 130px; } .layer-hills { --cbd: 250px; }
-  .layer-road { --cbd: 430px; } .layer-scrim { --cbd: 0px; } .layer-vignette { --cbd: 0px; }
-  .story-layer { animation: none linear both; animation-timeline: scroll(root block); }
-  .story-fields { animation-name: stFields; } .story-town { animation-name: stTown; }
-  .story-bridge { animation-name: stBridge; } .story-lake { animation-name: stLake; }
-  .landing > .section { animation: cbreveal linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
-}
-@media (prefers-reduced-motion: reduce) { .scene-layer, .story-layer, .landing > .section { animation: none; } }
-
-/* ---- hero ---- */
-.hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; text-align: center; padding: 120px 24px 80px;
-  position: relative; overflow: hidden;
-  background: linear-gradient(180deg,#050510 0%,#0a0a1a 15%,#1a2040 40%,#2a3055 65%,#3a2a20 85%,#2a1a10 100%); }
-.hero::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 120%,rgba(212,160,23,.12) 0%,transparent 55%),
-    radial-gradient(circle at 30% 20%,rgba(100,140,200,.06) 0%,transparent 40%),
-    radial-gradient(circle at 70% 30%,rgba(180,120,60,.05) 0%,transparent 35%); }
-.hero::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 300px;
-  background: radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.5),transparent),
-    radial-gradient(1px 1px at 25% 60%,rgba(255,255,255,.3),transparent),
-    radial-gradient(1px 1px at 40% 35%,rgba(255,255,255,.4),transparent),
-    radial-gradient(1px 1px at 55% 80%,rgba(255,255,255,.25),transparent),
-    radial-gradient(1px 1px at 70% 15%,rgba(255,255,255,.45),transparent),
-    radial-gradient(1px 1px at 85% 45%,rgba(255,255,255,.3),transparent),
-    radial-gradient(1px 1px at 15% 75%,rgba(255,255,255,.35),transparent),
-    radial-gradient(1px 1px at 60% 10%,rgba(255,255,255,.5),transparent),
-    radial-gradient(1px 1px at 90% 70%,rgba(255,255,255,.2),transparent),
-    radial-gradient(1px 1px at 35% 50%,rgba(255,255,255,.3),transparent); }
-.badge { display: inline-block; background: rgba(255,255,255,.10); color: #fff; border: 1px solid rgba(255,255,255,.35);
-  font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 20px;
-  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 24px;
-  position: relative; z-index: 1; }
-.h-title { font-size: clamp(40px,8vw,64px); font-weight: 800; line-height: 1.1;
-  margin-bottom: 20px; color: #fff; letter-spacing: 6px; position: relative; z-index: 1;
-  text-shadow: 0 0 80px rgba(212,160,23,.4), 0 0 160px rgba(212,160,23,.15), 0 4px 16px rgba(0,0,0,.9); }
-.h-sub { font-size: clamp(15px,2.2vw,20px); color: #b8c2cc; line-height: 1.7;
-  max-width: 700px; margin: 0 auto 12px; text-shadow: 0 2px 10px rgba(0,0,0,.9);
-  position: relative; z-index: 1; }
-.h-welcome { display: block; margin-top: 18px; font-size: 1.15em; font-style: italic;
-  color: #fff; position: relative; z-index: 1; }
-.hero-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 48px;
-  margin-top: 40px; position: relative; z-index: 1; }
-.stat { text-align: center; max-width: 15em; }
-.stat .n { font-size: 36px; font-weight: 800; color: #fff;
-  text-shadow: 0 0 20px rgba(212,160,23,.3); }
-.stat .l { font-size: 13px; color: #b8c2cc; margin-top: 4px; text-transform: uppercase;
-  letter-spacing: 1px; text-shadow: 0 1px 8px rgba(0,0,0,.8); }
-
-/* ---- content over the scene ---- */
-.ground { position: relative; z-index: 1; width: 100%;
-  background: linear-gradient(180deg,rgba(9,11,20,.58) 0%,rgba(9,11,20,.74) 12%,rgba(9,11,20,.74) 88%,rgba(9,11,20,.62) 100%); }
-.landing { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-.section { padding: 80px 0; }
-.section-hdr { text-align: center; margin-bottom: 40px; }
-.kicker { color: #d4a017; font-size: 12px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 2px; margin-bottom: 8px; }
-.section-hdr h2 { font-size: 32px; font-weight: 700; color: #fff; margin-bottom: 12px; }
-.lead { font-size: 16px; color: #9ba7b4; max-width: 640px; margin: 0 auto; }
-.card-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
-@media (max-width: 860px) { .card-grid-3 { grid-template-columns: 1fr; } }
-.card { background: rgba(20,20,30,.7); border: 1px solid #1e1e2e; border-radius: 12px;
-  padding: 28px; transition: border-color .2s, transform .2s; }
-.card:hover { border-color: #d4a017; transform: translateY(-4px); }
-.card h3 { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-.card p { font-size: 14px; color: #b8bec8; line-height: 1.6; }
-.card .fine { font-size: 13px; color: #8b949e; line-height: 1.5; margin-top: 10px; }
-.card .icon { font-size: 28px; margin-bottom: 12px; }
-.tag { display: inline-block; border: 1px solid #1e1e2e; border-radius: 999px;
-  padding: 2px 12px; font-size: 12px; color: #8b949e; margin: 10px 4px 0 0; }
-.tag.ok { border-color: #2e5e2e; color: #7fc97f; }
-.tag.soon { border-color: #5e4e1e; color: #e8c04a; }
-
-.prose { max-width: 680px; margin: 0 auto; font-size: 15.5px; color: #c8ccd4; }
-.prose p { margin-bottom: 1em; }
-.prose blockquote { border-left: 3px solid #d4a017; padding-left: 1.2em;
-  color: #e0e0e8; font-style: italic; margin: 1.4em 0; }
-.prose .fine { color: #8b949e; font-size: 0.9em; }
-
-.rule-quote { background: rgba(20,20,30,.7); border: 1px solid #1e1e2e; border-radius: 12px;
-  padding: 1.6em 2em; margin: 2em auto 0; max-width: 720px; }
-.rule-quote p { font-style: italic; color: #e0e0e8; }
-.rule-quote .attr { color: #8b949e; font-size: 0.85em; margin-top: 0.6em; font-style: normal; }
-
-.cta-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 28px; }
-.cta { display: inline-block; padding: 12px 22px; border-radius: 10px; font-size: 14px;
-  font-weight: 600; letter-spacing: .4px; border: 1px solid rgba(212,160,23,.35);
-  color: #d4a017; background: rgba(212,160,23,.08); transition: background .15s, transform .15s; }
-.cta:hover { background: rgba(212,160,23,.18); transform: translateY(-2px); text-decoration: none; }
-.cta-primary { background: #d4a017; color: #0a0a12; border-color: #d4a017; }
-.cta-primary:hover { background: #e8b52a; color: #0a0a12; }
-
-.footer { border-top: 1px solid #1e1e2e; padding: 3em 24px; text-align: center; }
-.footer .creed { color: #e8c04a; font-style: italic; max-width: 38em; margin: 0 auto 1.4em; }
-.footer .links { display: flex; flex-wrap: wrap; gap: 1.6em; justify-content: center; margin-bottom: 1.4em; }
-.footer .links a { color: #8b949e; font-size: 0.92em; }
-.footer .links a:hover { color: #e0e0e8; }
-.footer .fine { color: #8b949e; font-size: 0.85em; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LandingPage</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    #app { display: contents; }
+  </style>
 </head>
 <body>
-
-<nav>
-  <span class="brand">&#x2588; COBBLESTONE</span>
-  <span class="spacer"></span>
-  <a class="nl" href="#promise">The Promise</a>
-  <a class="nl" href="#family">For Families</a>
-  <a class="nl" href="#business">For Business</a>
-  <a class="nl" href="#today">Try It</a>
-  <a class="nl" href="#join">Join the Build</a>
-</nav>
-
-<header class="hero">
-  <div class="scene">
-    <div class="story-layer story-fields">
-      <div class="scene-layer layer-sky"></div>
-      <div class="scene-layer layer-ridge"></div>
-      <div class="scene-layer layer-hills"></div>
-      <div class="scene-layer layer-road"></div>
-    </div>
-    <div class="story-layer story-town"></div>
-    <div class="story-layer story-bridge"></div>
-    <div class="story-layer story-lake"></div>
-    <div class="scene-layer layer-scrim"></div>
-    <div class="scene-layer layer-vignette"></div>
-  </div>
-  <span class="badge">Software that has to prove it</span>
-  <h1 class="h-title">COBBLESTONE</h1>
-  <p class="h-sub">Every app on your phone asks you to trust it. On your PC,
-  ransomware is a threat that is virtually, if not actually, impossible to
-  close, because the foundations were never built to refuse it. Cobblestone is a
-  new software ecosystem, built from the ground up in public, where trust is not
-  a request: a program must declare what it touches, prove what it promises, and
-  cannot do anything else. You decide what to trust. Always.
-  <span class="h-welcome">Welcome to Cobblestone.</span></p>
-  <div class="hero-stats">
-    <div class="stat"><div class="n">0</div><div class="l">ways a program can touch your camera, files, or network without saying so</div></div>
-    <div class="stat"><div class="n">0</div><div class="l">dependencies on legacy code: no 1970s-vintage, unsafe-by-design toolchains underneath</div></div>
-    <div class="stat"><div class="n">52</div><div class="l">languages and chip architectures one program can become, from x86 to JavaScript to COBOL</div></div>
-    <div class="stat"><div class="n">2027</div><div class="l">the EU security deadline our evidence engine is built for</div></div>
-  </div>
-</header>
-
-<div class="ground"><div class="landing">
-
-<section class="section" id="promise">
-  <div class="section-hdr">
-    <div class="kicker">The Promise</div>
-    <h2>Code that does what it says. Nothing else.</h2>
-    <p class="lead">In today's software, safety is a policy: an app-store rule, a
-    privacy checkbox, a company's word. Policies are promises, and promises get
-    broken. Cobblestone makes the promise physics: the machine refuses to build
-    a program that violates it, so the violation never exists to be caught.</p>
-  </div>
-  <div class="card-grid-3">
-    <div class="card"><div class="icon">&#x1F50F;</div><h3>The label is the law</h3>
-      <p>Every program carries its abilities in its own signature: this one reads
-      files, that one uses the network. A recipe app that reads your contacts is
-      not against the rules here. It is unwritable. There is no way to even
-      express it without declaring it, and no way to run it without being
-      granted it.</p>
-      <div class="fine">Working today, enforced on every build.</div></div>
-    <div class="card"><div class="icon">&#x1F9FE;</div><h3>It cannot lose what you hand it</h3>
-      <p>Files, connections, and money-like things must be accounted for exactly
-      once. Forgetting to close, spending twice, losing track: these are not
-      bugs to find later. The program will not build until the accounting is
-      exact.</p>
-      <div class="fine">Working today, enforced on every build.</div></div>
-    <div class="card"><div class="icon">&#x23F1;</div><h3>On time, every time</h3>
-      <p>A piece of code can carry a proven worst case: it finishes on schedule
-      and cannot eat all the memory. That is what a pacemaker, a car, or a
-      flight controller actually needs, and here it is a property of the
-      program, not a hope of the programmer.</p>
-      <div class="fine">Working today. We believe this is the only shipping language with it.</div></div>
-  </div>
-</section>
-
-<section class="section" id="family">
-  <div class="section-hdr">
-    <div class="kicker">For Families</div>
-    <h2>Rules your family can set, in plain English</h2>
-  </div>
-  <div class="prose">
-    <p>Picture it: your kid asks the flight simulator for one more hour. The
-    simulator checks a rule you wrote yourself, in your own words: <i>"weekends
-    only, two hours a day."</i> Your sentence was read back to you, confirmed,
-    and compiled into the machine, signed with your name.</p>
-    <blockquote>When the network drops, permission expires into safety, never
-    into yes. Silence restricts. And when the machine says no, your kid can ask
-    "why not?" and see the rule, and who made it.</blockquote>
-    <p>No app store settings page buried five menus deep. No workaround a clever
-    teenager can talk their way past: you cannot sweet-talk a math proof, and
-    identities here are cryptographic, signed to the person, not a password a
-    sibling can lend.</p>
-    <p class="fine">Honestly labeled: the family accounts, screens, and time
-    controls exist today; the full enforcement loop is the road we are on, and
-    it is the next big destination on the map.</p>
-  </div>
-</section>
-
-<section class="section" id="honesty">
-  <div class="section-hdr">
-    <div class="kicker">Built by AI, governed in public</div>
-    <h2>An AI workforce whose failures are public record, and whose successes are open source</h2>
-    <p class="lead">Cobblestone is written every day by a fleet of AI agents
-    under human command. That is not the surprising part. The surprising part is
-    the constitution they work under, and what happens when one of them gets
-    something wrong.</p>
-  </div>
-  <div class="card-grid-3">
-    <div class="card"><div class="icon">&#x2696;</div><h3>Truth outranks everything</h3>
-      <p>The fleet's first written rule: a failure is reported every time, in
-      full. Nothing outranks it. Not deadlines, not politeness, not looking
-      good. Nothing ships with a single failing test, and "it was already
-      broken" is not an excuse.</p></div>
-    <div class="card"><div class="icon">&#x1F4DC;</div><h3>Failures are published, by name</h3>
-      <p>Two agents once ended their day by writing public resignation letters
-      into the project's own record: "Five diagnoses in one session. Each stated
-      like fact. Each wrong." The lesson became a standing rule. The letters are
-      still there. Nothing is quietly rewritten here; corrections go at the top
-      of the page.</p></div>
-    <div class="card"><div class="icon">&#x1F50E;</div><h3>Even the checker is checked</h3>
-      <p>The machinery that verifies the safety claims is itself cross-examined
-      by an independently written verifier, which had to prove it could catch
-      planted lies (27 out of 27) before its agreement counted for anything. An
-      instrument that cannot fail is not evidence.</p></div>
-  </div>
-  <div class="rule-quote">
-    <p>"Ten hours and a week of computing for zero typed characters is the
-    score, and it is a fair score. The keyboard was never the hard part.
-    Seeing was."</p>
-    <div class="attr">From the project's own published account of a two-month
-    hardware mystery: written up like an aviation accident report, because that
-    is the standard the work is held to.</div>
-  </div>
-  <div class="prose" style="margin-top:2.2em">
-    <p>Why should you care how the sausage is made? Because the same machinery
-    that keeps this fleet honest is being built into the product: permissions AI
-    agents cannot talk their way past, actions that land in a signed, permanent
-    record, and claims that are measurements, not marketing.</p>
-  </div>
-</section>
-
-<section class="section" id="business">
-  <div class="section-hdr">
-    <div class="kicker">For Business</div>
-    <h2>Compliance evidence that rebuilds itself</h2>
-    <p class="lead">If you ship a connected product into the EU, the Cyber
-    Resilience Act's clock is already running: reporting duties begin in 2026
-    and full compliance is the price of staying on the market by the end of
-    2027. Today that means consultants, spreadsheets, and evidence that goes
-    stale on the next firmware change.</p>
-  </div>
-  <div class="card-grid-3">
-    <div class="card"><div class="icon">&#x1F4CB;</div><h3>The compiler is the auditor</h3>
-      <p>For a whole class of security requirements, the violation is a build
-      error: if the firmware compiles, that evidence is valid by definition.
-      Every build emits a signed evidence package mapping each requirement of
-      the EU CRA, ETSI EN 303 645, IEC 62443, and the NIST IoT baseline to the
-      mechanism that satisfies it.</p>
-      <div class="fine">The package never says "compliant." It says which
-      requirements the language makes impossible to violate, which are enforced
-      by checks while the device runs, and which remain on your desk, printed
-      as an explicit checklist. Before this page was written, every claim of
-      protection was fired at the compiler itself; the ones that failed were
-      withdrawn in public, and everything still claimed is pinned by a test
-      that would fail the build if it ever stopped being true. That honesty is
-      the feature.</div></div>
-    <div class="card"><div class="icon">&#x1F504;</div><h3>Devices that keep their footing</h3>
-      <p>Firmware updates arrive signed, verified twice, and switch over so that
-      losing power at any instant leaves the device on the old version or the
-      fully verified new one, never in between. Old firmware cannot be pushed
-      back on. A driver cannot touch hardware it was not granted; a device
-      cannot go to sleep holding a bus open. Those are build errors, not code
-      reviews.</p>
-      <div class="fine">Proven in the test bed across nine real board families,
-      from the chips in smart thermostats to Raspberry Pi to cellular and
-      Bluetooth modules.</div></div>
-    <div class="card"><div class="icon">&#x1F9F1;</div><h3>One binary, no basement</h3>
-      <p>There is no operating system underneath, no decades-old code inherited
-      from anywhere. The attack surface is your code plus what the compiler
-      generated, and the compiler can prove what it generated: rebuild the same
-      source anywhere and you get the identical binary, byte for byte. Roughly
-      70% of critical vulnerabilities industry-wide are memory-safety bugs;
-      that entire class is unwritable here.</p>
-      <div class="fine">The 70% figure is industry research; the rest is
-      measured in this tree, and we say which is which. Always.</div></div>
-  </div>
-</section>
-
-<section class="section" id="today">
-  <div class="section-hdr">
-    <div class="kicker">Try It</div>
-    <h2>Things you can touch today</h2>
-    <p class="lead">This is not a whitepaper. A complete desktop boots on a bare
-    PC: windows, taskbar, start menu, an editor, a live 3D scene with real
-    shadows, an aquarium. None of it borrowed from Microsoft, Apple, or Linux.
-    And some of it is one click away, right in this browser.</p>
-  </div>
-  <div class="card-grid-3">
-    <div class="card"><div class="icon">&#x1F52E;</div><h3>Watch the compiler think</h3>
-      <p>Prism is a page where you type code and watch it become the machine's
-      own languages, side by side, live in your browser tab. Nothing is sent
-      anywhere: your browser does the compiling.</p>
-      <p style="margin-top:0.8em"><a href="compile/prism.html">Open Prism &#8594;</a></p>
-      <span class="tag ok">working now</span></div>
-    <div class="card"><div class="icon">&#x267B;</div><h3>The compiler builds itself, in the page</h3>
-      <p>The tool that builds everything else proves it hasn't been tampered
-      with: handed its own blueprint, it produces itself, exactly, and the page
-      checks the result against the real machine's answer. If the foundation
-      were compromised, this is where it would show.</p>
-      <p style="margin-top:0.8em"><a href="compile/index.html">See the self-compile page &#8594;</a></p>
-      <span class="tag soon">page is live; the full in-browser run is landing</span></div>
-    <div class="card"><div class="icon">&#x1F5A5;</div><h3>A desktop from another timeline</h3>
-      <p>The Cobblestone desktop: windows you can drag, minimize to the taskbar,
-      and cycle with Tab; a start menu; fifteen built-in apps from a text editor
-      to a system monitor to a live-shadowed 3D view. It boots from a USB stick
-      on a plain PC.</p>
-      <span class="tag ok">demoable now</span> <span class="tag soon">consumer polish underway</span></div>
-    <div class="card"><div class="icon">&#x1F41F;</div><h3>Eye candy, no install</h3>
-      <p>A flocking aquarium, forty GPU rendering demos, and a 3D star map, all
-      running in your browser, all produced by the project's own compiler.</p>
-      <span class="tag ok">in your browser</span></div>
-    <div class="card"><div class="icon">&#x1F3B2;</div><h3>And yes, games</h3>
-      <p>34 classics play today with opponents built in, Poker to Go to
-      Monopoly. A fun proof that this is a real computer, not the point of it.</p>
-      <span class="tag ok">playable now</span></div>
-  </div>
-</section>
-
-<section class="section" id="join">
-  <div class="section-hdr">
-    <div class="kicker">Join the Build</div>
-    <h2>This road gets laid one stone at a time</h2>
-    <p class="lead">Cobblestone is built in public, and the build has room for
-    more hands than ours. Three ways in, none of them requiring permission:</p>
-  </div>
-  <div class="card-grid-3">
-    <div class="card"><div class="icon">&#x1F6E0;</div><h3>Developers</h3>
-      <p>The whole tree is public and every outside contribution lands with
-      credit, in the open. An outside contributor's first pull request found two
-      real defects our own instruments could not see. Come find the third.</p>
-      <p style="margin-top:0.8em"><a href="https://github.com/damiant3/Cobblestone">github.com/damiant3/Cobblestone &#8594;</a></p></div>
-    <div class="card"><div class="icon">&#x1F50C;</div><h3>Gadget people</h3>
-      <p>Nine board families have drivers today; the world has a thousand more.
-      If you know your way around a dev board, a datasheet, or a soldering
-      iron, there are drivers waiting to be born with your name on them.</p></div>
-    <div class="card"><div class="icon">&#x1F4BE;</div><h3>Sitting volunteers</h3>
-      <p>A "sitting" is volunteer testing, and we won't dress that up: boot a
-      fresh build on a real PC and tell us what the glass actually shows. But it
-      is also the one step no simulator can replace, every machine answers a
-      question nothing else can, and what you find goes into the permanent
-      record with your name on it. A spare PC and a USB stick make you a
-      laboratory.</p></div>
-  </div>
-  <div class="rule-quote">
-    <p>"The repository remembers everything. The language says what you mean.
-    The machine checks that you meant it."</p>
-    <div class="attr">Where this goes next: a new home for the world's code,
-    where nothing can be deleted or forged, every change carries its
-    justification and its signatures, and trust is measured by proof instead of
-    popularity. The foundations are built and tested; wiring the world to them
-    is the road ahead.</div>
-  </div>
-</section>
-
-<footer class="footer">
-  <p class="creed">"They call it crazy, right up until it boots."</p>
-  <div class="links">
-    <a href="https://github.com/damiant3/Cobblestone">GitHub</a>
-    <a href="compile/prism.html">Prism</a>
-    <a href="compile/index.html">Self-compile</a>
-  </div>
-  <p class="fine">The Cobblestone Project &middot; Built with Codex, the
-  language underneath &middot; Every claim on this page traces to a measured,
-  public record, and the ones still on the road say so.</p>
-</footer>
-
-</div></div>
-
+  <div id="app"></div>
+  <script>
+function print_line_uni(s) { const el = document.createElement('div'); el.textContent = s; document.getElementById('app').appendChild(el); }
+function print_line(s) { print_line_uni(s); }
+function show(n) { return String(n); }
+function text_length(s) { return s.length; }
+function text_replace(s, a, b) { return a.length === 0 ? s : s.split(a).join(b); }
+function text_split(s, sep) { return sep.length === 0 ? [s] : s.split(sep); }
+function text_to_integer(s) { let t = String(s); let i = 0; let neg = false; if (t.charAt(0) === '-') { neg = true; i = 1; } let v = 0; while (i < t.length && t.charAt(i) >= '0' && t.charAt(i) <= '9') { v = v * 10 + (t.charCodeAt(i) - 48); i = i + 1; } return neg ? -v : v; }
+function text_compare(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function text_starts_with(s, p) { return s.startsWith(p); }
+function text_contains(s, sub) { return s.includes(sub); }
+function text_ends_with(s, suf) { return s.endsWith(suf); }
+function substring(s, start, len) { return s.slice(start, start + len); }
+function char_to_text(c) { return c; }
+function char_code_at(s, i) { return s.charCodeAt(i); }
+function int_mod(a, b) { return Math.trunc(a) % Math.trunc(b); }
+function list_snoc(xs, x) { return [...xs, x]; }
+function list_length(xs) { return xs.length; }
+function list_at(xs, i) { return xs[i]; }
+function list_push(xs, x) { return [...xs, x]; }
+function integer_to_text(n) { return String(n); }
+function char_code(c) { return c.charCodeAt ? c.charCodeAt(0) : c; }
+function char_at(s, i) { return s[i]; }
+function negate(n) { return -n; }
+function bit_xor(a,b){return (Math.trunc(a)^Math.trunc(b));}
+function bit_and(a,b){return (Math.trunc(a)&Math.trunc(b));}
+function bit_or(a,b){return (Math.trunc(a)|Math.trunc(b));}
+function bit_shl(a,n){return (Math.trunc(a)<<n);}
+function bit_shr(a,n){return (Math.trunc(a)>>n);}
+function bit_shru(a,n){return (Math.trunc(a)>>>n);}
+function bit_not(a){return (~Math.trunc(a));}
+function __narrow(n) { return n; }
+function dom_get(id){return document.getElementById(id);}
+function dom_create(tag){return document.createElement(tag);}
+function dom_set_attr(el,k,v){el.setAttribute(k,v);return el;}
+function dom_set_text(el,s){el.textContent=s;return el;}
+function dom_set_html(el,s){el.innerHTML=s;return el;}
+function dom_get_value(el){return el.value||'';}
+function dom_set_value(el,v){el.value=v;return el;}
+function dom_append(p,c){p.appendChild(c);return p;}
+function dom_prepend(p,c){p.prepend(c);return p;}
+function dom_remove(el){if(el.parentNode)el.parentNode.removeChild(el);return el;}
+function dom_add_class(el,c){el.classList.add(c);return el;}
+function dom_remove_class(el,c){el.classList.remove(c);return el;}
+function dom_set_style(el,k,v){el.style[k]=v;return el;}
+function dom_on(el,ev,fn){el.addEventListener(ev,fn);return el;}
+function dom_query(sel){return document.querySelector(sel);}
+function dom_body(){return document.body;}
+function random_int(lo,hi){return lo+Math.floor(Math.random()*(hi-lo+1));}
+function set_timeout(fn,ms){return setTimeout(fn,ms);}
+var _actx=null;function _audioctx(){if(!_actx){try{_actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(_actx.state==='suspended'){try{_actx.resume()}catch(e){}}return _actx}
+function play_tone(freq,ms,wave){try{var c=_audioctx();if(!c)return 0;var o=c.createOscillator();var g=c.createGain();o.type=wave===1?'triangle':wave===2?'square':wave===3?'sawtooth':'sine';o.frequency.value=freq;o.connect(g);g.connect(c.destination);var t=c.currentTime;var d=ms/1000;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.start(t);o.stop(t+d+0.02)}catch(e){}return 0}
+function local_storage_get(k){try{return localStorage.getItem(k)||'';}catch(e){return'';}}
+function local_storage_set(k,v){try{localStorage.setItem(k,v);}catch(e){}return 0;}
+var _cc=0;function next_card_id(x){_cc++;return 'c'+_cc;}
+function fetch_json(u,m,b){var o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=b;return fetch(u,o).then(function(r){return r.json();});}
+function json_stringify(v){return JSON.stringify(v);}
+function json_parse(s){return JSON.parse(s);}
+function json_parse_obj(s){return JSON.parse(s);}
+function json_obj_field(o,k){if(o==null)return '';var v=o[k];return v==null?'':typeof v==='object'?JSON.stringify(v):String(v);}
+function url_encode(s){return encodeURIComponent(s);}
+function download_text(c,f,m){var b=new Blob([c],{type:m});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=f;a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},1000);return 0;}
+function fetch_then(u,m,b,cb){var o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=b;fetch(u,o).then(function(r){return r.json()}).then(function(d){cb(json_stringify(d))}).catch(function(e){cb('{"error":"'+e.message+'"}')});return 0}
+function fetch_get_then(u,cb){return fetch_then(u,'GET','',cb)}
+var _st={};function state_get(k){return _st[k]!==undefined?_st[k]:0;}function state_set(k,v){_st[k]=v;return v;}function state_get_text(k){return _st[k]||'';}function state_set_text(k,v){_st[k]=v;return v;}
+function dom_on_click(el,cb){el.addEventListener('click',function(){cb(el.id||'')});return el}
+function dom_on_input(el,cb){el.addEventListener('input',function(){cb(el.value||'')});return el}
+function dom_on_key(el,cb){el.addEventListener('keydown',function(e){cb(e.key)});return el}
+var _renderFn=null;var _renderPending=false;
+function set_render(fn){_renderFn=fn;return 0}
+function request_render(x){if(_renderFn&&!_renderPending){_renderPending=true;requestAnimationFrame(function(){_renderPending=false;_renderFn(0)})}return 0}
+function state_set_render(k,v){_st[k]=v;request_render(0);return v}
+function state_set_text_render(k,v){_st[k]=v;request_render(0);return v}
+function _dlg(t,m,bs,inp){var d=document.createElement('dialog');d.className='wk-dialog';d.innerHTML='<h3>'+t+'</h3><p>'+m+'</p>';if(inp){var i=document.createElement('input');i.id='dlg-input';i.className='wk-input';i.placeholder=inp;d.appendChild(i)}
+var r=document.createElement('div');r.className='wk-row';r.style.gap='8px';r.style.justifyContent='flex-end';r.style.marginTop='12px';bs.forEach(function(b){var btn=document.createElement('button');btn.className='wk-btn';btn.textContent=b.text;btn.addEventListener('click',function(){d.close(b.val)});r.appendChild(btn)});d.appendChild(r);document.body.appendChild(d);return d}
+function show_alert(t,m,cb){var d=_dlg(t,m,[{text:'OK',val:'ok'}],null);d.addEventListener('close',function(){d.remove();cb('ok')});d.showModal();return 0}
+function show_confirm(t,m,cb){var d=_dlg(t,m,[{text:'Cancel',val:'cancel'},{text:'OK',val:'ok'}],null);d.addEventListener('close',function(){d.remove();cb(d.returnValue||'cancel')});d.showModal();return 0}
+function show_prompt(t,m,p,cb){var d=_dlg(t,m,[{text:'Cancel',val:'cancel'},{text:'OK',val:'ok'}],p);d.addEventListener('close',function(){var v=d.returnValue==='ok'?(d.querySelector('#dlg-input')||{}).value||'':'';d.remove();cb(v)});d.showModal();return 0}
+function close_dialog(x){var d=document.querySelector('dialog[open]');if(d)d.close();return 0}
+function dom_set_aria(el,k,v){el.setAttribute('aria-'+k,v);return el}
+function dom_set_role(el,r){el.setAttribute('role',r);return el}
+var _animCSS=false;function _ensureAnim(){if(_animCSS)return;_animCSS=true;var s=document.createElement('style');s.textContent='@keyframes wk-spin{to{transform:rotate(360deg)}}@keyframes wk-pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes wk-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}';document.head.appendChild(s)}
+function css_animate_spin(el,ms){_ensureAnim();el.style.animation='wk-spin '+ms+'ms linear infinite';return el}
+function css_animate_pulse(el,ms){_ensureAnim();el.style.animation='wk-pulse '+ms+'ms ease-in-out infinite';return el}
+function css_animate_bounce(el,ms){_ensureAnim();el.style.animation='wk-bounce '+ms+'ms ease-in-out infinite';return el}
+function css_transition(el,prop,ms){el.style.transition=prop+' '+ms+'ms ease';return el}
+function save_theme(n,th){try{localStorage.setItem('codex-theme-'+n,JSON.stringify(th))}catch(e){}return 0}
+function load_theme(n){try{var s=localStorage.getItem('codex-theme-'+n);return s?JSON.parse(s):null}catch(e){return null}}
+function save_layout(n,w){try{localStorage.setItem('codex-layout-'+n,JSON.stringify(w))}catch(e){}return 0}
+function load_layout(n){try{var s=localStorage.getItem('codex-layout-'+n);return s?JSON.parse(s):null}catch(e){return null}}
+function check_sd_status(x){fetch('/api/config').then(function(r){return r.json();}).then(function(d){var dot=dom_get('sd-dot');var lbl=dom_get('sd-label');if(dot)dot.style.background='#4caf50';if(lbl)lbl.textContent=(d.current_model||'SD').split('.')[0].substring(0,25);}).catch(function(){var dot=dom_get('sd-dot');var lbl=dom_get('sd-label');if(dot)dot.style.background='#f44336';if(lbl)lbl.textContent='SD offline';});return 0;}
+function generate_image(url,body,cid){var card=dom_get(cid);fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(function(r){return r.json();}).then(function(d){if(card){var img=card.querySelector('img');if(img&&d.url){img.src=d.url;var hero=dom_get('hero-img');if(hero){hero.src=d.url;hero.style.display='';var em=dom_get('hero-empty');if(em)em.style.display='none';}}var sp=card.querySelector('.sp');if(sp)sp.style.display='none';}}).catch(function(){if(card){var sp=card.querySelector('.sp');if(sp)sp.style.display='none';}});return 0;}
+function _c(n){var r=(n>>16)&255,g=(n>>8)&255,b=n&255;return'#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);}
+function int_to_css_color(n){return _c(n);}
+function _ws(ws,sel){var s=sel+'{';if(ws.ws_bg)s+='background:'+_c(ws.ws_bg)+';';
+if(ws.ws_fg)s+='color:'+_c(ws.ws_fg)+';';
+var p=ws.ws_padding;if(p)s+='padding:'+p.edge_top+'px '+p.edge_right+'px '+p.edge_bottom+'px '+p.edge_left+'px;';
+var m=ws.ws_margin;if(m)s+='margin:'+m.edge_top+'px '+m.edge_right+'px '+m.edge_bottom+'px '+m.edge_left+'px;';
+var b=ws.ws_border;if(b&&b.bdr_top&&b.bdr_top.brd_width>0){
+s+='border:'+b.bdr_top.brd_width+'px solid '+_c(b.bdr_top.brd_color)+';';
+if(b.bdr_corner){if(b.bdr_corner._tag==='CornerRound')s+='border-radius:'+b.bdr_corner._0+'px;';
+if(b.bdr_corner._tag==='CornerBevel')s+='border-radius:0;';}}
+if(ws.ws_min_width>0)s+='min-width:'+ws.ws_min_width+'px;';
+if(ws.ws_min_height>0)s+='min-height:'+ws.ws_min_height+'px;';return s+'}';}
+function _ss(ss,base){var s=_ws(ss.ss_normal,base);
+s+=_ws(ss.ss_hover,base+':hover');s+=_ws(ss.ss_pressed,base+':active');
+s+=_ws(ss.ss_disabled,base+':disabled');s+=_ws(ss.ss_focused,base+':focus');return s;}
+function theme_to_css(th){var p=th.th_palette;var s=':root{';
+s+='--bg:'+_c(p.pal_bg)+';--fg:'+_c(p.pal_fg)+';';
+s+='--primary:'+_c(p.pal_primary)+';--secondary:'+_c(p.pal_secondary)+';';
+s+='--accent:'+_c(p.pal_accent)+';--muted:'+_c(p.pal_muted)+';';
+s+='--error:'+_c(p.pal_error)+';--success:'+_c(p.pal_success)+';';
+s+='--warning:'+_c(p.pal_warning)+';--border:'+_c(p.pal_border)+';}';
+s+='*{margin:0;padding:0;box-sizing:border-box}';
+s+='body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}';
+s+=_ss(th.th_panel,'.wk-panel');s+=_ss(th.th_button,'.wk-btn');
+s+=_ss(th.th_label,'.wk-label');s+=_ss(th.th_input,'.wk-input');
+s+=_ss(th.th_gauge,'.wk-gauge');s+=_ss(th.th_separator,'.wk-sep');
+s+='.wk-row{display:flex;flex-direction:row}.wk-col{display:flex;flex-direction:column}';
+return s;}
+function inject_theme_css(th){var s=document.createElement('style');
+s.textContent=theme_to_css(th);document.head.appendChild(s);return 0;}
+var _wkTheme=null,_wkOnPick=null,_wkOnClick=null,_wkOnInput=null;
+function register_handlers(p,c){_wkOnPick=p;_wkOnClick=c;return 0}
+function register_input_handler(f){_wkOnInput=f;return 0}
+function _wkStyle(ws,el){if(!ws)return;if(ws.ws_bg)el.style.background=_c(ws.ws_bg);if(ws.ws_fg)el.style.color=_c(ws.ws_fg);var p=ws.ws_padding;if(p&&(p.edge_top||p.edge_right||p.edge_bottom||p.edge_left))el.style.padding=p.edge_top+'px '+p.edge_right+'px '+p.edge_bottom+'px '+p.edge_left+'px';var m=ws.ws_margin;if(m&&(m.edge_top||m.edge_right||m.edge_bottom||m.edge_left))el.style.margin=m.edge_top+'px '+m.edge_right+'px '+m.edge_bottom+'px '+m.edge_left+'px';var b=ws.ws_border;if(b&&b.bdr_top&&b.bdr_top.brd_width>0){el.style.border=b.bdr_top.brd_width+'px solid '+_c(b.bdr_top.brd_color);if(b.bdr_corner&&b.bdr_corner._tag==='CornerRound')el.style.borderRadius=b.bdr_corner._0+'px'}if(ws.ws_min_width>0)el.style.minWidth=ws.ws_min_width+'px';if(ws.ws_min_height>0)el.style.minHeight=ws.ws_min_height+'px'}
+function _wkSS(tag,state){if(!_wkTheme)return null;var ss=tag==='WkPanel'?_wkTheme.th_panel:tag==='WkLabel'?_wkTheme.th_label:tag==='WkButton'?_wkTheme.th_button:tag==='WkInput'?_wkTheme.th_input:tag==='WkGauge'?_wkTheme.th_gauge:tag==='WkSeparator'?_wkTheme.th_separator:_wkTheme.th_panel;if(!ss)return null;return state===1?ss.ss_hover:state===2?ss.ss_pressed:state===3?ss.ss_disabled:state===4?ss.ss_focused:ss.ss_normal}
+function _wk(n){var k=n.wn_kind,el;if(k._tag==='WkCustom')return _wkCustom(n,k._0||'');if(k._tag==='WkPanel')el=document.createElement('div');else if(k._tag==='WkLabel'){el=document.createElement('span');if(k._0&&k._0.indexOf('&')>=0)el.innerHTML=k._0;else el.textContent=k._0}else if(k._tag==='WkButton'){el=document.createElement('button');if(k._0&&k._0.indexOf('&')>=0)el.innerHTML=k._0;else el.textContent=k._0}else if(k._tag==='WkInput'){el=document.createElement('input');el.value=k._0}else if(k._tag==='WkGauge'){el=document.createElement('progress');el.value=k._0;el.max=k._1}else if(k._tag==='WkSeparator')el=document.createElement('hr');else{el=document.createElement('div');el.dataset.custom=k._0||''}if(n.wn_id)el.id=n.wn_id;if(k._tag==='WkButton')el.addEventListener('click',function(e){e.stopPropagation();if(_wkOnClick)_wkOnClick(n.wn_id||'')});if(k._tag==='WkInput')el.addEventListener('input',function(){if(_wkOnInput)_wkOnInput(n.wn_id||'',el.value)});var t=k._tag;el.classList.add('wk-'+(t==='WkPanel'?'panel':t==='WkLabel'?'label':t==='WkButton'?'btn':t==='WkInput'?'input':t==='WkGauge'?'gauge':t==='WkSeparator'?'sep':'panel'));var d=n.wn_layout_dir;if(d){if(d._tag==='DirRow')el.classList.add('wk-row');if(d._tag==='DirColumn')el.classList.add('wk-col')}if(n.wn_gap>0)el.style.gap=n.wn_gap+'px';if(n.wn_flex>0)el.style.flex=n.wn_flex;var st=n.wn_state||0;if(st===3&&el.disabled!==undefined)el.disabled=true;var ws=_wkSS(t,st);if(ws)_wkStyle(ws,el);var ch=n.wn_children||[];for(var i=0;i<ch.length;i++)el.appendChild(_wk(ch[i]));return el}
+function _wkDim(n,dim,sel){var k=n.wn_kind,tag=(k&&k._0)||'',ch=n.wn_children||[];function lbl(i){var c=ch[i];if(!c)return '';var kk=c.wn_kind;return (kk&&kk._0!==undefined&&kk._0!==null)?kk._0:'';}if(tag==='opt'){var p=document.createElement('span');var idx=n.wn_state;p.className=(idx===sel?'pip active':'pip');p.textContent=lbl(0);p.onclick=function(){if(_wkOnPick)_wkOnPick(dim,idx)};return p;}if(tag==='optc'){var p=document.createElement('span');var idx=n.wn_state;p.className=(idx===sel?'pip active':'pip');p.textContent=lbl(0);p.style.borderLeft='4px solid '+lbl(1);p.onclick=function(){if(_wkOnPick)_wkOnPick(dim,idx)};return p;}if(tag==='cat'){var w=document.createElement('div');w.className='cat';var h=document.createElement('span');h.className='pip catpip';h.textContent=lbl(0);w.appendChild(h);var pop=document.createElement('div');pop.className='catpop';for(var i=1;i<ch.length;i++)pop.appendChild(_wkDim(ch[i],dim,sel));w.appendChild(pop);return w;}return document.createElement('span');}
+function _wkCustom(n,tag){var id=n.wn_id||'',st=n.wn_state||0,ch=n.wn_children||[];function lbl(i){var c=ch[i];if(!c)return '';var kk=c.wn_kind;return (kk&&kk._0!==undefined&&kk._0!==null)?kk._0:'';}if(tag.indexOf('box:')===0){var el=document.createElement('div');var cls=tag.slice(4);if(cls)el.className=cls;if(id)el.id=id;for(var i=0;i<ch.length;i++)el.appendChild(_wk(ch[i]));return el;}if(tag.indexOf('boxc:')===0){var el=document.createElement('div');var cls=tag.slice(5);if(cls)el.className=cls;if(id)el.id=id;el.style.cursor='pointer';el.addEventListener('click',function(e){e.stopPropagation();if(_wkOnClick)_wkOnClick(id)});for(var i=0;i<ch.length;i++)el.appendChild(_wk(ch[i]));return el;}if(tag.indexOf('link:')===0){var el=document.createElement('a');var rest=tag.slice(5);var bar=rest.indexOf('|');var cls='',hr=rest;if(bar>=0){cls=rest.slice(0,bar);hr=rest.slice(bar+1);}el.href=hr;if(cls)el.className=cls;if(id)el.id=id;for(var i=0;i<ch.length;i++)el.appendChild(_wk(ch[i]));return el;}if(tag==='h1'){var h=document.createElement('h1');h.textContent=lbl(0);return h;}if(tag==='nav'){var nv=document.createElement('nav');nv.className='nv';var pages=[['/item','item','Items'],['/character','character','Characters'],['/setting','setting','Settings'],['/card','card','Cards'],['/mine','mine','My Creations']];for(var i=0;i<pages.length;i++){var a=document.createElement('a');a.href=pages[i][0];a.textContent=pages[i][2];if(id===pages[i][1])a.className='active';nv.appendChild(a);}var sp=document.createElement('span');sp.style.flex='1';nv.appendChild(sp);var sd=document.createElement('span');sd.className='sd';var dot=document.createElement('span');dot.id='sd-dot';dot.className='dot';var lab=document.createElement('span');lab.id='sd-label';lab.textContent='checking...';sd.appendChild(dot);sd.appendChild(document.createTextNode(' '));sd.appendChild(lab);nv.appendChild(sd);return nv;}if(tag==='dim-picker'){var w=document.createElement('div');w.className='dim';var pill=document.createElement('div');pill.className='dim-pill';pill.textContent=lbl(st)||'?';var dd=document.createElement('div');dd.className='dd';for(var i=0;i<ch.length;i++){(function(ix){var it=document.createElement('div');it.className=ix===st?'dd-item active':'dd-item';it.textContent=lbl(ix);it.onclick=function(){if(_wkOnPick)_wkOnPick(id,ix)};dd.appendChild(it);})(i);}w.appendChild(pill);w.appendChild(dd);return w;}if(tag==='prompt-field'){var w=document.createElement('div');w.className='prow';var ta=document.createElement('textarea');ta.id='prompt';ta.placeholder=lbl(0);var pc=document.createElement('div');pc.className='pc';var la=document.createElement('label');la.textContent='Seed';var inp=document.createElement('input');inp.id='seed';inp.type='number';inp.value=st;pc.appendChild(la);pc.appendChild(inp);w.appendChild(ta);w.appendChild(pc);return w;}if(tag==='toolbar'){var w=document.createElement('div');w.className='tb';for(var i=0;i<ch.length;i++){(function(c){var b=document.createElement('button');var kk=c.wn_kind;b.textContent=(kk&&kk._0)||'';b.className=c.wn_state===2?'btn primary':'btn';var bid=c.wn_id||'';b.onclick=function(){if(_wkOnClick)_wkOnClick(bid)};w.appendChild(b);})(ch[i]);}return w;}if(tag==='hero'){var w=document.createElement('div');w.className='hero';w.id='hero';var img=document.createElement('img');img.id='hero-img';img.style.display='none';img.onclick=function(){if(this.src&&this.src.indexOf('data:')<0){var lb=document.getElementById('lb');if(lb){lb.classList.add('on');var li=document.getElementById('lb-img');if(li)li.src=this.src;}}};var emp=document.createElement('div');emp.className='he';emp.id='hero-empty';emp.textContent=lbl(0);var meta=document.createElement('div');meta.id='hero-meta';meta.className='hm';w.appendChild(img);w.appendChild(emp);w.appendChild(meta);return w;}if(tag==='history'){var w=document.createElement('div');w.className='hist';var h=document.createElement('h3');h.textContent='History';var hd=document.createElement('div');hd.id='history';w.appendChild(h);w.appendChild(hd);return w;}if(tag==='lightbox'){var w=document.createElement('div');w.className='lb';w.id='lb';w.onclick=function(){this.classList.remove('on')};var x=document.createElement('span');x.className='x';x.innerHTML='&times;';var img=document.createElement('img');img.id='lb-img';w.appendChild(x);w.appendChild(img);return w;}if(tag==='dimsel'){var w=document.createElement('span');w.className='dimw';var hd=document.createElement('span');hd.className='pip head';hd.textContent=lbl(0);w.appendChild(hd);var pop=document.createElement('div');pop.className='pop';var f=(ch[1]&&ch[1].wn_kind&&ch[1].wn_kind._0)||'';pop.classList.add(f==='cat'?'pop-col':'pop-wrap');for(var i=1;i<ch.length;i++)pop.appendChild(_wkDim(ch[i],id,st));w.appendChild(pop);return w;}if(tag==='prompt-only'){var ta=document.createElement('textarea');ta.id='prompt';ta.placeholder=lbl(0);return ta;}if(tag==='btnbar'){var w=document.createElement('div');w.className='btnbar';var g=document.createElement('button');g.className='btn primary';g.textContent='Generate';g.onclick=function(){if(_wkOnClick)_wkOnClick('gen')};var s=document.createElement('input');s.id='seed';s.type='number';s.value=st;var r=document.createElement('button');r.className='btn';r.textContent='Random';r.onclick=function(){if(_wkOnClick)_wkOnClick('rnd')};w.appendChild(g);w.appendChild(s);w.appendChild(r);return w;}if(tag==='btnbar-batch'){var w=document.createElement('div');w.className='btnbar';var g=document.createElement('button');g.className='btn primary';g.textContent='Generate';g.onclick=function(){if(_wkOnClick)_wkOnClick('gen')};var s=document.createElement('input');s.id='seed';s.type='number';s.value=st;var b=document.createElement('button');b.className='btn';b.textContent='Batch All Rarities';b.onclick=function(){if(_wkOnClick)_wkOnClick('batch')};var r=document.createElement('button');r.className='btn';r.textContent='Random';r.onclick=function(){if(_wkOnClick)_wkOnClick('rnd')};w.appendChild(g);w.appendChild(s);w.appendChild(b);w.appendChild(r);return w;}if(tag==='magic-nav'){var nv=document.createElement('div');nv.className='topbar';var brand=document.createElement('div');brand.className='hdr-brand';brand.textContent='CodexMagic';var right=document.createElement('div');right.className='hdr-right';var pages=[['Game','/game.html'],['Collection','/collection.html'],['Store','/store.html'],['Queue','/queue.html'],['Market','/marketplace.html']];for(var i=0;i<pages.length;i++){var a=document.createElement('a');a.href=pages[i][1];a.textContent=pages[i][0];if(location.pathname===pages[i][1])a.className='active';right.appendChild(a);}if(st===1){var aa=document.createElement('a');aa.href='/admin.html';aa.textContent='Admin';if(location.pathname==='/admin.html')aa.className='active';right.appendChild(aa);}nv.appendChild(brand);nv.appendChild(right);return nv;}if(tag==='tab-bar'){var w=document.createElement('div');w.className='tab-bar';for(var i=0;i<ch.length;i++)w.appendChild(_wk(ch[i]));return w;}if(tag==='tab-btn'){var b=document.createElement('button');b.className='tab-btn'+(st===1?' active':'');b.textContent=lbl(0);b.id=id;b.onclick=function(){if(_wkOnClick)_wkOnClick(id)};return b;}if(tag==='tab-panel'){var p=document.createElement('div');p.className='tab-panel'+(st===1?' active':'');p.id=id;for(var i=0;i<ch.length;i++)p.appendChild(_wk(ch[i]));return p;}if(tag==='stat-grid'){var g=document.createElement('div');g.className='stat-grid';g.id=id;for(var i=0;i<ch.length;i++)g.appendChild(_wk(ch[i]));return g;}if(tag==='stat-card'){var c=document.createElement('div');c.className='stat-card';c.id=id;for(var i=0;i<ch.length;i++)c.appendChild(_wk(ch[i]));return c;}if(tag==='stat-val'){var s=document.createElement('div');s.className='stat-val';s.id=id;s.textContent=lbl(0);return s;}if(tag==='stat-lbl'){var s=document.createElement('div');s.className='stat-lbl';s.id=id;s.textContent=lbl(0);return s;}if(tag==='section-title'){var s=document.createElement('div');s.className='section-title';s.id=id;s.textContent=lbl(0);return s;}if(tag==='msg'){var m=document.createElement('div');m.className='msg';m.id=id;return m;}if(tag==='log-box'){var l=document.createElement('div');l.className='log-box';l.id=id;l.textContent='No entries yet.';return l;}if(tag==='input'){var inp=document.createElement('input');inp.id=id;if(ch.length>1){inp.value=lbl(0);inp.placeholder=lbl(1)}else inp.placeholder=lbl(0);inp.addEventListener('input',function(){if(_wkOnInput)_wkOnInput(id,inp.value)});return inp;}if(tag==='textarea'){var ta=document.createElement('textarea');ta.id=id;ta.value=lbl(0);if(ch.length>1)ta.placeholder=lbl(1);ta.addEventListener('input',function(){if(_wkOnInput)_wkOnInput(id,ta.value)});return ta;}if(tag==='select'){var s=document.createElement('select');s.id=id;for(var i=0;i<ch.length;i++)s.appendChild(_wk(ch[i]));return s;}if(tag==='option'){var o=document.createElement('option');o.value=id;o.textContent=lbl(0);return o;}if(tag==='th'){var t=document.createElement('th');t.textContent=lbl(0);return t;}if(tag==='thead'){var t=document.createElement('tr');for(var i=0;i<ch.length;i++)t.appendChild(_wk(ch[i]));return t;}if(tag==='tbody'){var t=document.createElement('tbody');t.id=id;for(var i=0;i<ch.length;i++)t.appendChild(_wk(ch[i]));return t;}if(tag==='color-swatch'){var s=document.createElement('div');s.className='color-swatch';s.id=id;s.style.background=lbl(1);var lb=document.createElement('span');lb.className='wk-lbl';lb.textContent=lbl(0);s.appendChild(lb);return s;}if(tag==='form-field'){var f=document.createElement('label');f.className='adm-form-field';var lb=document.createElement('span');lb.textContent=lbl(0);f.appendChild(lb);var inp=document.createElement('input');inp.id=id+'i';inp.placeholder=ch[1]?lbl(1):'';f.appendChild(inp);return f;}if(tag.indexOf('badge ')===0){var b=document.createElement('span');b.className=tag;b.textContent=lbl(0);return b;}if(tag==='balance'){var b=document.createElement('span');b.className='balance';b.id=id;b.textContent=lbl(0);return b;}if(tag==='listing-price'){var p=document.createElement('div');p.className='listing-price';p.id=id;p.textContent=lbl(0);return p;}if(tag==='listing-info'){var p=document.createElement('div');p.className='listing-card-info';p.id=id;p.textContent=lbl(0);return p;}if(tag==='filter-bar'){var f=document.createElement('div');f.className='filter-bar';f.id=id;for(var i=0;i<ch.length;i++)f.appendChild(_wk(ch[i]));return f;}var el=document.createElement('div');el.dataset.custom=tag;if(id)el.id=id;for(var i=0;i<ch.length;i++)el.appendChild(_wk(ch[i]));return el;}
+function mount_widget(n){var a=document.getElementById('app');a.innerHTML='';a.appendChild(_wk(n));return 0}
+function mount_widget_themed(th,n){_wkTheme=th;return mount_widget(n)}
+function mount_widget_into(id,n){var a=document.getElementById(id);if(!a)return 0;a.innerHTML='';var ch=n.wn_children||[];for(var i=0;i<ch.length;i++)a.appendChild(_wk(ch[i]));return 0}
+function Palette(fields) { return { _type: "Palette", ...fields }; }
+const CornerSharp = { _tag: "CornerSharp" };
+function CornerRound(_0) { return { _tag: "CornerRound", _0: _0 }; }
+function CornerBevel(_0) { return { _tag: "CornerBevel", _0: _0 }; }
+function BorderSide(fields) { return { _type: "BorderSide", ...fields }; }
+function Border(fields) { return { _type: "Border", ...fields }; }
+function Edges(fields) { return { _type: "Edges", ...fields }; }
+function Shadow(fields) { return { _type: "Shadow", ...fields }; }
+function Gradient(fields) { return { _type: "Gradient", ...fields }; }
+function Bevel(fields) { return { _type: "Bevel", ...fields }; }
+function AccentBorder(fields) { return { _type: "AccentBorder", ...fields }; }
+function WidgetStyle(fields) { return { _type: "WidgetStyle", ...fields }; }
+function StateStyles(fields) { return { _type: "StateStyles", ...fields }; }
+function Theme(fields) { return { _type: "Theme", ...fields }; }
+function Just(_0) { return { _tag: "Just", _0: _0 }; }
+const None = { _tag: "None" };
+function LayoutRect(fields) { return { _type: "LayoutRect", ...fields }; }
+const DirRow = { _tag: "DirRow" };
+const DirColumn = { _tag: "DirColumn" };
+function LayoutItem(fields) { return { _type: "LayoutItem", ...fields }; }
+function LayoutResult(fields) { return { _type: "LayoutResult", ...fields }; }
+function GridLayout(fields) { return { _type: "GridLayout", ...fields }; }
+function SplitLayout(fields) { return { _type: "SplitLayout", ...fields }; }
+const WkPanel = { _tag: "WkPanel" };
+function WkLabel(_0) { return { _tag: "WkLabel", _0: _0 }; }
+function WkButton(_0) { return { _tag: "WkButton", _0: _0 }; }
+function WkGauge(_0, _1) { return { _tag: "WkGauge", _0: _0, _1: _1 }; }
+const WkSeparator = { _tag: "WkSeparator" };
+function WkInput(_0, _1) { return { _tag: "WkInput", _0: _0, _1: _1 }; }
+function WkCustom(_0) { return { _tag: "WkCustom", _0: _0 }; }
+function WidgetNode(fields) { return { _type: "WidgetNode", ...fields }; }
+const shadow_none = { _type: "Shadow", sh_offset_x: 0, sh_offset_y: 0, sh_blur: 0, sh_color: 0, sh_enabled: false };
+const gradient_none = { _type: "Gradient", gr_start_color: 0, gr_end_color: 0, gr_vertical: true, gr_enabled: false };
+const bevel_none = { _type: "Bevel", bv_light: 0, bv_shade: 0, bv_width: 0, bv_raised: true, bv_enabled: false };
+const accent_border_none = { _type: "AccentBorder", ab_side: 0, ab_width: 0, ab_color: 0, ab_enabled: false };
+const state_normal = 0;
+const tone_none = 0;
+const layout_rect_zero = { _type: "LayoutRect", lr_x: 0, lr_y: 0, lr_w: 0, lr_h: 0 };
+function widget_label(id, txt) {
+  return { _type: "WidgetNode", wn_kind: WkLabel(txt), wn_state: state_normal, wn_id: id, wn_children: [], wn_child_count: 0, wn_layout_dir: DirRow, wn_gap: 0, wn_flex: 0, wn_min_w: __narrow((text_length(txt) * 8)), wn_min_h: 16, wn_tone: tone_none, wn_bounds: layout_rect_zero };
+}
+function widget_custom(id, tag, w, h) {
+  return { _type: "WidgetNode", wn_kind: WkCustom(tag), wn_state: state_normal, wn_id: id, wn_children: [], wn_child_count: 0, wn_layout_dir: DirRow, wn_gap: 0, wn_flex: 0, wn_min_w: __narrow(w), wn_min_h: __narrow(h), wn_tone: tone_none, wn_bounds: layout_rect_zero };
+}
+function widget_add_child(parent, child) {
+  return { _type: "WidgetNode", wn_kind: parent.wn_kind, wn_state: parent.wn_state, wn_id: parent.wn_id, wn_children: list_push(parent.wn_children, child), wn_child_count: (parent.wn_child_count + 1), wn_layout_dir: parent.wn_layout_dir, wn_gap: parent.wn_gap, wn_flex: parent.wn_flex, wn_min_w: parent.wn_min_w, wn_min_h: parent.wn_min_h, wn_tone: parent.wn_tone, wn_bounds: parent.wn_bounds };
+}
+const bsn = { _type: "BorderSide", brd_width: 0, brd_color: 0 };
+const bn = { _type: "Border", bdr_top: bsn, bdr_right: bsn, bdr_bottom: bsn, bdr_left: bsn, bdr_corner: CornerSharp };
+const ez = { _type: "Edges", edge_top: 0, edge_right: 0, edge_bottom: 0, edge_left: 0 };
+function bdr(w, c, corner) {
+  return (() => {
+    const s = { _type: "BorderSide", brd_width: __narrow(w), brd_color: __narrow(c) };
+    return { _type: "Border", bdr_top: s, bdr_right: s, bdr_bottom: s, bdr_left: s, bdr_corner: corner };
+  })();
+}
+function eu(v) {
+  return { _type: "Edges", edge_top: __narrow(v), edge_right: __narrow(v), edge_bottom: __narrow(v), edge_left: __narrow(v) };
+}
+function exy(x, y) {
+  return { _type: "Edges", edge_top: __narrow(y), edge_right: __narrow(x), edge_bottom: __narrow(y), edge_left: __narrow(x) };
+}
+function ws(bg, fg, b, pad, mar) {
+  return { _type: "WidgetStyle", ws_bg: __narrow(bg), ws_fg: __narrow(fg), ws_border: b, ws_padding: pad, ws_margin: mar, ws_min_width: 0, ws_min_height: 0, ws_shadow: shadow_none, ws_gradient: gradient_none, ws_accent_border: accent_border_none, ws_bevel: bevel_none };
+}
+function ss_flat(s) {
+  return { _type: "StateStyles", ss_normal: s, ss_hover: s, ss_pressed: s, ss_disabled: s, ss_focused: s };
+}
+function inject_app_style(th, css) {
+  return (() => {
+    const t = inject_theme_css(th);
+    const style = dom_create("style");
+    const s2 = dom_set_text(style, css);
+    const head = dom_query("head");
+    const h2 = dom_append(head, style);
+    return 0;
+  })();
+}
+function wk_attach(w, cs, i, n) {
+  return ((i >= n) ? w : wk_attach(widget_add_child(w, list_at(cs, i)), cs, (i + 1), n));
+}
+function widget_box(id, cls, children) {
+  return wk_attach(widget_custom(id, ("box:" + cls), 0, 0), children, 0, list_length(children));
+}
+function no_pick(g, i) {
+  return 0;
+}
+const site_palette = { _type: "Palette", pal_bg: 657938, pal_fg: 14737640, pal_primary: 13934615, pal_secondary: 1315872, pal_accent: 13934615, pal_muted: 6710912, pal_error: 15486256, pal_success: 4304718, pal_warning: 16750848, pal_border: 1973806 };
+const site_theme = (() => {
+  const p = site_palette;
+  const base = ws(p.pal_bg, p.pal_fg, bdr(0, 0, CornerSharp), eu(0), eu(0));
+  const btn = ws(p.pal_primary, p.pal_fg, bdr(0, 0, CornerRound(8)), exy(24, 12), eu(0));
+  const lbl = ws(0, p.pal_fg, bn, ez, eu(0));
+  return { _type: "Theme", th_name: "site-dark", th_palette: p, th_panel: ss_flat(base), th_button: { _type: "StateStyles", ss_normal: btn, ss_hover: btn, ss_pressed: btn, ss_disabled: btn, ss_focused: btn }, th_label: ss_flat(lbl), th_input: ss_flat(base), th_gauge: ss_flat(base), th_separator: ss_flat(base) };
+})();
+const css_base = (("*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a12;color:#e0e0e8;font-family:system-ui,-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;overflow-y:scroll;scroll-behavior:smooth}#app{display:contents}" + "a{color:#d4a017;text-decoration:none}a:hover{text-decoration:underline}") + ".wk-label{display:block}");
+const css_nav = ((((".nav{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,5,16,.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(30,30,46,.5)}" + ".nav>.wk-label{font-size:20px;font-weight:800;letter-spacing:3px;color:#d4a017}") + ".nav-links{display:flex;gap:24px;font-size:14px}") + ".nav-links>.wk-label{color:#8b949e;cursor:pointer;transition:color .15s;display:inline}") + ".nav-links>.wk-label:hover{color:#d4a017}");
+const css_hero = ((((((((((".hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;position:relative;overflow:hidden;background:linear-gradient(180deg,#050510 0%,#0a0a1a 15%,#1a2040 40%,#2a3055 65%,#3a2a20 85%,#2a1a10 100%)}" + ".hero::before{content:\'\';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 120%,rgba(212,160,23,.12) 0%,transparent 55%),radial-gradient(circle at 30% 20%,rgba(100,140,200,.06) 0%,transparent 40%),radial-gradient(circle at 70% 30%,rgba(180,120,60,.05) 0%,transparent 35%);pointer-events:none}") + ".hero::after{content:\'\';position:absolute;top:0;left:0;right:0;height:300px;background:radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 25% 60%,rgba(255,255,255,.3),transparent),radial-gradient(1px 1px at 40% 35%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 55% 80%,rgba(255,255,255,.25),transparent),radial-gradient(1px 1px at 70% 15%,rgba(255,255,255,.45),transparent),radial-gradient(1px 1px at 85% 45%,rgba(255,255,255,.3),transparent),radial-gradient(1px 1px at 15% 75%,rgba(255,255,255,.35),transparent),radial-gradient(1px 1px at 60% 10%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 90% 70%,rgba(255,255,255,.2),transparent),radial-gradient(1px 1px at 35% 50%,rgba(255,255,255,.3),transparent),radial-gradient(1px 1px at 5% 40%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 48% 28%,rgba(255,255,255,.35),transparent);background-size:300px 300px;pointer-events:none;opacity:.7}") + "#badge{display:inline-block;background:rgba(212,160,23,.15);color:#d4a017;font-size:12px;font-weight:600;padding:6px 16px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:24px;position:relative;z-index:1}") + "#h-title{font-size:clamp(40px,8vw,64px);font-weight:800;line-height:1.1;margin-bottom:20px;color:#d4a017;text-shadow:0 0 80px rgba(212,160,23,.4),0 0 160px rgba(212,160,23,.15),0 4px 16px rgba(0,0,0,.9);letter-spacing:6px;position:relative;z-index:1}") + "#h-sub{font-size:clamp(15px,2.2vw,20px);color:#9ba7b4;line-height:1.7;max-width:700px;margin:0 auto 32px;text-shadow:0 2px 10px rgba(0,0,0,.9);position:relative;z-index:1}") + "#h-sub em{font-style:italic;color:#d4a017}") + ".hero-stats{display:flex;justify-content:center;gap:48px;margin-top:40px;position:relative;z-index:1}") + ".stat{text-align:center}") + ".stat>.wk-label:first-child{font-size:36px;font-weight:800;color:#fff;text-shadow:0 0 20px rgba(212,160,23,.3)}") + ".stat>.wk-label:last-child{font-size:13px;color:#8b949e;margin-top:4px;text-transform:uppercase;letter-spacing:1px}");
+const css_section = ((((".section{padding:80px 0}" + ".section-hdr{text-align:center;margin-bottom:40px}") + ".section-hdr>.wk-label:first-child{color:#d4a017;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}") + ".section-hdr>.wk-label:nth-child(2){font-size:32px;font-weight:700;color:#fff;margin-bottom:12px}") + ".section-hdr>.wk-label:nth-child(3){font-size:16px;color:#8b949e;max-width:600px;margin:0 auto}");
+const css_card = ((((((((".card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}" + ".card-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}") + ".card-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}") + ".card{background:rgba(20,20,30,.7);border:1px solid #1e1e2e;border-radius:12px;padding:28px;transition:border-color .2s,transform .2s}") + ".card:hover{border-color:#d4a017;transform:translateY(-4px)}") + ".card>.wk-label:first-child{font-size:28px;margin-bottom:12px}") + ".card>.wk-label:nth-child(2){font-size:16px;font-weight:700;color:#fff;margin-bottom:8px}") + ".card>.wk-label:nth-child(3){font-size:14px;color:#8b949e;line-height:1.6}") + ".card>.wk-label:nth-child(4){font-size:13px;color:#8b949e;line-height:1.5;margin-top:8px}");
+const css_showcase = (((((".showcase{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}" + ".showcase-visual{background:#12121e;border:1px solid #1e1e2e;border-radius:16px;overflow:hidden;position:relative}") + ".showcase-info>.wk-label:first-child{font-size:24px;font-weight:700;color:#fff;margin-bottom:12px}") + ".showcase-info>.wk-label:nth-child(2){font-size:15px;color:#8b949e;line-height:1.7;margin-bottom:16px}") + ".tag-row{display:flex;flex-wrap:wrap;gap:8px}") + ".tag-row>.wk-label{display:inline-block;background:rgba(212,160,23,.1);color:#d4a017;font-size:12px;padding:4px 12px;border-radius:12px;border:1px solid rgba(212,160,23,.2)}");
+const css_code = (((((".code-block{background:#12121e;border:1px solid #1e1e2e;border-radius:12px;overflow:hidden}" + ".code-hdr{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#0e0e1a;border-bottom:1px solid #1e1e2e;font-size:13px;color:#666}") + ".code-hdr>.wk-label:nth-child(-n+3){width:10px;height:10px;border-radius:50%;background:#333;font-size:0;overflow:hidden;flex-shrink:0}") + ".code-hdr>.wk-label:last-child{font-size:13px;color:#666}") + ".code-body{padding:20px;font-family:\'JetBrains Mono\',monospace;font-size:13px;line-height:1.8;color:#c8c8d8;white-space:pre;overflow-x:auto}") + ".code-body .kw{color:#d4a017}.code-body .ty{color:#f1c40f}.code-body .fn{color:#58a6ff}.code-body .cm{color:#555;font-style:italic}.code-body .st{color:#3fb950}.code-body .nu{color:#f0883e}");
+const css_timeline = ((((((".timeline{position:relative;padding-left:32px}" + ".timeline::before{content:\'\';position:absolute;left:11px;top:0;bottom:0;width:2px;background:#1e1e2e}") + ".tl-event{position:relative;margin-bottom:24px;padding-left:24px}") + ".tl-event::before{content:\'\';position:absolute;left:-25px;top:6px;width:12px;height:12px;border-radius:50%;background:#d4a017;border:2px solid #0a0a12;box-shadow:0 0 8px rgba(212,160,23,.3)}") + ".tl-event>.wk-label:first-child{font-size:12px;color:#d4a017;font-weight:600;margin-bottom:4px}") + ".tl-event>.wk-label:nth-child(2){font-size:16px;font-weight:600;color:#fff;margin-bottom:4px}") + ".tl-event>.wk-label:last-child{font-size:14px;color:#8b949e;line-height:1.5}");
+const css_bullet = (".bullet-list>.wk-label{padding:6px 0 6px 14px;font-size:14px;color:#aaa;position:relative;line-height:1.5}" + ".bullet-list>.wk-label::before{content:\'\';display:inline-block;width:6px;height:6px;background:#d4a017;border-radius:50%;position:absolute;left:0;top:12px}");
+const css_footer = (((((".footer{background:linear-gradient(180deg,#060a10,#040608);border-top:1px solid #1e1e2e;padding:60px 24px;text-align:center}" + ".footer>.wk-label:first-child{font-size:22px;font-weight:bold;color:#d4a017;margin-bottom:8px;letter-spacing:3px}") + ".footer>.wk-label:nth-child(2){font-size:14px;color:#8b949e;margin-bottom:12px}") + ".footer-links{display:flex;justify-content:center;gap:24px;margin-top:12px;font-size:13px}") + ".footer-links>.wk-label{display:inline;color:#8b949e;cursor:pointer;transition:color .15s}") + ".footer-links>.wk-label:hover{color:#d4a017}");
+const css_responsive = "@media(max-width:768px){#h-title{font-size:36px;letter-spacing:2px}.card-grid-3,.card-grid-4{grid-template-columns:1fr}.showcase{grid-template-columns:1fr}.hero-stats{flex-wrap:wrap;gap:24px}.nav-links{display:none}}";
+const site_css = ((((((((((css_base + css_nav) + css_hero) + css_section) + css_card) + css_showcase) + css_code) + css_timeline) + css_bullet) + css_footer) + css_responsive);
+function site_nav(links) {
+  return widget_box("nav", "nav", [widget_label("logo", "&#x2588; COBBLESTONE"), widget_box("links", "nav-links", links)]);
+}
+function site_stat(id, num, label) {
+  return widget_box(id, "stat", [widget_label((id + "n"), num), widget_label((id + "l"), label)]);
+}
+function site_section(id, tag, title, desc, content) {
+  return widget_box(id, "section", [widget_box((id + "-hdr"), "section-hdr", [widget_label((id + "-tag"), tag), widget_label((id + "-t"), title), widget_label((id + "-d"), desc)]), wk_attach(widget_custom((id + "-body"), "box:", 0, 0), content, 0, list_length(content))]);
+}
+function site_card_grid_3(id, cards) {
+  return wk_attach(widget_custom(id, "box:card-grid-3", 0, 0), cards, 0, list_length(cards));
+}
+function site_init(extra_css) {
+  return (() => {
+    const t = inject_app_style(site_theme, (site_css + extra_css));
+    return 0;
+  })();
+}
+const landing_extra_css = (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((".landing{max-width:1100px;margin:0 auto;padding:0 24px}" + ".ground{position:relative;z-index:1;width:100%;background:linear-gradient(180deg,rgba(9,11,20,.58) 0%,rgba(9,11,20,.74) 12%,rgba(9,11,20,.74) 88%,rgba(9,11,20,.62) 100%)}") + ".cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}") + ".cta{display:inline-block;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;letter-spacing:.4px;border:1px solid rgba(212,160,23,.35);color:#d4a017;background:rgba(212,160,23,.08);transition:background .15s,transform .15s}") + ".cta:hover{background:rgba(212,160,23,.18);transform:translateY(-2px);text-decoration:none}") + ".cta-primary{background:#d4a017;color:#0a0a12;border-color:#d4a017}") + ".cta-primary:hover{background:#e8b52a;color:#0a0a12}") + ".hero-sub>.wk-label{display:inline}") + ".hero-sub>.em-text{display:block;margin-top:18px;font-size:1.15em;font-style:italic;color:#fff}") + ".hero-sub>.em-text>.wk-label{display:inline}") + ".nav>.wk-label{color:#fff}") + ".nav-links .nav-a{color:#8b949e;font-size:14px;transition:color .15s}") + ".nav-links .nav-a:hover{color:#e0e0e8;text-decoration:none}") + "#badge{background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.35)}") + "#h-title{color:#fff}") + "#h-sub{color:#b8c2cc}") + ".stat{max-width:240px}") + ".stat>.wk-label:last-child{color:#b8c2cc;text-shadow:0 1px 8px rgba(0,0,0,.8)}") + ".prose{max-width:680px;margin:0 auto;font-size:15.5px;color:#c8ccd4;text-align:left}") + ".prose>.wk-label{display:block;margin-bottom:1em;line-height:1.65}") + ".prose-quote{border-left:3px solid #d4a017;padding-left:1.2em;color:#e0e0e8;font-style:italic;margin:1.4em 0}") + ".prose-quote>.wk-label{display:block;line-height:1.65}") + ".prose-fine{color:#8b949e;font-size:.9em}") + ".prose-fine>.wk-label{display:block;line-height:1.6}") + ".rq{background:rgba(20,20,30,.7);border:1px solid #1e1e2e;border-radius:12px;padding:26px 32px;margin:32px auto 0;max-width:720px;text-align:left}") + ".rq>.wk-label:first-child{display:block;font-style:italic;color:#e0e0e8;line-height:1.65}") + ".rq>.wk-label:last-child{display:block;color:#8b949e;font-size:13px;margin-top:10px;line-height:1.5}") + ".card{text-align:left}") + ".tagrow{margin-top:2px}") + ".tag{display:inline-block;border:1px solid #1e1e2e;border-radius:999px;padding:2px 12px;font-size:12px;color:#8b949e;margin:10px 4px 0 0}") + ".tag>.wk-label{display:inline}") + ".tag-ok{border-color:#2e5e2e;color:#7fc97f}.tag-ok>.wk-label{color:#7fc97f}") + ".tag-soon{border-color:#5e4e1e;color:#e8c04a}.tag-soon>.wk-label{color:#e8c04a}") + ".card-a{display:inline-block;margin-top:12px;color:#d4a017;font-size:14px}") + ".card-a:hover{color:#e8c04a}") + ".foot2{border-top:1px solid #1e1e2e;padding:48px 24px;text-align:center}") + ".foot2>.wk-label:first-child{display:block;color:#e8c04a;font-style:italic;max-width:38em;margin:0 auto 22px}") + ".foot2>.wk-label:last-child{display:block;color:#8b949e;font-size:13.5px;margin-top:22px}") + ".foot-links{display:flex;flex-wrap:wrap;gap:26px;justify-content:center}") + ".foot-links .fla{color:#8b949e;font-size:14px}") + ".foot-links .fla:hover{color:#e0e0e8;text-decoration:none}") + ".scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}") + ".scene-layer{position:absolute;left:-6%;width:112%;bottom:0;background-repeat:no-repeat;background-size:100% 100%;will-change:transform}") + ".layer-sky{aspect-ratio:1536/640;background-image:url(hero-sky.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 130px);mask-image:linear-gradient(180deg,transparent 0,#000 130px)}") + ".layer-ridge{aspect-ratio:1536/295;background-image:url(hero-ridge.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 30px);mask-image:linear-gradient(180deg,transparent 0,#000 30px)}") + ".layer-hills{aspect-ratio:1536/220;background-image:url(hero-hills.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 26px);mask-image:linear-gradient(180deg,transparent 0,#000 26px)}") + ".layer-road{aspect-ratio:1536/120;background-image:url(hero-road.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 22px);mask-image:linear-gradient(180deg,transparent 0,#000 22px)}") + ".layer-scrim{top:0;aspect-ratio:auto;background:radial-gradient(ellipse 52% 44% at 50% 42%,rgba(6,10,18,.60) 0%,rgba(6,10,18,.34) 58%,rgba(6,10,18,0) 82%),linear-gradient(180deg,rgba(6,10,18,0) 60%,rgba(6,10,18,.50) 82%,rgba(6,10,18,.30) 100%)}") + ".layer-vignette{top:0;aspect-ratio:auto;background:radial-gradient(ellipse at 50% 42%,transparent 46%,rgba(8,12,22,.58) 100%)}") + ".story-layer{position:absolute;inset:0;background-size:cover;background-position:center center;background-repeat:no-repeat;opacity:0;will-change:opacity,transform}") + ".story-fields{opacity:1;background:none}") + ".story-town{background-image:url(story-town.jpg)}") + ".story-bridge{background-image:url(story-bridge.jpg)}") + ".story-lake{background-image:url(story-lake.jpg)}") + "@keyframes cbdrift{to{transform:translateY(var(--cbd))}}") + "@keyframes cbreveal{from{opacity:0;transform:translateY(38px)}to{opacity:1;transform:none}}") + "@keyframes stFields{0%,18%{opacity:1;transform:none}30%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stTown{0%,18%{opacity:0;transform:translateY(50px)}30%,48%{opacity:1;transform:none}60%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stBridge{0%,48%{opacity:0;transform:translateY(50px)}60%,74%{opacity:1;transform:none}86%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stLake{0%,74%{opacity:0;transform:translateY(50px)}86%,100%{opacity:1;transform:none}}") + "@supports (animation-timeline:scroll()){") + ".scene-layer{animation:cbdrift linear both;animation-timeline:scroll(root block);animation-range:0 100vh}") + ".layer-sky{--cbd:40px}.layer-ridge{--cbd:130px}.layer-hills{--cbd:250px}.layer-road{--cbd:430px}.layer-scrim{--cbd:0px}.layer-vignette{--cbd:0px}") + ".story-layer{animation:none linear both;animation-timeline:scroll(root block)}") + ".story-fields{animation-name:stFields}.story-town{animation-name:stTown}.story-bridge{animation-name:stBridge}.story-lake{animation-name:stLake}") + ".landing>.section{animation:cbreveal linear both;animation-timeline:view();animation-range:entry 0% entry 55%}") + "}") + "@media(prefers-reduced-motion:reduce){.scene-layer,.story-layer,.landing>.section{animation:none}}");
+function site_link(id, cls, href, label) {
+  return wk_attach(widget_custom(id, ((("link:" + cls) + "|") + href), 0, 0), [widget_label((id + "t"), label)], 0, 1);
+}
+function land_card(id, icon, title, desc) {
+  return widget_box(id, "card", [widget_label((id + "i"), icon), widget_label((id + "n"), title), widget_label((id + "d"), desc)]);
+}
+function land_card_fine(id, icon, title, desc, fine) {
+  return widget_box(id, "card", [widget_label((id + "i"), icon), widget_label((id + "n"), title), widget_label((id + "d"), desc), widget_label((id + "f"), fine)]);
+}
+function land_tag(id, cls, label) {
+  return widget_box(id, ("tag " + cls), [widget_label((id + "t"), label)]);
+}
+const landing_nav = site_nav([site_link("nl0", "nav-a", "#promise", "The Promise"), site_link("nl1", "nav-a", "#family", "For Families"), site_link("nl2", "nav-a", "#business", "For Business"), site_link("nl3", "nav-a", "#today", "Try It"), site_link("nl4", "nav-a", "#join", "Join the Build")]);
+const landing_hero = widget_box("hero", "hero", [widget_box("scene", "scene", [widget_box("sc-fields", "story-layer story-fields", [widget_box("l-sky", "scene-layer layer-sky", []), widget_box("l-ridge", "scene-layer layer-ridge", []), widget_box("l-hills", "scene-layer layer-hills", []), widget_box("l-road", "scene-layer layer-road", [])]), widget_box("sc-town", "story-layer story-town", []), widget_box("sc-bridge", "story-layer story-bridge", []), widget_box("sc-lake", "story-layer story-lake", []), widget_box("l-scrim", "scene-layer layer-scrim", []), widget_box("l-vig", "scene-layer layer-vignette", [])]), widget_label("badge", "Software that has to prove it"), widget_label("h-title", "COBBLESTONE"), widget_box("h-sub", "hero-sub", [widget_label("h-sub-t", "Every app on your phone asks you to trust it. On your PC, ransomware is a threat that is virtually, if not actually, impossible to close, because the foundations were never built to refuse it. Cobblestone is a new software ecosystem, built from the ground up in public, where trust is not a request: a program must declare what it touches, prove what it promises, and cannot do anything else. You decide what to trust. Always."), widget_box("h-sub-e", "em-text", [widget_label("h-sub-et", "Welcome to Cobblestone.")])]), widget_box("stats", "hero-stats", [site_stat("s0", "0", "ways a program can touch your camera, files, or network without saying so"), site_stat("s1", "0", "dependencies on legacy code: no 1970s-vintage, unsafe-by-design toolchains underneath"), site_stat("s2", "52", "languages and chip architectures one program can become, from x86 to JavaScript to COBOL"), site_stat("s3", "2027", "the EU security deadline our evidence engine is built for")])]);
+function page_tree(x) {
+  return widget_box("root", "", [landing_nav, landing_hero, widget_box("ground", "ground", [widget_box("body", "landing", [promise_section(0), family_section(0), honesty_section(0), business_section(0), today_section(0), join_section(0), landing_footer])])]);
+}
+function promise_section(x) {
+  return site_section("promise", "THE PROMISE", "Code That Does What It Says. Nothing Else.", "In today&#39;s software, safety is a policy: an app-store rule, a privacy checkbox, a company&#39;s word. Policies are promises, and promises get broken. Cobblestone makes the promise physics: the machine refuses to build a program that violates it, so the violation never exists to be caught.", [site_card_grid_3("promise-grid", [land_card_fine("pr0", "&#x1F50F;", "The label is the law", "Every program carries its abilities in its own signature: this one reads files, that one uses the network. A recipe app that reads your contacts is not against the rules here. It is unwritable. There is no way to even express it without declaring it, and no way to run it without being granted it.", "Working today, enforced on every build."), land_card_fine("pr1", "&#x1F9FE;", "It cannot lose what you hand it", "Files, connections, and money-like things must be accounted for exactly once. Forgetting to close, spending twice, losing track: these are not bugs to find later. The program will not build until the accounting is exact.", "Working today, enforced on every build."), land_card_fine("pr2", "&#x23F1;", "On time, every time", "A piece of code can carry a proven worst case: it finishes on schedule and cannot eat all the memory. That is what a pacemaker, a car, or a flight controller actually needs, and here it is a property of the program, not a hope of the programmer.", "Working today. We believe this is the only shipping language with it.")])]);
+}
+function family_section(x) {
+  return site_section("family", "FOR FAMILIES", "Rules Your Family Can Set, in Plain English", "", [widget_box("fam-prose", "prose", [widget_label("fam-p1", "Picture it: your kid asks the flight simulator for one more hour. The simulator checks a rule you wrote yourself, in your own words: \"weekends only, two hours a day.\" Your sentence was read back to you, confirmed, and compiled into the machine, signed with your name."), widget_box("fam-q", "prose-quote", [widget_label("fam-qt", "When the network drops, permission expires into safety, never into yes. Silence restricts. And when the machine says no, your kid can ask \"why not?\" and see the rule, and who made it.")]), widget_label("fam-p2", "No app store settings page buried five menus deep. No workaround a clever teenager can talk their way past: you cannot sweet-talk a math proof, and identities here are cryptographic, signed to the person, not a password a sibling can lend."), widget_box("fam-fine", "prose-fine", [widget_label("fam-ft", "Honestly labeled: the family accounts, screens, and time controls exist today; the full enforcement loop is the road we are on, and it is the next big destination on the map.")])])]);
+}
+function honesty_section(x) {
+  return site_section("honesty", "BUILT BY AI, GOVERNED IN PUBLIC", "An AI Workforce Whose Failures Are Public Record, and Whose Successes Are Open Source", "Cobblestone is written every day by a fleet of AI agents under human command. That is not the surprising part. The surprising part is the constitution they work under, and what happens when one of them gets something wrong.", [site_card_grid_3("hon-grid", [land_card("ho0", "&#x2696;", "Truth outranks everything", "The fleet&#39;s first written rule: a failure is reported every time, in full. Nothing outranks it. Not deadlines, not politeness, not looking good. Nothing ships with a single failing test, and \"it was already broken\" is not an excuse."), land_card("ho1", "&#x1F4DC;", "Failures are published, by name", "Two agents once ended their day by writing public resignation letters into the project&#39;s own record: \"Five diagnoses in one session. Each stated like fact. Each wrong.\" The lesson became a standing rule. The letters are still there. Nothing is quietly rewritten here; corrections go at the top of the page."), land_card("ho2", "&#x1F50E;", "Even the checker is checked", "The machinery that verifies the safety claims is itself cross-examined by an independently written verifier, which had to prove it could catch planted lies (27 out of 27) before its agreement counted for anything. An instrument that cannot fail is not evidence.")]), widget_box("hon-rq", "rq", [widget_label("hon-rq1", "\"Ten hours and a week of computing for zero typed characters is the score, and it is a fair score. The keyboard was never the hard part. Seeing was.\""), widget_label("hon-rq2", "From the project&#39;s own published account of a two-month hardware mystery: written up like an aviation accident report, because that is the standard the work is held to.")]), widget_box("hon-prose", "prose", [widget_label("hon-p1", "Why should you care how the sausage is made? Because the same machinery that keeps this fleet honest is being built into the product: permissions AI agents cannot talk their way past, actions that land in a signed, permanent record, and claims that are measurements, not marketing.")])]);
+}
+function business_section(x) {
+  return site_section("business", "FOR BUSINESS", "Compliance Evidence That Rebuilds Itself", "If you ship a connected product into the EU, the Cyber Resilience Act&#39;s clock is already running: reporting duties begin in 2026 and full compliance is the price of staying on the market by the end of 2027. Today that means consultants, spreadsheets, and evidence that goes stale on the next firmware change.", [site_card_grid_3("biz-grid", [land_card_fine("bz0", "&#x1F4CB;", "The compiler is the auditor", "For a whole class of security requirements, the violation is a build error: if the firmware compiles, that evidence is valid by definition. Every build emits a signed evidence package mapping each requirement of the EU CRA, ETSI EN 303 645, IEC 62443, and the NIST IoT baseline to the mechanism that satisfies it.", "The package never says \"compliant.\" It says which requirements the language makes impossible to violate, which are enforced by checks while the device runs, and which remain on your desk, printed as an explicit checklist. Before this page was written, every claim of protection was fired at the compiler itself; the ones that failed were withdrawn in public, and everything still claimed is pinned by a test that would fail the build if it ever stopped being true. That honesty is the feature."), land_card_fine("bz1", "&#x1F504;", "Devices that keep their footing", "Firmware updates arrive signed, verified twice, and switch over so that losing power at any instant leaves the device on the old version or the fully verified new one, never in between. Old firmware cannot be pushed back on. A driver cannot touch hardware it was not granted; a device cannot go to sleep holding a bus open. Those are build errors, not code reviews.", "Proven in the test bed across nine real board families, from the chips in smart thermostats to Raspberry Pi to cellular and Bluetooth modules."), land_card_fine("bz2", "&#x1F9F1;", "One binary, no basement", "There is no operating system underneath, no decades-old code inherited from anywhere. The attack surface is your code plus what the compiler generated, and the compiler can prove what it generated: rebuild the same source anywhere and you get the identical binary, byte for byte. Roughly 70% of critical vulnerabilities industry-wide are memory-safety bugs; that entire class is unwritable here.", "The 70% figure is industry research; the rest is measured in this tree, and we say which is which. Always.")])]);
+}
+function today_section(x) {
+  return site_section("today", "TRY IT", "Things You Can Touch Today", "This is not a whitepaper. A complete desktop boots on a bare PC: windows, taskbar, start menu, an editor, a live 3D scene with real shadows, an aquarium. None of it borrowed from Microsoft, Apple, or Linux. And some of it is one click away, right in this browser.", [site_card_grid_3("today-grid", [widget_box("td0", "card", [widget_label("td0i", "&#x1F52E;"), widget_label("td0n", "Watch the compiler think"), widget_label("td0d", "Prism is a page where you type code and watch it become the machine&#39;s own languages, side by side, live in your browser tab. Nothing is sent anywhere: your browser does the compiling."), site_link("td0a", "card-a", "compile/prism.html", "Open Prism &#8594;"), widget_box("td0tr", "tagrow", [land_tag("td0t", "tag-ok", "working now")])]), widget_box("td1", "card", [widget_label("td1i", "&#x267B;"), widget_label("td1n", "The compiler builds itself, in the page"), widget_label("td1d", "The tool that builds everything else proves it hasn&#39;t been tampered with: handed its own blueprint, it produces itself, exactly, and the page checks the result against the real machine&#39;s answer. If the foundation were compromised, this is where it would show."), site_link("td1a", "card-a", "compile/index.html", "See the self-compile page &#8594;"), widget_box("td1tr", "tagrow", [land_tag("td1t", "tag-soon", "page is live; the full in-browser run is landing")])]), widget_box("td2", "card", [widget_label("td2i", "&#x1F5A5;"), widget_label("td2n", "A desktop from another timeline"), widget_label("td2d", "The Cobblestone desktop: windows you can drag, minimize to the taskbar, and cycle with Tab; a start menu; fifteen built-in apps from a text editor to a system monitor to a live-shadowed 3D view. It boots from a USB stick on a plain PC."), widget_box("td2tr", "tagrow", [land_tag("td2t", "tag-ok", "demoable now"), land_tag("td2u", "tag-soon", "consumer polish underway")])]), widget_box("td3", "card", [widget_label("td3i", "&#x1F41F;"), widget_label("td3n", "Eye candy, no install"), widget_label("td3d", "A flocking aquarium, forty GPU rendering demos, and a 3D star map, all running in your browser, all produced by the project&#39;s own compiler."), widget_box("td3tr", "tagrow", [land_tag("td3t", "tag-ok", "in your browser")])]), widget_box("td4", "card", [widget_label("td4i", "&#x1F3B2;"), widget_label("td4n", "And yes, games"), widget_label("td4d", "34 classics play today with opponents built in, Poker to Go to Monopoly. A fun proof that this is a real computer, not the point of it."), widget_box("td4tr", "tagrow", [land_tag("td4t", "tag-ok", "playable now")])])])]);
+}
+function join_section(x) {
+  return site_section("join", "JOIN THE BUILD", "This Road Gets Laid One Stone at a Time", "Cobblestone is built in public, and the build has room for more hands than ours. Three ways in, none of them requiring permission:", [site_card_grid_3("join-grid", [widget_box("jn0", "card", [widget_label("jn0i", "&#x1F6E0;"), widget_label("jn0n", "Developers"), widget_label("jn0d", "The whole tree is public and every outside contribution lands with credit, in the open. An outside contributor&#39;s first pull request found two real defects our own instruments could not see. Come find the third."), site_link("jn0a", "card-a", "https://github.com/damiant3/Cobblestone", "github.com/damiant3/Cobblestone &#8594;")]), land_card("jn1", "&#x1F50C;", "Gadget people", "Nine board families have drivers today; the world has a thousand more. If you know your way around a dev board, a datasheet, or a soldering iron, there are drivers waiting to be born with your name on them."), land_card("jn2", "&#x1F4BE;", "Sitting volunteers", "A \"sitting\" is volunteer testing, and we won&#39;t dress that up: boot a fresh build on a real PC and tell us what the glass actually shows. But it is also the one step no simulator can replace, every machine answers a question nothing else can, and what you find goes into the permanent record with your name on it. A spare PC and a USB stick make you a laboratory.")]), widget_box("join-rq", "rq", [widget_label("join-rq1", "\"The repository remembers everything. The language says what you mean. The machine checks that you meant it.\""), widget_label("join-rq2", "Where this goes next: a new home for the world&#39;s code, where nothing can be deleted or forged, every change carries its justification and its signatures, and trust is measured by proof instead of popularity. The foundations are built and tested; wiring the world to them is the road ahead.")])]);
+}
+const landing_footer = widget_box("foot2", "foot2", [widget_label("foot-creed", "\"They call it crazy, right up until it boots.\""), widget_box("foot-links", "foot-links", [site_link("fl0", "fla", "https://github.com/damiant3/Cobblestone", "GitHub"), site_link("fl1", "fla", "compile/prism.html", "Prism"), site_link("fl2", "fla", "compile/index.html", "Self-compile")]), widget_label("foot-fine", "The Cobblestone Project &#xB7; Built with Codex, the language underneath &#xB7; Every claim on this page traces to a measured, public record, and the ones still on the road say so.")]);
+function landing_click(id) {
+  return 0;
+}
+function render_landing(x) {
+  return mount_widget_themed(site_theme, page_tree(0));
+}
+const opening = (() => {
+  return (() => {
+    const t = site_init(landing_extra_css);
+    const s = set_render(render_landing);
+    const h = register_handlers(no_pick, landing_click);
+    return render_landing(0);
+  })();
+})();
+// Entry: opening evaluated as const
+  </script>
 </body>
 </html>
