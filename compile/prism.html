@@ -862,6 +862,7 @@ a { color: var(--accent); text-decoration: none; }
     <div class="pills" id="pills-binary" style="display:none">
       <button class="pill active" data-bin="pe">PE (UEFI)</button>
       <button class="pill" data-bin="img">Disk image</button>
+      <button class="pill" data-bin="cdx">CDX</button>
       <button class="pill" disabled title="The ELF plug runs here, but nothing emits the x86 payload it reads: the compiler has no ELF mode, and extract-x86-output.ps1 is dead.">ELF</button>
       <label class="toggle inline" style="margin-left:auto"><input type="checkbox" id="eu-toggle">
         Also produce the compliance evidence package, the CRA and ETSI style
@@ -1909,13 +1910,18 @@ goBtn.addEventListener('click', async () => {
         endBusy(); return;
       }
       let bytes, ms = c.ms, mb = c.mb;
-      const pe = await runW(await moduleBytes(BYTES_FILE.pe), peWire(cdx));
-      ms += pe.ms; mb = Math.max(mb, pe.mb);
-      if (binTarget === 'pe') { bytes = pe.bytes; }
+      // The CDX target IS the compiled payload: the root artifact, no plug
+      // after the compiler. The other two wrap it.
+      if (binTarget === 'cdx') { bytes = cdx; }
       else {
-        const im = await runW(await moduleBytes(BYTES_FILE.img), imgWire(pe.bytes, cdx, IMG_SECTORS));
-        ms += im.ms; mb = Math.max(mb, im.mb);
-        bytes = im.bytes;
+        const pe = await runW(await moduleBytes(BYTES_FILE.pe), peWire(cdx));
+        ms += pe.ms; mb = Math.max(mb, pe.mb);
+        if (binTarget === 'pe') { bytes = pe.bytes; }
+        else {
+          const im = await runW(await moduleBytes(BYTES_FILE.img), imgWire(pe.bytes, cdx, IMG_SECTORS));
+          ms += im.ms; mb = Math.max(mb, im.mb);
+          bytes = im.bytes;
+        }
       }
       // A plug that refuses says so in words on the same stream, and those
       // words are not a file. Catching it here is what keeps a download button
@@ -1927,7 +1933,12 @@ goBtn.addEventListener('click', async () => {
         outEl.innerHTML = '<span class="diag">' + esc(new TextDecoder().decode(bytes)) + '</span>';
         endBusy(); return;
       }
-      emittedBin = { name: BIN_NAME[binTarget], bytes };
+      emittedBin = {
+        name: binTarget === 'cdx'
+          ? (activePath || 'program').replace(/\.codex$/, '').replace(/[^A-Za-z0-9_-]+/g, '-') + '.cdx'
+          : BIN_NAME[binTarget],
+        bytes
+      };
       saveBinBtn.disabled = false;
       setStatus('ok', 'ok');
       setBuildline('ok', emittedBin.name + ' · ' + bytes.length.toLocaleString() + ' bytes · ' +
@@ -2031,7 +2042,7 @@ function renderEmittedHtml() {
 saveBinBtn.addEventListener('click', () => {
   if (!emittedBin) return;
   download(emittedBin.name, emittedBin.bytes,
-           binTarget === 'img' ? 'application/octet-stream' : 'application/vnd.microsoft.portable-executable');
+           binTarget === 'pe' ? 'application/vnd.microsoft.portable-executable' : 'application/octet-stream');
 });
 
 copyOutBtn.addEventListener('click', async () => {
