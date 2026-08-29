@@ -397,5 +397,89 @@
     "decks": 12,
     "prelude": "",
     "source": "Chapter: Example--VecSized\n\n The sized-vector builtins had a registry row, a type and an emitter each and\n zero call sites, so nothing in the tree ever ran one. `vec-singleton` reached\n `__list_cons`, which extends the list it finds in `rsi` while\n `emit-helper-call-1` loads only `rdi`, and the general-protection fault that\n followed was invisible for the same reason: no test named these.\n\n One line per builtin, so a fault in one names itself rather than arriving as\n a silent absence.\n\n `vec-empty` is the only one of the five reached as a bare name rather than a\n call, so its rows are what hold the nullary-builtin route open: without it\n the name is emitted as a call to a symbol nothing defines and the chapter\n fails to compile at all rather than answering wrong.\n\n THE TWO LENGTH ROWS CANNOT CATCH THE OTHER HALF, and the two consuming rows\n below them are not redundant with anything. Measured against a compiler with\n the empty vector emitted as a literal 0: both length rows still answered 0\n and PASSED, because a length read is a load from offset 0 and address 0 is\n mapped and holds zero, so the wrong representation returns the right answer\n by coincidence. Only a row that dereferences the vector fails, and it fails\n at `CR2=fffffffffffffff8` -- the count cell one word below a null pointer.\n\n `vec-cons` APPENDS, and the order rows below are what pin that. Nothing\n documents these five as a user-facing capability, so the name is the only\n thing suggesting a prepend and it is outvoted: `PunctualProbe.md` records\n `__list_snoc` as the one write primitive behind list-push, list-snoc AND\n vec-cons (Damian, 2026-07-04), which makes `vec-cons` the vector-typed\n sibling of `list-snoc` and the name a wart. A prepend reading would put 1 at\n the head below instead of 2, so these rows fail if anyone changes it.\n\nSection: Subjects\n\n  vs-one : Vector 1 Integer\n  vs-one = vec-singleton 7\n\n  vs-two : Vector 2 Integer\n  vs-two = vec-cons 1 (vec-singleton 2)\n\n  vs-nil : Vector 0 Integer\n  vs-nil = vec-empty\n\nSection: Entry\n\n  opening : [Console] Nothing = act\n   print-line-uni (\"vec-length singleton want 1: \" & show (vec-length vs-one))\n   print-line-uni (\"vec-head singleton   want 7: \" & show (vec-head vs-one))\n   print-line-uni (\"vec-length rebuilt    want 1: \" & show (vec-length (vec-singleton 42)))\n   print-line-uni (\"vec-head rebuilt     want 42: \" & show (vec-head (vec-singleton 42)))\n   print-line-uni (\"vec-cons length      want 2: \" & show (vec-length vs-two))\n   print-line-uni (\"vec-cons appends, head stays want 2: \" & show (vec-head vs-two))\n   print-line-uni (\"vec-length empty     want 0: \" & show (vec-length vs-nil))\n   print-line-uni (\"vec-length rebuilt empty want 0: \" & show (vec-length vec-empty))\n   print-line-uni (\"cons onto empty      want 1: \" & show (vec-length (vec-cons 5 vec-empty)))\n   print-line-uni (\"head of that         want 5: \" & show (vec-head (vec-cons 5 vec-empty)))\n  end\n\n\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-ack",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Ack\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  ack : Integer, Integer -> Integer\r\n  ack (m) (n) = if m == 0 then n + 1 else if n == 0 then ack (m - 1) 1 else ack (m - 1) (ack m (n - 1))\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (ack 3 9))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-collatz",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\nChapter: Foreword--MathLib\n\nSection: Common Helpers\n\n  math-abs : Integer -> Integer\n  math-abs (n) = if n < 0 then -n else n\n\n  math-min : Integer, Integer -> Integer\n  math-min (a) (b) = if a < b then a else b\n\n  math-max : Integer, Integer -> Integer\n  math-max (a) (b) = if a > b then a else b\n\n  math-clamp : Integer, Integer, Integer -> Integer\n  math-clamp (lo) (hi) (v) = if v < lo then lo else if v > hi then hi else v\n\n  math-mod : Integer, Integer -> Integer\n  math-mod (a) (b) = a - (a / b) * b\n\n  math-isqrt : Integer -> Integer\n  math-isqrt (n) = if n <= 0 then 0 else math-isqrt-loop n (n / 2 + 1)\n\n  math-isqrt-loop : Integer, Integer -> Integer\n  math-isqrt-loop (n) (guess) =\n    let next = (guess + n / guess) / 2\n    in if next >= guess then guess else math-isqrt-loop n next\n",
+    "source": "Chapter: Bench Collatz\r\n  cites Foreword chapter Console\r\n  cites Foreword chapter MathLib\r\n\r\nSection: Definitions\r\n\r\n  collatz : Integer, Integer -> Integer\r\n  collatz (n) (steps) = if n == 1 then steps else if math-mod n 2 == 0 then collatz (n / 2) (steps + 1) else collatz (3 * n + 1) (steps + 1)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (collatz 837799 0))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-epishare",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench EpiShare\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n Three things have to hold at once and each is deliberate. Two returns, so\r\n there is a second copy to save. A value live ACROSS a real call, so the\r\n allocator must give it a callee-saved register and the epilogue is two\r\n instructions rather than one -- `es-helper` is recursive so the leaf inliner\r\n declines it and the call survives to force that. And a back-edge laid out\r\n last, so the layout does NOT end in a return and nothing falls into the\r\n epilogue.\r\n\r\n At two returns and a two-instruction epilogue, sharing costs two jumps plus\r\n one epilogue and duplicating costs two epilogues: four instructions either\r\n way. **Instruction count cannot tell them apart, and never will** -- that\r\n equality is exact. What separates them is bytes, 12 against 4, and one extra\r\n executed jump on every return. That is why the harness reports bytes, and why\r\n this bench's instruction column is expected to sit still while its byte column\r\n moves.\r\n\r\n  es-helper : Integer -> Integer\r\n  es-helper (n) = if n <= 0 then 0 else es-helper (n - 1) + 2\r\n\r\n  epishare : Integer -> Integer\r\n  epishare (n) = if n < 0 then es-helper (0 - n) + n else if n == 0 then 0 else epishare (n - 1)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (epishare 5))\r\n    print-line-uni (show (epishare (-7)))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-fact",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Fact\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  fact : Integer -> Integer\r\n  fact (n) = if n == 0 then 1 else n * fact (n - 1)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (fact 20))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-fib",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Fib\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  fib : Integer -> Integer\r\n  fib (n) = if n == 0 then 0 else if n == 1 then 1 else fib (n - 1) + fib (n - 2)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (fib 35))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-gcd",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\nChapter: Foreword--MathLib\n\nSection: Common Helpers\n\n  math-abs : Integer -> Integer\n  math-abs (n) = if n < 0 then -n else n\n\n  math-min : Integer, Integer -> Integer\n  math-min (a) (b) = if a < b then a else b\n\n  math-max : Integer, Integer -> Integer\n  math-max (a) (b) = if a > b then a else b\n\n  math-clamp : Integer, Integer, Integer -> Integer\n  math-clamp (lo) (hi) (v) = if v < lo then lo else if v > hi then hi else v\n\n  math-mod : Integer, Integer -> Integer\n  math-mod (a) (b) = a - (a / b) * b\n\n  math-isqrt : Integer -> Integer\n  math-isqrt (n) = if n <= 0 then 0 else math-isqrt-loop n (n / 2 + 1)\n\n  math-isqrt-loop : Integer, Integer -> Integer\n  math-isqrt-loop (n) (guess) =\n    let next = (guess + n / guess) / 2\n    in if next >= guess then guess else math-isqrt-loop n next\n",
+    "source": "Chapter: Bench Gcd\r\n  cites Foreword chapter Console\r\n  cites Foreword chapter MathLib\r\n\r\nSection: Definitions\r\n\r\n  my-gcd : Integer, Integer -> Integer\r\n  my-gcd (a) (b) = if b == 0 then a else my-gcd b (math-mod a b)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (my-gcd 46368 28657))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-joinexit",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench JoinExit\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n Every other bench in this directory returns from its arms. That is a shape,\r\n not a coincidence, and it left the non-tail join exit unmeasured: CL 8600\r\n taught the fall-through to skip blocks that emit nothing and, by naming the\r\n exit block one way and the layout another, made each arm emit a five-byte\r\n jump to the instruction underneath it. All nine benches were green. This one\r\n was 6 instructions before that change, 7 after, and 6 again once both sides\r\n canonicalised the same way.\r\n\r\n  joinexit : Integer -> Integer\r\n  joinexit (x) = let v = if x > 0 then x + 1 else x - 1 in v\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (joinexit 10))\r\n    print-line-uni (show (joinexit (-10)))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-locals",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Locals\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  compute : Integer, Integer -> Integer\r\n  compute (n) (acc) =\r\n    if n == 0 then acc\r\n    else\r\n      let a = n + 1\r\n      in let b = n * 2\r\n      in let c = n - 3\r\n      in let d = a * b\r\n      in let e = b + c\r\n      in let f = c * a\r\n      in compute (n - 1) (acc + d + e + f)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (compute 1000 0))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-regright",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench RegRight\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n Body is (regright(n-1)) * n - n: the recursive call result is a dead\r\n temp on the left of both the multiply and the subtract, with n a\r\n register-local on the right. Both are reg-right in-place folds (imul\r\n rax,rbx then sub rax,rbx with no staging mov). Subtraction is the\r\n case unique to the reg-right path -- non-commutative, the dead temp\r\n is the minuend and lands in the destination.\r\n\r\n  regright : Integer -> Integer\r\n  regright (n) = if n <= 0 then 1 else (regright (n - 1)) * n - n\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (regright 12))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-regstress",
+    "decks": 12,
+    "prelude": "",
+    "source": "Chapter: RegStress\r\n\r\n Register-pressure benchmark. Each `mix4` argument is itself a function\r\n call (`step`), so the result of evaluating one argument cannot stay in\r\n an argument register while the next argument is evaluated -- the codegen\r\n must stage every argument into a callee-saved local before the call.\r\n The four `mix4` calls are independent: each result is consumed only at\r\n the very end. Without per-expression local recycling the staging locals\r\n accumulate monotonically across all four calls and spill past the ten\r\n callee-saved registers; with recycling each call's four staging locals\r\n are reclaimed once the call returns, so the function stays in registers\r\n with no spill traffic.\r\n\r\n Measured (RV64, regstress function body): with per-expression local\r\n recycling 100 instructions and zero spill memory ops; without recycling\r\n 114 instructions and 23 spill loads/stores. To reproduce the baseline,\r\n make rv-emit-binary and rv-emit-user-call return their inner result\r\n directly (skip the next-local restore), rebuild the plug, and recompile.\r\n\r\nSection: Stress\r\n\r\n  step : Integer -> Integer\r\n  step (x) = x * 3 - 1\r\n\r\n  mix4 : Integer, Integer, Integer, Integer -> Integer\r\n  mix4 (a) (b) (c) (d) = a + b * c - d\r\n\r\n  regstress : Integer -> Integer\r\n  regstress (n) =\r\n   let r1 = mix4 (step n) (step (n + 1)) (step (n + 2)) (step (n + 3))\r\n   in let r2 = mix4 (step (n + 4)) (step (n + 5)) (step (n + 6)) (step (n + 7))\r\n   in let r3 = mix4 (step (n + 8)) (step (n + 9)) (step (n + 10)) (step (n + 11))\r\n   in let r4 = mix4 (step (n + 12)) (step (n + 13)) (step (n + 14)) (step (n + 15))\r\n   in r1 + r2 + r3 + r4\r\n\r\n  opening : Integer\r\n  opening = regstress 7\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-sum",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Sum\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  sum-to : Integer, Integer -> Integer\r\n  sum-to (n) (acc) = if n == 0 then acc else sum-to (n - 1) (acc + n)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (sum-to 1000000 0))\r\n  end\r\n\r\nPage 1\r\n"
+  },
+  {
+    "cat": "Bench",
+    "name": "bench-tak",
+    "decks": 12,
+    "prelude": "Chapter: Foreword--Console\n\n We say:\n\nSection: Definitions\n\n  effect Console where\n    print-line-uni : Text -> [Console.Write] Nothing\n    read-line  : [Console.Read] Text\n\nPage 1\n\n\n",
+    "source": "Chapter: Bench Tak\r\n  cites Foreword chapter Console\r\n\r\nSection: Definitions\r\n\r\n  tak : Integer, Integer, Integer -> Integer\r\n  tak (x) (y) (z) = if y >= x then z else tak (tak (x - 1) y z) (tak (y - 1) z x) (tak (z - 1) x y)\r\n\r\nSection: Entry\r\n\r\n  opening : [Console] Nothing = act\r\n    print-line-uni (show (tak 24 16 8))\r\n  end\r\n\r\nPage 1\r\n"
   }
 ]

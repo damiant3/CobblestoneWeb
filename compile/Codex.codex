@@ -7804,7 +7804,7 @@ Section: Disk Foreword Loading
    in let doc = parse-document (make-parse-state (tok-result.tokens) source) ceiling
    in filter-library-cites (doc.citations) 0 (list-length (doc.citations)) []
 
-  disk-load-cite : Fat16Volume, DiskLoadState, Text, Text, Integer -> DiskLoadState
+  disk-load-cite : Fat16Volume, DiskLoadState, Text, Text, Integer -> [Console] DiskLoadState
   disk-load-cite (vol) (st) (quire) (name) (ceiling) =
    let key = quire & ":" & name
    in if text-set-has (st.dls-seen) key then st
@@ -7816,16 +7816,18 @@ Section: Disk Foreword Loading
        in let st2 = disk-load-cites-list vol (DiskLoadState { dls-seen = seen2, dls-chunks = st.dls-chunks }) deps 0 (list-length deps) ceiling
        in let renamed = text-replace content ("Chapter: " & name) ("Chapter: " & quire & "--" & name)
        in DiskLoadState { dls-seen = st2.dls-seen, dls-chunks = list-push (st2.dls-chunks) (renamed & "\n\n") }
-     is None -> DiskLoadState { dls-seen = seen2, dls-chunks = st.dls-chunks }
+     is None ->
+       let noted = print-line-uni ("CITE-MISSING " & quire & " " & name)
+       in DiskLoadState { dls-seen = seen2, dls-chunks = st.dls-chunks }
 
-  disk-load-cites-list : Fat16Volume, DiskLoadState, List CitesDecl, Integer, Integer, Integer -> DiskLoadState
+  disk-load-cites-list : Fat16Volume, DiskLoadState, List CitesDecl, Integer, Integer, Integer -> [Console] DiskLoadState
   disk-load-cites-list (vol) (st) (cite-list) (i) (len) (ceiling) =
    if i >= len then st
    else let c = list-at cite-list i
    in let st2 = disk-load-cite vol st (token-text (c.quire)) (c.chapter-name) ceiling
    in disk-load-cites-list vol st2 cite-list (i + 1) len ceiling
 
-  disk-resolve-forewords : Fat16Volume, Text, Text -> Text
+  disk-resolve-forewords : Fat16Volume, Text, Text -> [Console] Text
   disk-resolve-forewords (vol) (source) (mode) =
    let scan-scale = effective-deck-scale mode (text-length source)
    in let scan-height = scaled-floor scan-scale demand-disk-scan-floor demand-disk-scan-guard-band
@@ -8989,7 +8991,7 @@ Section: Entry Point
   refuse-unknown-mode : Text -> [Console, FileSystem] Nothing
   refuse-unknown-mode (cmd) = act
    print-line-uni "CODEGEN-ERRORS:1"
-   print-line-uni ("  unknown mode '" & cmd & "': nothing emitted, because a mode this compiler does not implement must not come back looking like a successful TEXT build. Modes are CDX, TEXT, IR-UNI, IR-CCE, MEASURE and DISK.")
+   print-line-uni ("  unknown mode '" & cmd & "': nothing emitted, because a mode this compiler does not implement must not come back looking like a successful TEXT build. Modes are CDX, TEXT, IR-UNI, IR-CCE, MEASURE, DISK and RESOLVE.")
    print-line-uni ("CODEGEN-HALTED: unknown mode '" & cmd & "'; nothing emitted")
   end
 
@@ -9025,10 +9027,51 @@ Section: Entry Point
    in let sealed = compact-phase flags poison-parse
    in compile-plain (kept & split.sp-body) cmd mode flags
 
+ RESOLVE's wire, for the consumers built against it (the Prism page and
+ its beds; the boundary and this wire are recorded in
+ PrismDevEnvironment.md's stage-2 convergence): source arrives on stdin
+ exactly as TEXT/CDX take it; the disk is the linear-memory contract
+ (`disk_reserve` before `_start` on wasm, the boot medium on metal);
+ stdout carries the RESOLVED UNIT between `RESOLVE-BEGIN` and
+ `RESOLVE-END` lines -- resolved chapters first, renamed
+ `Chapter: quire--name` exactly as `disk-load-cite` does, then the source
+ verbatim. A host with no volume (`block-sector-count` 0) gets the source
+ back unchanged: the mount is never attempted, so the zeroed-BPB divide a
+ bare medium produces cannot happen here. Resolution is best-effort: a
+ cite whose chapter is not on the volume prepends nothing, and the
+ downstream compile answers ONE CDX3007 at the cite (measured against a
+ library image and its no-library control, 2026-08-28 -- an earlier
+ draft of this paragraph claimed a use-site cascade, and the measurement
+ killed it). `disk-load-cite` still prints one
+ `CITE-MISSING <quire> <name>` line per absent chapter, before the
+ frame, as a refinement CDX3007 cannot make: CDX3007's "not present in
+ this compilation unit" is also what a typo'd chapter name produces,
+ while CITE-MISSING says specifically that the medium was asked and did
+ not have it, and it says so before a compile is paid for.
+
+  emit-resolved : Text -> [Console, FileSystem, Device.Block] Nothing
+  emit-resolved (mode) = act
+   source-raw <- read-file-uni mode
+   let source = utf8-to-cce source-raw
+   in act
+    sectors <- block-sector-count
+    prefix <- if sectors == 0 then act "" end
+     else act
+      vol <- disk-locate-volume
+      disk-resolve-forewords vol source mode
+     end
+    print-line-uni "RESOLVE-BEGIN"
+    print-text (prefix & source)
+    print-line-uni ""
+    print-line-uni "RESOLVE-END"
+   end
+  end
+
   dispatch-on-mode : Text -> [Console, FileSystem, Device.Block] Nothing
   dispatch-on-mode (mode) = act
    let cmd = parse-mode-cmd mode
    in if cmd == "DISK" then emit-from-disk mode
+   else if cmd == "RESOLVE" then emit-resolved mode
    else act
     source-raw <- read-file-uni mode
     let raw = utf8-to-cce source-raw
@@ -45589,7 +45632,10 @@ Section: Expression Lowering
 
   lower-lazy : AExpr, CodexType, LowerCtx, SourceSpan, Integer -> IRExpr
   lower-lazy (inner) (ty) (ctx) (s) (depth) =
-   let inner-ty = peel-fun-return ty
+   let peeled-inner = peel-fun-return ty
+   in let inner-ty = when peeled-inner
+      is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) (aexpr-span inner))
+      is otherwise -> peeled-inner
    in let sfx = integer-to-text depth
    in let cell-n = "__lz-cell" & sfx
    in let unit-n = "__lz-u" & sfx
@@ -45611,18 +45657,19 @@ Section: Expression Lowering
     chapter-renames = ctx.chapter-renames
    }
    in let body-ir = lower-expr-at inner inner-ty lctx (depth + 97)
+   in let val-ty = chain-ret-or inner-ty (ir-expr-type body-ir)
    in let zero = deck-record (IrIntLit 0 s)
    in let one = deck-record (IrIntLit 1 s)
    in let done-read = deck-record (IrFieldAccess cell-name "__lz-done" int-ty-default s)
    in let done-check = deck-record (IrBinary IrEq done-read zero BooleanTy s)
-   in let val-name = deck-record (IrName val-n inner-ty s)
+   in let val-name = deck-record (IrName val-n val-ty s)
    in let store-done = deck-record (IrFieldStore cell-name "__lz-done" one cty s)
    in let store-val = deck-record (IrFieldStore cell-name "__lz-val" val-name cty s)
    in let inner-let2 = deck-record (IrLet s2-n cty store-val val-name s)
    in let inner-let1 = deck-record (IrLet s1-n cty store-done inner-let2 s)
-   in let then-body = deck-record (IrLet val-n inner-ty body-ir inner-let1 s)
-   in let else-body = deck-record (IrFieldAccess cell-name "__lz-val" inner-ty s)
-   in let if-expr = deck-record (IrIf done-check then-body else-body inner-ty s)
+   in let then-body = deck-record (IrLet val-n val-ty body-ir inner-let1 s)
+   in let else-body = deck-record (IrFieldAccess cell-name "__lz-val" val-ty s)
+   in let if-expr = deck-record (IrIf done-check then-body else-body val-ty s)
    in let param = deck-record (IRParam { name = unit-n, type-val = int-ty-default, span = s })
    in let lam = deck-record (IrLambda (list-push [] param) if-expr ty s)
    in deck-record (IrLet cell-n cty cell-ir lam s)
@@ -45853,7 +45900,7 @@ Section: Expression Lowering
    in let func-ir = lower-expr f fn-ty ctx
    in let ret-ty = peel-fun-return (ir-expr-type func-ir)
    in let actual-ret = when ret-ty
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> ret-ty
    in lower-apply-dispatch func-ir arg-ir actual-ret sp
 
@@ -45861,9 +45908,10 @@ Section: Expression Lowering
   lower-apply-lambda-chain (lam) (args) (ty) (ctx) (sp) =
    let arg-irs = for a in args -> lower-expr a NoExpectTy ctx
    in let n = list-length arg-irs
-   in let fn-ty = build-curried-fun-ty arg-irs 0 n ty
+   in let want = expected-or-recorded-ty ty ctx sp
+   in let fn-ty = build-curried-fun-ty arg-irs 0 n want
    in let func-ir = lower-expr lam fn-ty ctx
-   in apply-chain-fold func-ir arg-irs 0 n (ir-expr-type func-ir) ty sp
+   in apply-chain-fold func-ir arg-irs 0 n (ir-expr-type func-ir) want sp
 
   build-curried-fun-ty : List IRExpr, Integer, Integer, CodexType -> CodexType
   build-curried-fun-ty (irs) (i) (n) (ret) =
@@ -46082,7 +46130,7 @@ Section: Expression Lowering
    in let arg-ir = try-unit-convert raw-arg-ir arg-ty sp
    in let resolved-ret = subst-type-vars-from-arg arg-ty (ir-expr-type arg-ir) ret-ty
    in let actual-ret = when resolved-ret
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> resolved-ret
    in let preferred-ret = prefer-applied-ty ty actual-ret (ctx.local-type-vars)
    in if is-unit-ctor func-ir ret-ty then lower-unit-ctor-value arg-ir ret-ty sp
@@ -46097,7 +46145,7 @@ Section: Expression Lowering
    in let arg-ir = lower-expr a arg-ty-hint ctx
    in let resolved-ret = subst-type-vars-from-arg arg-ty-hint (ir-expr-type arg-ir) ret-ty
    in let actual-ret = when resolved-ret
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> resolved-ret
    in let preferred-ret = prefer-applied-ty ty actual-ret (ctx.local-type-vars)
    in let arg-tn = type-name-of (deep-resolve (ctx.ust) (ir-expr-type arg-ir))
@@ -46199,7 +46247,7 @@ Section: Let and Lambda
 
   lower-lambda : List Name, AExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-lambda (params) (body) (ty) (ctx) (sp) =
-   let expected = lambda-expected-ty ty ctx sp
+   let expected = expected-or-recorded-ty ty ctx sp
    in let stripped = strip-forall-ty expected
    in let lparams = lower-lambda-params params stripped 0 sp
    in let lctx = bind-lambda-to-ctx ctx params stripped 0
@@ -46216,16 +46264,18 @@ Section: Let and Lambda
  compiler's TYPE FAILURE atom, for a program the compiler reported clean.
 
  The type was never missing. The checker solved these parameters and filed
- the answer; nothing asked for it here. `lambda-expected-ty` asks -- the same
- `lookup-expr-type` / `deep-resolve` pair `lower-dict-placeholder` already
- uses twenty lines above, against the span the checker recorded under.
+ the answer; nothing asked for it here. `expected-or-recorded-ty` asks -- the
+ same `lookup-expr-type` / `deep-resolve` pair `lower-dict-placeholder`
+ already uses twenty lines above, against the span the checker recorded under.
+ It is named for what it does rather than for the lambda, because the apply
+ family reaches for the same answer when its own fallback is the sentinel.
 
  Only the no-expectation case changes. When the context DID supply a type,
  `expected` is `ty` and every line below is what it was, which is why a
  lambda at a declared parameter was already correct and stays byte-identical.
 
-  lambda-expected-ty : CodexType, LowerCtx, SourceSpan -> CodexType
-  lambda-expected-ty (ty) (ctx) (sp) =
+  expected-or-recorded-ty : CodexType, LowerCtx, SourceSpan -> CodexType
+  expected-or-recorded-ty (ty) (ctx) (sp) =
    when ty
     is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) sp)
     is otherwise -> ty
