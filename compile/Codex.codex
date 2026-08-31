@@ -11259,8 +11259,17 @@ Section: Handoff
 
   bp-magic : Integer = 5063257923364865091
 
+ `hosted-kind` is asked FIRST and it is not an optimisation. The cell is a
+ fixed PHYSICAL address only a bare-metal payload can reach, so on a hosted
+ target this peek faults rather than answering, and it faults before the
+ compiler has run a single rung. Every other path in this chapter is behind
+ this one, because bp-base, bp-armed, bp-paint and the clock all reach here
+ first.
+
   bp-present : Integer -> Boolean
-  bp-present (dummy) = peek-qword bp-cell 0 == bp-magic
+  bp-present (dummy) =
+   if hosted-kind /= 0 then False
+   else peek-qword bp-cell 0 == bp-magic
 
   bp-base : Integer -> Integer
   bp-base (dummy) = if bp-present 0 then peek-qword bp-cell 16 else 0
@@ -12640,7 +12649,7 @@ Section: Primitives
    let p = __heap-save
    in let deck-init = __deck-set p
    in let guarded = deck-reservation-guard p size
-   in let top = if deck-guard-enabled == 0 then 0 else poke-qword-cell deck-reservation-top-cell (p + size)
+   in let top = if deck-guard-enabled == 0 | hosted-kind /= 0 then 0 else poke-qword-cell deck-reservation-top-cell (p + size)
    in let advanced = __heap-advance size
    in p
 
@@ -12681,9 +12690,15 @@ Section: Primitives
    in let b7 = poke-byte addr 7 (int-mod (v / 72057594037927936) 256)
    in v
 
+ The cell is written by the page-table setup in X86_64Boot, which a hosted
+ build never runs, and it is a fixed physical address a hosted process does not
+ map. So on a hosted target the read faults instead of answering, and there is
+ nothing for the guard to read even if it did.
+
   deck-reservation-guard : Integer, Integer -> Integer
   deck-reservation-guard (p) (size) =
-   let guard-base = peek-qword guard-page-base-cell 0
+   if hosted-kind /= 0 then 0
+   else let guard-base = peek-qword guard-page-base-cell 0
    in if guard-base >= guard-page-plausible-floor & p + size >= guard-base
       then poke-byte guard-base 0 0
       else 0
@@ -20589,8 +20604,16 @@ Section: Memory Address Map
  Linux x86-64 syscall numbers. Ours to use, not ours to define.
 
   linux-sys-write : Integer = 1
+  linux-sys-read : Integer = 0
   linux-sys-exit-group : Integer = 231
   linux-stdout-fd : Integer = 1
+  linux-stdin-fd : Integer = 0
+
+ The byte a hosted read stages through. It is a cell rather than the heap
+ frontier because the frontier is the buffer being filled, and a syscall
+ writing into it would land on the next byte the loop is about to store.
+
+  hosted-read-byte-addr : Integer = hosted-cell-base + 40992
 
  The Windows console target. The PE layout is FIXED so both sides can agree on
  addresses without either reading the other's output: the loader gets an image
@@ -20599,10 +20622,18 @@ Section: Memory Address Map
  it builds, because a silent disagreement here is a jump into the wrong page.
 
  The import thunks are ordered GetStdHandle, WriteFile, ExitProcess,
- VirtualAlloc. One descriptor plus its null terminator is 40 bytes, the lookup
- table is five 8-byte thunks, and the address table follows it -- so the first
- IAT slot sits 80 bytes into .idata, and the loader writes the resolved
- addresses there.
+ VirtualAlloc, ReadFile. One descriptor plus its null terminator is 40 bytes,
+ the lookup table is six 8-byte thunks, and the address table follows it -- so
+ the first IAT slot sits 88 bytes into .idata, and the loader writes the
+ resolved addresses there.
+
+ ReadFile is what makes a hosted Windows build able to READ. Without it the
+ target was output-only: the three readers all lowered to the bare-metal serial
+ path, which polls a UART through port I/O and stages through watchdog cells at
+ 28744, and 0x7000 is in the band Windows will not map. A program that only
+ printed ran correctly; one that read a single byte died at 0xC0000005 on its
+ first read, which is why the compiler could never be a Windows binary while
+ every printing arm passed.
 
  VirtualAlloc is imported because the runtime cells sit BELOW any ImageBase the
  loader will accept, so a Windows build cannot map them with a section and has
@@ -20613,23 +20644,33 @@ Section: Memory Address Map
   hosted-win-idata-rva : Integer = 4096
   hosted-win-text-rva : Integer = 8192
   hosted-win-load-addr : Integer = 1056768
-  hosted-win-iat : Integer = 1052752
-  hosted-win-iat-getstdhandle : Integer = 1052752
-  hosted-win-iat-writefile : Integer = 1052760
-  hosted-win-iat-exitprocess : Integer = 1052768
+  hosted-win-iat : Integer = 1052760
+  hosted-win-iat-getstdhandle : Integer = 1052760
+  hosted-win-iat-writefile : Integer = 1052768
+  hosted-win-iat-exitprocess : Integer = 1052776
 
  Two cells a hosted Windows build needs and Linux does not: the console handle,
  cached after the first GetStdHandle, and the dword WriteFile insists on
  writing its transferred count into. Both sit above the print scratch, inside
  the band the container maps.
 
-  hosted-win-iat-virtualalloc : Integer = 1052776
+  hosted-win-iat-virtualalloc : Integer = 1052784
+
+  hosted-win-iat-readfile : Integer = 1052792
 
   hosted-win-mem-commit-reserve : Integer = 12288
   hosted-win-page-readwrite : Integer = 4
   hosted-cell-span : Integer = 65536
   hosted-heap-span : Integer = 3221225472
-  hosted-win-heap-span : Integer = 1073741824
+ THE ARENA IS THE SAME SIZE AS EVERY OTHER TARGET'S AND THAT IS LOAD-BEARING.
+ It was 1 GB while Linux and bare metal took 3, which is invisible to any
+ program that does not reserve a deck and fatal to the one that does: the
+ compiler reserves its phase decks before it prints anything, walked off the
+ end of a 1 GB commit, and died at 0xC0000005 with no output at all. A user
+ program printing and allocating a few megabytes never reached it, so every
+ hosted arm passed over the top of it.
+
+  hosted-win-heap-span : Integer = 3221225472
   hosted-win-cell-base : Integer = 1342177280
   hosted-win-heap-base : Integer = 1610612736
   hosted-win-cells-failed-code : Integer = 90
@@ -20646,6 +20687,15 @@ Section: Memory Address Map
   hosted-win-print-base-addr : Integer = hosted-win-cell-base + 40960
   hosted-win-handle-addr : Integer = hosted-win-cell-base + 40976
   hosted-win-written-addr : Integer = hosted-win-cell-base + 40984
+
+ The read side's three cells: the cached stdin handle, the dword ReadFile
+ insists on writing its transferred count into, and the one byte it reads into.
+ They are separate from the write side's because a read and a write can be in
+ flight in the same expression and sharing the count cell would lose one.
+
+  hosted-win-in-handle-addr : Integer = hosted-win-cell-base + 40992
+  hosted-win-read-count-addr : Integer = hosted-win-cell-base + 41000
+  hosted-win-read-byte-addr : Integer = hosted-win-cell-base + 41008
 
 
  The page an application processor begins executing in. A start-up IPI's
@@ -21397,11 +21447,11 @@ Section: Watchdog Timer Check
 
   emit-watchdog-ring-write : CodegenState -> CodegenState
   emit-watchdog-ring-write (st) =
-   let st1 = st-append-code st (li reg-rdi wd-ring-head-addr)
+   let st1 = st-append-code st (li reg-rdi (st-cell st wd-ring-head-addr))
    in let st2 = st-append-code st1 (mov-load reg-rax reg-rdi 0)
    in let st3 = st-append-code st2 (and-ri reg-rax 3)
    in let st4 = st-append-code st3 (shl-ri reg-rax 5)
-   in let st5 = st-append-code st4 (li reg-rsi wd-ring-buf-addr)
+   in let st5 = st-append-code st4 (li reg-rsi (st-cell st4 wd-ring-buf-addr))
    in let st6 = st-append-code st5 (add-rr reg-rsi reg-rax)
    in let st7 = st-append-code st6 (mov-store reg-rsi reg-rcx 0)
    in let st8 = st-append-code st7 (mov-load reg-rdx reg-rsp 64)
@@ -21440,21 +21490,21 @@ Section: Watchdog Timer Check
   emit-watchdog-timer-check : CodegenState -> CodegenState
   emit-watchdog-timer-check (st) =
    let st0 = st-append-code st (mov-load reg-rcx reg-rsp 40)
-   in let st2 = st-append-code st0 (li reg-rdi wd-last-heap-addr)
+   in let st2 = st-append-code st0 (li reg-rdi (st-cell st0 wd-last-heap-addr))
    in let st3 = st-append-code st2 (mov-load reg-rdx reg-rdi 0)
    in let st4 = st-append-code st3 (cmp-rr reg-r10 reg-rdx)
    in let heap-same-pos = st4.code-len
    in let st5 = st-append-code st4 (jcc cc-e 0)
    in let st6 = st-append-code st5 (mov-store reg-rdi reg-r10 0)
-   in let st7 = st-append-code st6 (li reg-rdi wd-last-rip-addr)
+   in let st7 = st-append-code st6 (li reg-rdi (st-cell st6 wd-last-rip-addr))
    in let st8 = st-append-code st7 (mov-store reg-rdi reg-rcx 0)
-   in let st9 = st-append-code st8 (li reg-rdi wd-stale-tick-addr)
+   in let st9 = st-append-code st8 (li reg-rdi (st-cell st8 wd-stale-tick-addr))
    in let st10 = st-append-code st9 (li reg-rax 0)
    in let st11 = st-append-code st10 (mov-store reg-rdi reg-rax 0)
    in let doneA-pos = st11.code-len
    in let st12 = st-append-code st11 (jmp 0)
    in let st13 = patch-jcc-at st12 heap-same-pos (st12.code-len)
-   in let st14 = st-append-code st13 (li reg-rdi wd-last-rip-addr)
+   in let st14 = st-append-code st13 (li reg-rdi (st-cell st13 wd-last-rip-addr))
    in let st15 = st-append-code st14 (mov-load reg-rdx reg-rdi 0)
    in let st16 = st-append-code st15 (mov-rr reg-rax reg-rcx)
    in let st17 = st-append-code st16 (sub-rr reg-rax reg-rdx)
@@ -21466,14 +21516,14 @@ Section: Watchdog Timer Check
    in let rip-same-pos = st22.code-len
    in let st23 = st-append-code st22 (jcc cc-be 0)
    in let st24 = st-append-code st23 (mov-store reg-rdi reg-rcx 0)
-   in let st25 = st-append-code st24 (li reg-rdi wd-stale-tick-addr)
+   in let st25 = st-append-code st24 (li reg-rdi (st-cell st24 wd-stale-tick-addr))
    in let st26 = st-append-code st25 (li reg-rax 0)
    in let st27 = st-append-code st26 (mov-store reg-rdi reg-rax 0)
    in let doneB-pos = st27.code-len
    in let st28 = st-append-code st27 (jmp 0)
    in let st29 = patch-jcc-at st28 rip-same-pos (st28.code-len)
    in let st-ring = emit-watchdog-ring-write st29
-   in let st30 = st-append-code st-ring (li reg-rdi wd-stale-tick-addr)
+   in let st30 = st-append-code st-ring (li reg-rdi (st-cell st-ring wd-stale-tick-addr))
    in let st31 = st-append-code st30 (mov-load reg-rax reg-rdi 0)
    in let st32 = st-append-code st31 (add-ri reg-rax 1)
    in let st33 = st-append-code st32 (mov-store reg-rdi reg-rax 0)
@@ -22422,13 +22472,13 @@ Section: Interrupt Setup
    in let st14 = st-append-code st13 (mov-store reg-rdi reg-rax 0)
    in let st15 = st-append-code st14 (li reg-rdi (st-cell st14 arena-base-addr))
    in let st18 = st-append-code st15 (mov-store reg-rdi reg-rax 0)
-   in let st19 = st-append-code st18 (li reg-rdi wd-stale-tick-addr)
+   in let st19 = st-append-code st18 (li reg-rdi (st-cell st18 wd-stale-tick-addr))
    in let st20 = st-append-code st19 (mov-store reg-rdi reg-rax 0)
-   in let st21 = st-append-code st20 (li reg-rdi wd-last-heap-addr)
+   in let st21 = st-append-code st20 (li reg-rdi (st-cell st20 wd-last-heap-addr))
    in let st22 = st-append-code st21 (mov-store reg-rdi reg-rax 0)
-   in let st23 = st-append-code st22 (li reg-rdi wd-last-rip-addr)
+   in let st23 = st-append-code st22 (li reg-rdi (st-cell st22 wd-last-rip-addr))
    in let st24 = st-append-code st23 (mov-store reg-rdi reg-rax 0)
-   in let st25 = st-append-code st24 (li reg-rdi wd-ring-head-addr)
+   in let st25 = st-append-code st24 (li reg-rdi (st-cell st24 wd-ring-head-addr))
    in let st26 = st-append-code st25 (mov-store reg-rdi reg-rax 0)
    in let st27 = st-append-code st26 (li reg-rdi cap-expiry-addr)
    in let st28 = st-append-code st27 (mov-store reg-rdi reg-rax 0)
@@ -24944,7 +24994,8 @@ Section: Builtin Emission
   emit-read-file-builtin (st) (args) =
     let r = emit-expr (st-set-tail-pos st False) (list-at args 0)
    in let st1 = st-append-code (r.state) (mov-rr reg-rdi (r.reg))
-   in let st2 = emit-call-to st1 "__bare_metal_read_serial"
+   in let st2 = if st-hosted st1 then emit-call-to st1 "__hosted_read_all_uni"
+    else emit-call-to st1 "__bare_metal_read_serial"
    in let rd = alloc-temp st2
    in EmitResult {
    state = st-append-code (rd.state) (mov-rr (rd.reg) reg-rax),
@@ -26063,7 +26114,7 @@ Section: Bare-Metal Start
   emit-pet-watchdog-helper (st) =
    let st1 = record-func-offset st "__pet_watchdog"
    in let st2 = st-append-code st1 (push-r reg-rax)
-   in let st3 = st-append-code st2 (li reg-rax wd-stale-tick-addr)
+   in let st3 = st-append-code st2 (li reg-rax (st-cell st2 wd-stale-tick-addr))
    in let st4 = st-append-code st3 [72, 199, 0, 0, 0, 0, 0]
    in let st5 = st-append-code st4 (pop-r reg-rax)
    in st-append-code st5 [195]
@@ -26137,12 +26188,12 @@ Section: Bare-Metal Start
   emit-watchdog-stack-walk : CodegenState -> CodegenState
   emit-watchdog-stack-walk (st) =
    let st1 = emit-oom-string st [83, 84, 75, 61] 0
-   in let st2 = st-append-code st1 (li reg-rdi wd-ring-head-addr)
+   in let st2 = st-append-code st1 (li reg-rdi (st-cell st1 wd-ring-head-addr))
    in let st3 = st-append-code st2 (mov-load reg-rax reg-rdi 0)
    in let st4 = st-append-code st3 (sub-ri reg-rax 1)
    in let st5 = st-append-code st4 (and-ri reg-rax 3)
    in let st6 = st-append-code st5 (shl-ri reg-rax 5)
-   in let st7 = st-append-code st6 (li reg-rsi wd-ring-buf-addr)
+   in let st7 = st-append-code st6 (li reg-rsi (st-cell st6 wd-ring-buf-addr))
    in let st8 = st-append-code st7 (add-rr reg-rsi reg-rax)
    in let st9 = st-append-code st8 (mov-load reg-rsi reg-rsi 8)
    in emit-watchdog-stack-walk-loop st9 0
@@ -30184,6 +30235,252 @@ Section: I/O Boundary Helpers
    in let st24 = st-append-code st23 (pop-r reg-r11 & pop-r reg-r10 & pop-r reg-r9 & pop-r reg-r8 & pop-r reg-rcx & pop-r reg-rax)
    in let st25 = st-append-code st24 (pop-r reg-rbp)
    in st-append-code st25 x86-ret
+ ONE BYTE OF STDIN, hosted. Both arms answer the byte in RAX and 0 at end of
+ input, which is the sentinel every reader above already stops on, so the
+ conversion and termination logic is shared rather than written twice.
+
+ The Windows arm caches the handle exactly as the write side does, and zeroes
+ the count cell before the call: ReadFile leaves it untouched on failure, and a
+ stale count from the previous byte would read as a successful byte that was
+ never delivered. RCX and R11 are pushed for the Linux arm because SYSCALL
+ clobbers them by architecture, and R10 for the Windows arm because it carries
+ the heap frontier and is volatile under the Windows ABI.
+
+  emit-hosted-win-read-byte-helper : CodegenState -> CodegenState
+  emit-hosted-win-read-byte-helper (st) =
+   let st0 = record-func-offset st "__hosted_read_byte"
+   in let st1 = st-append-code st0 (push-r reg-rcx & push-r reg-rdx & push-r reg-r8 & push-r reg-r9 & push-r reg-r10 & push-r reg-r11)
+   in let st1a = st-append-code st1 (push-r reg-rbp & mov-rr reg-rbp reg-rsp)
+   in let st2 = st-append-code st1a (and-ri reg-rsp (-16))
+   in let st3 = st-append-code st2 (emit-sub-rsp-imm32 64)
+   in let st4 = st-append-code st3 (li reg-r10 hosted-win-in-handle-addr)
+   in let st5 = st-append-code st4 (mov-load reg-rax reg-r10 0)
+   in let st6 = st-append-code st5 (test-rr reg-rax reg-rax)
+   in let have-handle = st6.code-len
+   in let st7 = st-append-code st6 (jcc cc-ne 0)
+   in let st8 = st-append-code st7 (li reg-rcx (0 - 10))
+   in let st9 = st-append-code st8 (call-abs-ind hosted-win-iat-getstdhandle)
+   in let st10 = st-append-code st9 (li reg-r10 hosted-win-in-handle-addr)
+   in let st11 = st-append-code st10 (mov-store reg-r10 reg-rax 0)
+   in let st12 = patch-jcc-at st11 have-handle (st11.code-len)
+   in let st13 = st-append-code st12 (li reg-r10 hosted-win-read-count-addr)
+   in let st14 = st-append-code st13 (li reg-rax 0)
+   in let st15 = st-append-code st14 (mov-store reg-r10 reg-rax 0)
+   in let st16 = st-append-code st15 (li reg-r10 hosted-win-in-handle-addr)
+   in let st17 = st-append-code st16 (mov-load reg-rcx reg-r10 0)
+   in let st18 = st-append-code st17 (li reg-rdx hosted-win-read-byte-addr)
+   in let st19 = st-append-code st18 (li reg-r8 1)
+   in let st20 = st-append-code st19 (li reg-r9 hosted-win-read-count-addr)
+   in let st21 = st-append-code st20 (li reg-r10 0)
+   in let st22 = st-append-code st21 (mov-store reg-rsp reg-r10 32)
+   in let st23 = st-append-code st22 (call-abs-ind hosted-win-iat-readfile)
+   in let st24 = st-append-code st23 (test-rr reg-rax reg-rax)
+   in let call-failed = st24.code-len
+   in let st25 = st-append-code st24 (jcc cc-e 0)
+   in let st26 = st-append-code st25 (li reg-r10 hosted-win-read-count-addr)
+   in let st27 = st-append-code st26 (mov-load reg-rax reg-r10 0)
+   in let st28 = st-append-code st27 (test-rr reg-rax reg-rax)
+   in let at-eof = st28.code-len
+   in let st29 = st-append-code st28 (jcc cc-e 0)
+   in let st30 = st-append-code st29 (li reg-rax hosted-win-read-byte-addr)
+   in let st31 = st-append-code st30 (movzx-byte reg-rax reg-rax 0)
+   in let got-byte = st31.code-len
+   in let st32 = st-append-code st31 (jmp 0)
+   in let st33 = patch-jcc-at st32 call-failed (st32.code-len)
+   in let st34 = patch-jcc-at st33 at-eof (st33.code-len)
+   in let st35 = st-append-code st34 (li reg-rax 0)
+   in let st36 = patch-jmp-at st35 got-byte (st35.code-len)
+   in let st37 = st-append-code st36 (mov-rr reg-rsp reg-rbp)
+   in let st38 = st-append-code st37 (pop-r reg-rbp)
+   in let st39 = st-append-code st38 (pop-r reg-r11 & pop-r reg-r10 & pop-r reg-r9 & pop-r reg-r8 & pop-r reg-rdx & pop-r reg-rcx)
+   in st-append-code st39 x86-ret
+
+  emit-hosted-read-byte-helper : CodegenState -> CodegenState
+  emit-hosted-read-byte-helper (st) =
+   let st0 = record-func-offset st "__hosted_read_byte"
+   in let st1 = st-append-code st0 (push-r reg-rcx & push-r reg-rdx & push-r reg-rsi & push-r reg-rdi & push-r reg-r11)
+   in let st2 = st-append-code st1 (li reg-rax linux-sys-read)
+   in let st3 = st-append-code st2 (li reg-rdi linux-stdin-fd)
+   in let st4 = st-append-code st3 (li reg-rsi hosted-read-byte-addr)
+   in let st5 = st-append-code st4 (li reg-rdx 1)
+   in let st6 = st-append-code st5 x86-syscall
+   in let st7 = st-append-code st6 (cmp-ri reg-rax 1)
+   in let short-read = st7.code-len
+   in let st8 = st-append-code st7 (jcc cc-ne 0)
+   in let st9 = st-append-code st8 (li reg-rax hosted-read-byte-addr)
+   in let st10 = st-append-code st9 (movzx-byte reg-rax reg-rax 0)
+   in let got-byte = st10.code-len
+   in let st11 = st-append-code st10 (jmp 0)
+   in let st12 = patch-jcc-at st11 short-read (st11.code-len)
+   in let st13 = st-append-code st12 (li reg-rax 0)
+   in let st14 = patch-jmp-at st13 got-byte (st13.code-len)
+   in let st15 = st-append-code st14 (pop-r reg-r11 & pop-r reg-rdi & pop-r reg-rsi & pop-r reg-rdx & pop-r reg-rcx)
+   in st-append-code st15 x86-ret
+
+ The hosted slurp and line reader. The buffer protocol is the bare-metal one
+ unchanged: RBX is the heap frontier and the buffer, the length goes at [RBX],
+ the bytes at RBX+8, and the frontier is bumped once at the end. Bytes under
+ 128 go through the unicode-to-CCE table, CR is dropped, and the read ends at
+ NUL or EOT, which is what `read-file-uni` means on this target.
+
+  emit-hosted-read-all-uni-helper : CodegenState -> CodegenState
+  emit-hosted-read-all-uni-helper (st) =
+   let st0 = record-func-offset st "__hosted_read_all_uni"
+   in let st1 = st-append-code st0 (push-r reg-rbx & push-r reg-rcx & push-r reg-r12)
+   in let st2 = emit-load-rodata-addr st1 reg-r12 unicode-to-cce-rodata-offset
+   in let st3 = st-append-code st2 (mov-rr reg-rbx reg-r10)
+   in let st4 = st-append-code st3 (li reg-rcx 0)
+   in let loop-top = st4.code-len
+   in let st5 = emit-call-to st4 "__hosted_read_byte"
+   in let st6 = st-append-code st5 (test-rr reg-rax reg-rax)
+   in let at-eof = st6.code-len
+   in let st7 = st-append-code st6 (jcc cc-e 0)
+   in let st8 = st-append-code st7 (cmp-ri reg-rax 4)
+   in let at-eot = st8.code-len
+   in let st9 = st-append-code st8 (jcc cc-e 0)
+   in let st10 = st-append-code st9 (cmp-ri reg-rax 13)
+   in let skip-cr = st10.code-len
+   in let st11 = st-append-code st10 (jcc cc-e 0)
+   in let st12 = st-append-code st11 (cmp-ri reg-rax 128)
+   in let skip-high = st12.code-len
+   in let st13 = st-append-code st12 (jcc cc-ge 0)
+   in let st14 = st-append-code st13 (add-rr reg-rax reg-r12)
+   in let st15 = st-append-code st14 (movzx-byte reg-rax reg-rax 0)
+   in let store-pos = st15.code-len
+   in let st16 = st-append-code st15 (mov-rr reg-rsi reg-rbx)
+   in let st17 = st-append-code st16 (add-rr reg-rsi reg-rcx)
+   in let st18 = st-append-code st17 (add-ri reg-rsi 8)
+   in let st19 = st-append-code st18 [136, 6]
+   in let st20 = st-append-code st19 (add-ri reg-rcx 1)
+   in let st21 = patch-jcc-at st20 skip-cr (st20.code-len)
+   in let st22 = patch-jcc-at st21 skip-high store-pos
+   in let st23 = st-append-code st22 (jmp (loop-top - (st22.code-len + 5)))
+   in let st24 = patch-jcc-at st23 at-eof (st23.code-len)
+   in let st25 = patch-jcc-at st24 at-eot (st24.code-len)
+   in let st26 = st-append-code st25 (mov-store reg-rbx reg-rcx 0)
+   in let st27 = st-append-code st26 (mov-rr reg-rax reg-rcx)
+   in let st28 = st-append-code st27 (add-ri reg-rax 15)
+   in let st29 = st-append-code st28 (and-ri reg-rax (-8))
+   in let st30 = st-append-code st29 (add-ri reg-rax 8)
+   in let st31 = heap-bump-reg st30 reg-rax
+   in let st32 = st-append-code st31 (mov-rr reg-rax reg-rbx)
+   in let st33 = st-append-code st32 (pop-r reg-r12 & pop-r reg-rcx & pop-r reg-rbx)
+   in st-append-code st33 x86-ret
+
+ The line reader ends at LF instead, and answers a zero-length text at end of
+ input rather than a null, because `read-line`'s Maybe is decided by the
+ caller on the length rather than on a sentinel pointer.
+
+  emit-hosted-read-line-helper : CodegenState -> CodegenState
+  emit-hosted-read-line-helper (st) =
+   let st0 = record-func-offset st "__hosted_read_line"
+   in let st1 = st-append-code st0 (push-r reg-rbx & push-r reg-rcx & push-r reg-r12)
+   in let st2 = emit-load-rodata-addr st1 reg-r12 unicode-to-cce-rodata-offset
+   in let st3 = st-append-code st2 (mov-rr reg-rbx reg-r10)
+   in let st4 = st-append-code st3 (li reg-rcx 0)
+   in let loop-top = st4.code-len
+   in let st5 = emit-call-to st4 "__hosted_read_byte"
+   in let st6 = st-append-code st5 (test-rr reg-rax reg-rax)
+   in let at-eof = st6.code-len
+   in let st7 = st-append-code st6 (jcc cc-e 0)
+   in let st8 = st-append-code st7 (cmp-ri reg-rax 10)
+   in let at-lf = st8.code-len
+   in let st9 = st-append-code st8 (jcc cc-e 0)
+   in let st10 = st-append-code st9 (cmp-ri reg-rax 13)
+   in let skip-cr = st10.code-len
+   in let st11 = st-append-code st10 (jcc cc-e 0)
+   in let st12 = st-append-code st11 (cmp-ri reg-rax 128)
+   in let skip-high = st12.code-len
+   in let st13 = st-append-code st12 (jcc cc-ge 0)
+   in let st14 = st-append-code st13 (add-rr reg-rax reg-r12)
+   in let st15 = st-append-code st14 (movzx-byte reg-rax reg-rax 0)
+   in let store-pos = st15.code-len
+   in let st16 = st-append-code st15 (mov-rr reg-rsi reg-rbx)
+   in let st17 = st-append-code st16 (add-rr reg-rsi reg-rcx)
+   in let st18 = st-append-code st17 (add-ri reg-rsi 8)
+   in let st19 = st-append-code st18 [136, 6]
+   in let st20 = st-append-code st19 (add-ri reg-rcx 1)
+   in let st21 = patch-jcc-at st20 skip-cr (st20.code-len)
+   in let st22 = patch-jcc-at st21 skip-high store-pos
+   in let st23 = st-append-code st22 (jmp (loop-top - (st22.code-len + 5)))
+   in let st24 = patch-jcc-at st23 at-eof (st23.code-len)
+   in let st24a = st-append-code st24 (test-rr reg-rcx reg-rcx)
+   in let eof-empty = st24a.code-len
+   in let st24b = st-append-code st24a (jcc cc-e 0)
+   in let st25 = patch-jcc-at st24b at-lf (st24b.code-len)
+   in let st26 = st-append-code st25 (mov-store reg-rbx reg-rcx 0)
+   in let st27 = st-append-code st26 (mov-rr reg-rax reg-rcx)
+   in let st28 = st-append-code st27 (add-ri reg-rax 15)
+   in let st29 = st-append-code st28 (and-ri reg-rax (-8))
+   in let st30 = heap-bump-reg st29 reg-rax
+   in let st31 = st-append-code st30 (mov-rr reg-rax reg-r10)
+   in let st32 = st-append-code st31 (li reg-rdi 0)
+   in let st33 = st-append-code st32 (mov-store reg-rax reg-rdi 0)
+   in let st34 = st-append-code st33 (mov-store reg-rax reg-rbx 8)
+   in let st35 = heap-bump-imm st34 16
+   in let got-line = st35.code-len
+   in let st36 = st-append-code st35 (jmp 0)
+   in let st37 = patch-jcc-at st36 eof-empty (st36.code-len)
+   in let st38 = st-append-code st37 (mov-rr reg-rax reg-r10)
+   in let st39 = st-append-code st38 (li reg-rdi 1)
+   in let st40 = st-append-code st39 (mov-store reg-rax reg-rdi 0)
+   in let st41 = heap-bump-imm st40 8
+   in let st42 = patch-jmp-at st41 got-line (st41.code-len)
+   in let st43 = st-append-code st42 (pop-r reg-r12 & pop-r reg-rcx & pop-r reg-rbx)
+   in st-append-code st43 x86-ret
+
+ THE BINARY WRITERS GO THROUGH `__serial_put` ON A HOSTED TARGET, byte by byte,
+ because every other path they have is a port. Both probe for a debug device
+ first (`in al, dx` on 0xE9 and 0x511) and both fall back to the UART at 0x3F8,
+ so all three of their arms are privileged instructions in user mode. Measured
+ 2026-08-30: the hosted compiler compiled its own 3 MB source correctly and
+ announced `SIZE:3085320`, then died at 0xC0000096 the moment it began writing
+ the payload out. The names are recorded by the callers below, so these bodies
+ start already registered.
+
+  emit-hosted-write-binary-body : CodegenState -> CodegenState
+  emit-hosted-write-binary-body (st) =
+   let st2 = st-append-code st (push-r reg-rbx & push-r reg-rcx & push-r reg-r11)
+   in let st3 = st-append-code st2 (mov-rr reg-rbx reg-rdi)
+   in let st4 = st-append-code st3 (mov-load reg-rcx reg-rbx 0)
+   in let st5 = emit-list-eff-base st4 reg-rbx reg-rax
+   in let st6 = st-append-code st5 (li reg-r11 0)
+   in let loop-top = st6.code-len
+   in let st7 = st-append-code st6 (cmp-rr reg-r11 reg-rcx)
+   in let done-pos = st7.code-len
+   in let st8 = st-append-code st7 (jcc cc-ge 0)
+   in let st9 = st-append-code st8 (mov-rr reg-rax reg-r11)
+   in let st10 = st-append-code st9 (shl-ri reg-rax 3)
+   in let st11 = st-append-code st10 (add-rr reg-rax reg-rbx)
+   in let st12 = st-append-code st11 (mov-load reg-rax reg-rax 8)
+   in let st13 = emit-call-to st12 "__serial_put"
+   in let st14 = st-append-code st13 (add-ri reg-r11 1)
+   in let st15 = st-append-code st14 (jmp (loop-top - (st14.code-len + 5)))
+   in let st16 = patch-jcc-at st15 done-pos (st15.code-len)
+   in let st17 = st-append-code st16 (pop-r reg-r11 & pop-r reg-rcx & pop-r reg-rbx)
+   in st-append-code st17 x86-ret
+
+  emit-hosted-write-binary-buf-body : CodegenState -> CodegenState
+  emit-hosted-write-binary-buf-body (st) =
+   let st2 = st-append-code st (push-r reg-rbx & push-r reg-rcx & push-r reg-r11)
+   in let st3 = st-append-code st2 (mov-rr reg-rbx reg-rdi)
+   in let st4 = st-append-code st3 (add-rr reg-rbx reg-rsi)
+   in let st5 = st-append-code st4 (mov-rr reg-rcx reg-rdx)
+   in let st6 = st-append-code st5 (li reg-r11 0)
+   in let loop-top = st6.code-len
+   in let st7 = st-append-code st6 (cmp-rr reg-r11 reg-rcx)
+   in let done-pos = st7.code-len
+   in let st8 = st-append-code st7 (jcc cc-ge 0)
+   in let st9 = st-append-code st8 (mov-rr reg-rax reg-rbx)
+   in let st10 = st-append-code st9 (add-rr reg-rax reg-r11)
+   in let st11 = st-append-code st10 (movzx-byte reg-rax reg-rax 0)
+   in let st12 = emit-call-to st11 "__serial_put"
+   in let st13 = st-append-code st12 (add-ri reg-r11 1)
+   in let st14 = st-append-code st13 (jmp (loop-top - (st13.code-len + 5)))
+   in let st15 = patch-jcc-at st14 done-pos (st14.code-len)
+   in let st16 = st-append-code st15 (pop-r reg-r11 & pop-r reg-rcx & pop-r reg-rbx)
+   in st-append-code st16 x86-ret
+
   emit-hosted-print-begin-helper : CodegenState -> CodegenState
   emit-hosted-print-begin-helper (st) =
    let st0 = record-func-offset st "__print_begin"
@@ -30447,7 +30744,15 @@ Section: I/O Boundary Helpers
 
    let st1 = record-func-offset st "__read_line"
 
-   in let st2 = st-append-code st1 (push-r reg-rbx)
+   in if st-hosted st1 then
+
+    let sth = emit-call-to st1 "__hosted_read_line"
+
+    in st-append-code sth x86-ret
+
+   else
+
+   let st2 = st-append-code st1 (push-r reg-rbx)
 
    in let st3 = st-append-code st2 (push-r reg-r12)
 
@@ -30465,7 +30770,7 @@ Section: I/O Boundary Helpers
 
    in let st7a = st-append-code st7 (li reg-rax 0)
 
-   in let st7b = st-append-code st7a (li reg-rdi wd-stale-tick-addr)
+   in let st7b = st-append-code st7a (li reg-rdi (st-cell st7a wd-stale-tick-addr))
 
    in let st7c = st-append-code st7b (mov-store reg-rdi reg-rax 0)
 
@@ -30681,7 +30986,7 @@ Section: I/O Boundary Helpers
 
    in let st7a = st-append-code st7 (li reg-rax 0)
 
-   in let st7b = st-append-code st7a (li reg-rdi wd-stale-tick-addr)
+   in let st7b = st-append-code st7a (li reg-rdi (st-cell st7a wd-stale-tick-addr))
 
    in let st7c = st-append-code st7b (mov-store reg-rdi reg-rax 0)
 
@@ -30857,7 +31162,8 @@ Section: I/O Boundary Helpers
 
    let st1 = record-func-offset st "__read_file"
 
-   in let st2 = emit-call-to st1 "__bare_metal_read_serial"
+   in let st2 = if st-hosted st1 then emit-call-to st1 "__hosted_read_all_uni"
+    else emit-call-to st1 "__bare_metal_read_serial"
 
    in st-append-code st2 x86-ret
 
@@ -30885,7 +31191,7 @@ Section: I/O Boundary Helpers
 
    in let st6a = st-append-code st6 (li reg-rax 0)
 
-   in let st6b = st-append-code st6a (li reg-rdi wd-stale-tick-addr)
+   in let st6b = st-append-code st6a (li reg-rdi (st-cell st6a wd-stale-tick-addr))
 
    in let st6c = st-append-code st6b (mov-store reg-rdi reg-rax 0)
 
@@ -31007,7 +31313,7 @@ Section: I/O Boundary Helpers
    in let read-loop = st5.code-len
    in let wait-loop = st5.code-len
    in let st5a = st-append-code st5 (li reg-rax 0)
-   in let st5b = st-append-code st5a (li reg-rdi wd-stale-tick-addr)
+   in let st5b = st-append-code st5a (li reg-rdi (st-cell st5a wd-stale-tick-addr))
    in let st5c = st-append-code st5b (mov-store reg-rdi reg-rax 0)
    in let st6 = st-append-code st5c (li reg-rdi serial-write-pos-addr)
    in let st7 = st-append-code st6 (mov-load reg-rsi reg-rdi 0)
@@ -31069,7 +31375,7 @@ Section: I/O Boundary Helpers
    in let read-loop = st5.code-len
    in let wait-loop = st5.code-len
    in let st5a = st-append-code st5 (li reg-rax 0)
-   in let st5b = st-append-code st5a (li reg-rdi wd-stale-tick-addr)
+   in let st5b = st-append-code st5a (li reg-rdi (st-cell st5a wd-stale-tick-addr))
    in let st5c = st-append-code st5b (mov-store reg-rdi reg-rax 0)
    in let st6 = st-append-code st5c (li reg-rdi serial-write-pos-addr)
    in let st7 = st-append-code st6 (mov-load reg-rsi reg-rdi 0)
@@ -31175,7 +31481,11 @@ Section: I/O Boundary Helpers
 
    in let st17y = if st-windows st17x then emit-hosted-win-serial-put-helper st17x else if st-hosted st17x then emit-hosted-serial-put-helper st17x else emit-serial-put-helper st17x
 
-   in let st17z = if st-hosted st17y then emit-hosted-print-begin-helper st17y else emit-print-begin-helper st17y
+   in let st17rb = if st-windows st17y then emit-hosted-win-read-byte-helper st17y
+    else if st-hosted st17y then emit-hosted-read-byte-helper st17y else st17y
+   in let st17ra = if st-hosted st17rb then emit-hosted-read-all-uni-helper st17rb else st17rb
+   in let st17rl = if st-hosted st17ra then emit-hosted-read-line-helper st17ra else st17ra
+   in let st17z = if st-hosted st17rl then emit-hosted-print-begin-helper st17rl else emit-print-begin-helper st17rl
 
    in let st17w = if st-hosted st17z then emit-hosted-print-flush-helper st17z else emit-print-flush-helper st17z
 
@@ -31287,7 +31597,9 @@ Section: I/O Boundary Helpers
 
    in let st36i = emit-cpu-read-cr3-helper st36h
 
-   in let st36j = emit-cpu-cpuid-eax-helper st36i
+   in let st36ibh = emit-hosted-kind-helper st36i
+
+   in let st36j = emit-cpu-cpuid-eax-helper st36ibh
 
    in let st36k = emit-cpu-cpuid-ebx-helper st36j
 
@@ -32665,7 +32977,9 @@ Section: Binary Output
 
    let st1 = record-func-offset st "__write_binary"
 
-   in let st2 = st-append-code st1 (push-r reg-rbx)
+   in if st-hosted st1 then emit-hosted-write-binary-body st1
+
+   else let st2 = st-append-code st1 (push-r reg-rbx)
 
    in let st3 = st-append-code st2 (push-r reg-rcx)
 
@@ -32721,7 +33035,7 @@ Section: Binary Output
 
    in let st7a = st-append-code st7 (li reg-rax 0)
 
-   in let st7b = st-append-code st7a (li reg-rdi wd-stale-tick-addr)
+   in let st7b = st-append-code st7a (li reg-rdi (st-cell st7a wd-stale-tick-addr))
 
    in let st7c = st-append-code st7b (mov-store reg-rdi reg-rax 0)
 
@@ -32808,7 +33122,9 @@ Section: Binary Output
 
    let st1 = record-func-offset st "__write_binary_buf"
 
-   in let st2 = st-append-code st1 (push-r reg-rbx)
+   in if st-hosted st1 then emit-hosted-write-binary-buf-body st1
+
+   else let st2 = st-append-code st1 (push-r reg-rbx)
 
    in let st3 = st-append-code st2 (push-r reg-rcx)
 
@@ -32880,7 +33196,7 @@ Section: Binary Output
 
    in let st23 = st-append-code st22a (li reg-rax 0)
 
-   in let st24 = st-append-code st23 (li reg-rdi wd-stale-tick-addr)
+   in let st24 = st-append-code st23 (li reg-rdi (st-cell st23 wd-stale-tick-addr))
 
    in let st25 = st-append-code st24 (mov-store reg-rdi reg-rax 0)
 
@@ -34174,6 +34490,38 @@ Section: Binary Output
    in let st0 = __record-set (__record-set st "fo-names" n) "fo-offsets" o
 
    in let st1 = st-append-code st0 [15, 32, 216]
+
+   in st-append-code st1 x86-ret
+
+ WHAT THE TARGET IS, ANSWERED TO SOURCE: 0 bare metal, 1 hosted Linux, 2
+ hosted Windows, the same three values `st.hosted-target` carries. Two cells
+ the compiler reads are FIXED PHYSICAL addresses that only a bare-metal payload
+ can reach, and until this existed there was no way for the source holding
+ those reads to know not to take them. `bp-cell` (126976) is the UEFI stub's
+ framebuffer handoff block, and `guard-page-base-cell` (36320) is the deck
+ guard's, written by the page-table setup above that a hosted build never runs.
+ No hosted target maps either: Windows refuses a fixed low VirtualAlloc from a
+ freshly loaded image, which is why `hosted-win-cell-base` sits at 0x50000000,
+ and Linux starts its band at 131072 with `bp-cell` on the page below.
+
+ Measured 2026-08-30, and this is why it is worth a builtin: `peek-qword
+ 126976 0` in an eight-line hosted-windows program prints its first line and
+ dies at 0xC0000005. The compiler's own `opening` reaches `bp-present` on its
+ first rung, so every hosted build of the compiler faulted before running.
+
+  emit-hosted-kind-helper : CodegenState -> CodegenState
+
+  emit-hosted-kind-helper (st) =
+
+   let fn-off = st.code-len
+
+   in let n = list-push (st.fo-names) "hosted-kind"
+
+   in let o = list-push (st.fo-offsets) fn-off
+
+   in let st0 = __record-set (__record-set st "fo-names" n) "fo-offsets" o
+
+   in let st1 = st-append-code st0 (li reg-rax (st.hosted-target))
 
    in st-append-code st1 x86-ret
 
@@ -56270,6 +56618,7 @@ Section: The Table
    BuiltinSpec { bs-name = "flush-tlb", bs-alloc = "none", bs-varies = True, bs-type = Just int-ty-default, bs-emit = None },
    BuiltinSpec { bs-name = "cpu-read-cr0", bs-alloc = "none", bs-varies = True, bs-type = Just int-ty-default, bs-emit = None },
    BuiltinSpec { bs-name = "cpu-read-cr3", bs-alloc = "none", bs-varies = True, bs-type = Just int-ty-default, bs-emit = None },
+   BuiltinSpec { bs-name = "hosted-kind", bs-alloc = "none", bs-varies = True, bs-type = Just int-ty-default, bs-emit = None },
    BuiltinSpec { bs-name = "cpu-cpuid-eax", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row int-ty-default), bs-emit = None },
    BuiltinSpec { bs-name = "cpu-cpuid-ebx", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row int-ty-default), bs-emit = None },
    BuiltinSpec { bs-name = "cpu-cpuid-ecx", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row int-ty-default), bs-emit = None },
