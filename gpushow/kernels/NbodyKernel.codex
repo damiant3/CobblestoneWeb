@@ -1,0 +1,75 @@
+Chapter: NbodyKernel
+  cites Gpu chapter DeviceEffect
+
+ Positions and velocities are 1/256-pixel fixed point in the i32 state buffer
+ (px, py, vx, vy per body); force math divides down to whole pixels first so the
+ squared distances stay well inside 32-bit range.
+
+ We say:
+
+Section: Parameters
+
+  nb-count : Integer = 1024
+  nb-width : Integer = 1024
+  nb-height : Integer = 768
+
+Section: Force Accumulation
+
+ Softened weight w = G / (d^2 + soft), pull component dx * w, summed over every
+ body. dx, dy are in whole pixels (positions shifted down from 1/256 fixed
+ point) so d^2 stays under ~1.6e6.
+
+  nb-fx : Integer, Integer, Integer, Integer, Integer -> [Device] Integer
+  nb-fx (buf) (myx) (myy) (j) (acc) =
+    if j >= nb-count then acc
+    else act
+      jx <- device-load buf (j * 4)
+      jy <- device-load buf (j * 4 + 1)
+      let dx = (jx - myx) / 256
+      in let dy = (jy - myy) / 256
+      in let d2 = dx * dx + dy * dy + 32
+      in let w = 9000 / d2
+      in nb-fx buf myx myy (j + 1) (acc + dx * w)
+    end
+
+  nb-fy : Integer, Integer, Integer, Integer, Integer -> [Device] Integer
+  nb-fy (buf) (myx) (myy) (j) (acc) =
+    if j >= nb-count then acc
+    else act
+      jx <- device-load buf (j * 4)
+      jy <- device-load buf (j * 4 + 1)
+      let dx = (jx - myx) / 256
+      in let dy = (jy - myy) / 256
+      in let d2 = dx * dx + dy * dy + 32
+      in let w = 9000 / d2
+      in nb-fy buf myx myy (j + 1) (acc + dy * w)
+    end
+
+Section: Wrap
+
+  nb-wrap : Integer, Integer -> Integer
+  nb-wrap (v) (m) = let r = v - (v / m) * m in if r < 0 then r + m else r
+
+Section: N-body Kernel
+
+  nbody-step : Integer, Integer, Integer, Integer -> [Device] Integer
+  nbody-step (inb) (outb) (frame) (gid) = act
+    px <- device-load inb (gid * 4)
+    py <- device-load inb (gid * 4 + 1)
+    vx <- device-load inb (gid * 4 + 2)
+    vy <- device-load inb (gid * 4 + 3)
+    fx <- nb-fx inb px py 0 0
+    fy <- nb-fy inb px py 0 0
+    let nvx = vx + fx / 32
+    in let nvy = vy + fy / 32
+    in let cvx = if nvx > 4200 then 4200 else if nvx < 0 - 4200 then 0 - 4200 else nvx
+    in let cvy = if nvy > 4200 then 4200 else if nvy < 0 - 4200 then 0 - 4200 else nvy
+    in let npx = nb-wrap (px + cvx) (nb-width * 256)
+    in let npy = nb-wrap (py + cvy) (nb-height * 256)
+    in act
+    s0 <- device-store outb (gid * 4) npx
+    s1 <- device-store outb (gid * 4 + 1) npy
+    s2 <- device-store outb (gid * 4 + 2) cvx
+    device-store outb (gid * 4 + 3) cvy
+    end
+  end
