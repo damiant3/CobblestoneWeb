@@ -38,7 +38,7 @@ body::after {
   background: rgba(5,5,16,.85); backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(30,30,46,.5);
 }
-.nav .logo { font-size: 20px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
+.nav .logo { font-size: 20px; font-weight: 800; letter-spacing: 3px; color: var(--accent); text-decoration: none; }
 .nav-links { display: flex; gap: 24px; font-size: 14px; }
 .nav-links a { color: var(--dim); }
 .nav-links a:hover { color: var(--accent); text-decoration: none; }
@@ -127,7 +127,7 @@ a { color: var(--accent); text-decoration: none; }
 <body>
 
 <div class="nav">
-  <span class="logo">&#x2588; COBBLESTONE</span>
+  <a class="logo" href="../" title="Cobblestone home">&#x2588; COBBLESTONE</a>
   <span class="nav-links"><a href="https://github.com/damiant3/Cobblestone">GitHub</a></span>
 </div>
 
@@ -195,7 +195,7 @@ a { color: var(--accent); text-decoration: none; }
   </div>
   <div>
     Bare-metal reference hash, computed at page build from the identical source:
-    <span class="hash">84710DF537FA37F59B6304C2F66AB84B25E85387718634A7882DBABF2B61B96B</span>
+    <span class="hash">9B30065CA4311E5A5C37ED3C1F9CA16610DEB520866F3BAD881BF8A64137FB26</span>
   </div>
 </div>
 
@@ -205,7 +205,7 @@ const PHASES = [
   ['h3-assignments','assignments'],['h4-parse','parse'],['h5-desugar','desugar'],
   ['h6-scope','scope'],['h7-resolve','resolve']
 ];
-const X86_HASH = '84710DF537FA37F59B6304C2F66AB84B25E85387718634A7882DBABF2B61B96B';
+const X86_HASH = '9B30065CA4311E5A5C37ED3C1F9CA16610DEB520866F3BAD881BF8A64137FB26';
 const MODE_LINE = 'TEXT decks=125\n';
 
 const goBtn = document.getElementById('go');
