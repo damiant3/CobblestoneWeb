@@ -7292,7 +7292,21 @@ Section: Frontend
    in let scratch-ceiling = scratch-base + parse-scratch-height
    in let parse-phase = phase-start
    in let st = make-parse-state tokens source
-   in let scan = scan-document st
+   in let scan-mark = __heap-save
+   in let scan-floor = __deck-pos
+   in let scan0 = scan-document st
+   in let scan = deck-record (ScanResult {
+    type-defs = [],
+    effect-defs = [],
+    class-defs = [],
+    instance-defs = [],
+    def-headers = for h in (scan0.def-headers) -> DefHeader { name = copy-sx-token scan-floor (h.name), params = copy-sx-tokens scan-floor (h.params), ann = for a in (h.ann) -> copy-sx-typeann scan-floor a, body-pos = h.body-pos, chapter-slug = copy-sx-text scan-floor (h.chapter-slug) },
+    citations = [],
+    chapter-title = "",
+    section-titles = [],
+    chapter-names = copy-sx-texts scan-floor (scan0.chapter-names)
+   })
+   in let scan-back = __heap-restore scan-mark
    in let h2 = __heap-save
    in let assignments-s = if deck-short-of scratch-ceiling demand-parse-scratch-guard-band then [] else deck-record (build-all-assignments source (scan.def-headers) 0 [])
    in let colliding-s = if deck-short-of scratch-ceiling demand-parse-scratch-guard-band then skip-list-text-empty else deck-record (find-colliding-names assignments-s)
@@ -7437,7 +7451,8 @@ Section: Frontend
    in let check-ceiling = check-base + check-deck-height
    in let check-origin = __deck-pos
    in let check-phase = phase-start
-   in let check-result = deck-record (check-chapter (sr.scoped) (sr.renames) (sr.colliding) (sr.assignments) check-ceiling)
+   in let check-result = deck-record (check-chapter (sr.scoped) (sr.renames) (sr.colliding) (sr.assignments) check-ceiling check-base keep-base (keep-base + keep-height - 4194304) (if flags.poison-compact then poison-check else 0))
+   in let batch-bag = if flags.phase-trace then deck-record (bag-from-list [make-warning cdx-escape-violation (check-result.batch-note) synthetic-span]) else no-overflow-bag
    in let h8 = __heap-save
    in let cap-diags = deck-record (check-opening-capabilities (check-result.types))
    in let check-bag0 = deck-record (bag-merge-all [sr.resolve-bag, check-result.state.bag, bag-from-list cap-diags])
@@ -7448,7 +7463,7 @@ Section: Frontend
    in let check-ov-bag = if check-ov == 1 | check-sat == 1 then deck-overflow-bag "CHECK" else no-overflow-bag
    in let check-esc-bag = escape-check-bag (flags.escape-check) check-metrics "CHECK"
    in let cost-bag = deck-record (cost-growth-bag (flags.cost-report) (sr.scoped.defs) (check-result.state))
-   in let check-bag = deck-record (bag-merge-all [check-bag0, check-ov-bag, check-esc-bag, cost-bag])
+   in let check-bag = deck-record (bag-merge-all [check-bag0, check-ov-bag, check-esc-bag, cost-bag, batch-bag])
    in let check-heap-marks = deck-record (list-push (sr.heap-marks) h8)
    in let check-phase-metrics = deck-record (list-push (sr.phase-metrics) check-metrics)
    in if bag-has-errors check-bag
@@ -7457,7 +7472,7 @@ Section: Frontend
       in let sorted-all0 = deck-record (resolve-all-bindings (check-result.state) (sort-bindings (check-result.types & resolved-env)) 0 (list-length (check-result.types) + list-length resolved-env) (__list-with-capacity (list-length (check-result.types) + list-length resolved-env)))
       in let sorted-et0 = deck-record (resolve-all-expr-types (check-result.state) (sort-expr-types (check-result.state.expr-types)) 0 (list-length (check-result.state.expr-types)) (__list-with-capacity (list-length (check-result.state.expr-types))))
       in let post-ov-bag = if __deck-pos > check-ceiling then deck-overflow-bag "CHECK" else no-overflow-bag
-      in let memo-pop0 = list-length sorted-et0 * 32 + list-length sorted-all0 * 32 + 1024
+      in let memo-pop0 = list-length sorted-et0 / 4 + list-length sorted-all0 + 65536
       in let memo-graph = (check-metrics.deck-end - check-metrics.deck-origin) / 64
       in let memo-pop = if memo-graph > memo-pop0 then memo-graph else memo-pop0
       in let memo-slots = memo-pow2-at-least (memo-pop * 2) 4096
@@ -7466,11 +7481,14 @@ Section: Frontend
       in let cons-slots = memo-pow2-at-least (memo-pop / 2) 4096
       in let cons-table = pitch (cons-slots * 16)
       in let cons-z = __memset cons-table 0 (cons-slots * 16)
+      in let tcons-slots = memo-pow2-at-least (memo-pop / 4) 4096
+      in let tcons-table = pitch (tcons-slots * 16)
+      in let tcons-z = __memset tcons-table 0 (tcons-slots * 16)
       in let mc = MemoCtx {
        mc-table = memo-table,
        mc-slots = memo-slots,
        mc-shift = memo-shift-for memo-slots 64,
-       mc-floor = keep-base,
+       mc-floor = check-base,
        mc-ty = __list-with-capacity memo-pop,
        mc-text = __list-with-capacity memo-pop,
        mc-name = __list-with-capacity (memo-pop / 2 + 16),
@@ -7487,11 +7505,14 @@ Section: Frontend
        mc-cap-name = memo-pop / 2 + 16,
        mc-cap-row = memo-pop / 16 + 16,
        mc-cap-list = memo-pop / 4 + 16,
-       mc-ceiling = keep-base + keep-height - 4194304
+       mc-ceiling = keep-base + keep-height - 4194304,
+       mc-tcons = tcons-table,
+       mc-tcons-slots = tcons-slots,
+       mc-tcons-shift = memo-shift-for tcons-slots 64
       }
       in let check-resolve-metrics = phase-measure check-phase "CHECK-RESOLVE"
       in let all-phase-metrics = deck-record (list-push check-phase-metrics check-resolve-metrics)
-      in let keep-set = __deck-set keep-base
+      in let keep-set = __deck-set (check-result.keep-end)
       in let keep-phase = phase-start
       in let sorted-all = deck-record (copy-bindings-deep sorted-all0 mc)
       in let sorted-et = deck-record (copy-expr-types-deep sorted-et0 mc)
@@ -7503,7 +7524,7 @@ Section: Frontend
       in let kept-metrics = deck-record (for m in all-phase-metrics -> deck-record (PhaseMetrics { label = m.label, bivy-origin = m.bivy-origin, bivy-hwm = m.bivy-hwm, deck-origin = m.deck-origin, deck-end = m.deck-end }))
       in let keep-metrics = phase-measure keep-phase "CHECK-KEEP"
       in let keep-ov = check-deck-overflow (keep-metrics.deck-end - keep-metrics.deck-origin) keep-height
-      in let keep-ov-bag = if keep-ov == 1 | keep-metrics.deck-end >= mc.mc-ceiling then deck-overflow-bag "CHECK-KEEP" else no-overflow-bag
+      in let keep-ov-bag = if keep-ov == 1 | keep-metrics.deck-end >= mc.mc-ceiling | check-result.keep-overflow then deck-overflow-bag "CHECK-KEEP" else no-overflow-bag
       in let keep-stat-bag = if flags.escape-check then deck-record (bag-from-list [make-warning cdx-escape-violation ("KEEP-STAT used=" & show (keep-metrics.deck-end - keep-metrics.deck-origin) & " ty=" & show (list-length (mc.mc-ty)) & " text=" & show (list-length (mc.mc-text)) & " name=" & show (list-length (mc.mc-name)) & " row=" & show (list-length (mc.mc-row)) & " tylists=" & show (list-length (mc.mc-tylist)) & "/" & show (sum-tylist-lens (mc.mc-tylist) 0 (list-length (mc.mc-tylist)) 0) & " fieldlists=" & show (list-length (mc.mc-fieldlist)) & "/" & show (sum-fieldlist-lens (mc.mc-fieldlist) 0 (list-length (mc.mc-fieldlist)) 0) & " ctorlists=" & show (list-length (mc.mc-ctorlist)) & "/" & show (sum-ctorlist-lens (mc.mc-ctorlist) 0 (list-length (mc.mc-ctorlist)) 0) & " labellists=" & show (list-length (mc.mc-labellist)) & "/" & show (sum-labellist-lens (mc.mc-labellist) 0 (list-length (mc.mc-labellist)) 0) & " subs=" & show (list-length kept-subs) & " et=" & show (list-length sorted-et) & " binds=" & show (list-length sorted-all)) synthetic-span]) else bag-from-list []
       in let final-bag = deck-record (bag-merge-all [kept-bag, keep-ov-bag, keep-stat-bag, post-ov-bag])
       in let pre-sorted-ust = deck-record (UnificationState {
@@ -7515,7 +7536,8 @@ Section: Frontend
        expr-types = sorted-et,
        effect-exempt = False,
        scope-grants = [],
-       chapter-grounds = []
+       chapter-grounds = [],
+       dirty-slots = []
       })
       in let result0 = deck-record (CompileChecked {
        scoped = sr.scoped,
@@ -7581,7 +7603,7 @@ Section: Frontend
    in let lower-ceiling = lower-base + lower-deck-height
    in let lower-origin = __deck-pos
    in let lower-phase = phase-start
-   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling)
+   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling run-passes)
    in let passed = if run-passes then deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
       else IRPassResult { chapter = ir-raw, violations = [], infos = [] }
    in let ir-passed = passed.chapter
@@ -7638,7 +7660,7 @@ Section: Frontend
    in let lower-ceiling = lower-base + lower-deck-height
    in let lower-origin = __deck-pos
    in let lower-phase = phase-start
-   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling)
+   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling True)
    in let passed = deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
    in let ir = passed.chapter
    in let ir-check-bag = deck-record (ir-check-violation-bag (passed.violations))
@@ -10383,8 +10405,48 @@ Section: Document Desugaring
   push-derived-for-type : TypeDef, LinkedList ADef -> LinkedList ADef
   push-derived-for-type (td) (acc) =
    let acc1 = if deriving-has (td.deriving) "Show" then __linked-list-push acc (gen-show-def td) else acc
-   in let acc2 = if deriving-has (td.deriving) "Eq" then __linked-list-push acc1 (gen-eq-def td) else acc1
+   in let acc2 = if deriving-has (td.deriving) "Eq" | td-self-recursive td then __linked-list-push acc1 (gen-eq-def td) else acc1
    in if deriving-has (td.deriving) "Ord" then __linked-list-push acc2 (gen-compare-def td) else acc2
+
+  td-self-recursive : TypeDef -> Boolean
+  td-self-recursive (td) =
+   when td.body
+    is VariantBody (ctors) -> ctors-name-type ctors (token-text (td.name)) 0 (list-length ctors)
+    is otherwise -> False
+
+  ctors-name-type : List VariantCtorDef, Text, Integer, Integer -> Boolean
+  ctors-name-type (ctors) (tn) (i) (len) =
+   if i >= len then False
+   else if fields-name-type ((list-at ctors i).fields) tn 0 (list-length ((list-at ctors i).fields)) then True
+   else ctors-name-type ctors tn (i + 1) len
+
+  fields-name-type : List TypeExpr, Text, Integer, Integer -> Boolean
+  fields-name-type (fs) (tn) (i) (len) =
+   if i >= len then False
+   else if type-expr-names tn (list-at fs i) then True
+   else fields-name-type fs tn (i + 1) len
+
+  type-expr-names : Text, TypeExpr -> Boolean
+  type-expr-names (tn) (te) =
+   when te
+    is NamedType (t) -> token-text t == tn
+    is FunType (a) (b) -> type-expr-names tn a | type-expr-names tn b
+    is AppType (h) (args) -> type-expr-names tn h | type-exprs-name tn args 0 (list-length args)
+    is ParenType (inner) -> type-expr-names tn inner
+    is ListType (inner) -> type-expr-names tn inner
+    is LinearTypeExpr (inner) -> type-expr-names tn inner
+    is EffectTypeExpr (e1) (e2) (e3) (inner) -> type-expr-names tn inner
+    is BoundedIntType (inner) (lo) (hi) (m) -> type-expr-names tn inner
+    is PropEqType (a) (b) (sp) -> type-expr-names tn a | type-expr-names tn b
+    is ConstrainedType (a) (b) -> type-expr-names tn a | type-expr-names tn b
+    is TupleType (ts) -> type-exprs-name tn ts 0 (list-length ts)
+    is ForAllType (v) (b) (inner) -> type-expr-names tn b | type-expr-names tn inner
+
+  type-exprs-name : Text, List TypeExpr, Integer, Integer -> Boolean
+  type-exprs-name (tn) (ts) (i) (len) =
+   if i >= len then False
+   else if type-expr-names tn (list-at ts i) then True
+   else type-exprs-name tn ts (i + 1) len
 
   gen-wild-pats : Integer, Integer, LinkedList APat -> List APat
   gen-wild-pats (n) (i) (acc) =
@@ -11773,6 +11835,20 @@ Section: Demand Decks
   demand-check-floor : Integer = 738197504
   demand-check-guard-band : Integer = 8388608
   demand-check-keep-floor : Integer = 100663296
+
+ The CHECK walk is deck-exited, so a definition's inference scratch lands in
+ the bivy and its deck-record boxes on the check deck, and until 2026-09-01
+ neither was reclaimed before the phase compact: measured on the compiler's
+ own unit, 643 MB of bivy and 366 MB of deck for a survivor set the keep copy
+ holds in under 96 MB. The walk now closes a batch whenever the two together
+ pass this budget: the batch's survivors are copied into the keep deck through
+ the same memoized copier the phase end uses, and both cursors rewind to the
+ batch start. The budget bounds the per-batch address memo below, which is
+ zeroed per batch; the slot count covers a budget's worth of distinct boxes at
+ sixteen bytes each with room to spare.
+
+  demand-check-batch-budget : Integer = 16777216
+  demand-check-batch-memo-slots : Integer = 1048576
   demand-frontend-keep-floor : Integer = 209715200
   demand-frontend-keep-guard-band : Integer = 8388608
   demand-lower-floor : Integer = 343932928
@@ -11986,6 +12062,8 @@ Section: Type checker and Codegen
 
   cdx-unknown-pattern-ctor : Integer = 2072
 
+  cdx-real-literal-overflow : Integer = 2073
+
 Section: Name resolver
   cdx-duplicate-definition : Integer = 3001
 
@@ -12155,6 +12233,7 @@ Section: Registry
     mk-cdx cdx-non-exhaustive-match "NonExhaustiveMatch" sev-error phase-type-checker "Match expression does not cover all constructors of the scrutinee type.",
     mk-cdx cdx-unreachable-match-arm "UnreachableMatchArm" sev-error phase-type-checker "An arm follows an unguarded catch-all, so nothing can reach it. The catch-all matches every remaining value, and an arm written after it is either a mistake about the order or a case the author believed was still open.",
     mk-cdx cdx-int-literal-overflow "IntLiteralOverflow" sev-error phase-type-checker "An integer literal exceeds 64 bits (decimal max 9223372036854775807, hash form max 16 hex digits); the value would be silently truncated. Split the constant or compute it from smaller parts.",
+    mk-cdx cdx-real-literal-overflow "RealLiteralOverflow" sev-error phase-type-checker "A Real literal carries more decimal digits than fit an i64. The parser accumulates every digit, on both sides of the point, into one wrapping i64 before it scales by the place count, so a literal past that width reads back as a different and often negative number with no fault. Split the constant or compute it from smaller parts.",
     mk-cdx cdx-unknown-pattern-ctor "UnknownPatternCtor" sev-error phase-type-checker "A pattern names a constructor that is not in scope; the arm could never match and the when would fall through silently at runtime. Check the constructor names of the scrutinee's type.",
     mk-cdx cdx-nothing-as-value "NothingAsValue" sev-error phase-type-checker "'Nothing' is a type, not a value. The empty Maybe value is 'None' (cite Foreword chapter Maybe); 'Nothing' is only the return type of effectful procedures such as [Console] Nothing.",
     mk-cdx cdx-leading-dot-continuation "LeadingDotContinuation" sev-error phase-parser "A line begins with '.', continuing a field access from the previous line. Field access must follow its receiver on the same line (receiver.field) or be bound with a let; otherwise the continuation is silently dropped.",
@@ -26500,11 +26579,17 @@ Section: Bare-Metal Start
    in let a4 = st-append-code a3 (mov-rr reg-r10 reg-rax)
    in st-append-code a4 (add-ri reg-rsp 32)
 
+ The 64 in the frame patch is the callee-saved margin `emit-function-standard`
+ reserves as `unused * 8`, taken at its maximum because the entry pushes no
+ callee-saved registers.
   emit-hosted-start : CodegenState -> CodegenState
   emit-hosted-start (st) =
    let st0a = record-func-offset st "__start"
    in let st0 = if st-windows st0a then emit-hosted-win-prologue st0a else st0a
-   in let st1 = st-append-code st0 (mov-rr reg-rbp reg-rsp)
+   in let st0r = reset-func-scratch st0
+   in let st1m = st-append-code st0r (mov-rr reg-rbp reg-rsp)
+   in let entry-frame-patch-pos = st1m.code-len
+   in let st1 = st-append-code st1m (emit-sub-rsp-imm32 0)
    in let st2 = if st-windows st1 then st1 else st-append-code st1 (li reg-r10 (st-heap-base st1))
    in let st3 = st-append-code st2 (li reg-rdi (st-cell st2 arena-base-addr))
    in let st4 = st-append-code st3 (mov-store reg-rdi reg-r10 0)
@@ -26526,7 +26611,8 @@ Section: Bare-Metal Start
    in let st20 = st-append-code st19 (li reg-r11 (st-cell st19 stack-min-rsp-addr))
    in let st21 = st-append-code st20 (mov-store reg-r11 reg-rsp 0)
    in let st22 = emit-call-to st21 opening-entry-point
-   in let st23 = emit-opening-result-print st22
+   in let st23u = emit-opening-result-print st22
+   in let st23 = st-add-deferred-patch st23u (make-i32-patch (entry-frame-patch-pos + 3) (align-16 (st23u.peak-spill * 8 + 64)))
    in if st-windows st23
     then let w0 = st-append-code st23 (li reg-rcx 0)
      in st-append-code w0 (call-abs-ind hosted-win-iat-exitprocess)
@@ -41309,6 +41395,21 @@ Section: __real_to_text
    in let st11 = st-append-code st10 (jmp (digit-loop - (st10.code-len + 5)))
    in patch-jcc-at st11 digit-done-pos (st11.code-len)
 
+ The 48-byte frame splits at 24, not at 16. The integer digits fill upward
+ from `rsp` and the fraction digits from `rsp + 24`, so the split is the
+ integer region's size and it must exceed the widest integer part
+ `cvttsd2si` can deliver: that is an i64, whose maximum is 19 digits. The
+ split was 16, so an integer part of 17 or more digits ran into the
+ fraction region and was overwritten -- silently, and as a DIGIT
+ SUBSTITUTION rather than a truncation, because the digits are stored
+ least-significant-first and the overrun lands on the most significant end.
+ With no fraction to write, the zero-fraction path below stored CCE 3 at
+ the split and turned that digit into '0': `12345678901234567.0` printed as
+ `02345678901234566.0` and `123456789012345678.0` as
+ `103456789012345680.0`, while `real-to-int` on the same values was right.
+ The fraction loop is capped at 15 digits, so 24 leaves both regions inside
+ the frame with room to spare.
+
   emit-number-to-text-frac-digits : CodegenState -> CodegenState
   emit-number-to-text-frac-digits (st) =
     let st0 = st-append-code st (mov-rr reg-r13 reg-rcx)
@@ -41326,7 +41427,7 @@ Section: __real_to_text
    in let st10 = st-append-code st9 (subsd-xmm 0 2)
    in let st11 = st-append-code st10 (add-ri reg-rdx 3)
    in let st12 = st-append-code st11 (mov-rr reg-rsi reg-rsp)
-   in let st13 = st-append-code st12 (add-ri reg-rsi 16)
+   in let st13 = st-append-code st12 (add-ri reg-rsi 24)
    in let st14 = st-append-code st13 (add-rr reg-rsi reg-r8)
    in let st15 = st-append-code st14 (mov-store-byte reg-rsi reg-rdx 0)
    in let st16 = st-append-code st15 (add-ri reg-r8 1)
@@ -41342,7 +41443,7 @@ Section: __real_to_text
    in let st24 = st-append-code st23 (jcc cc-ne 0)
    in let st25 = st-append-code st24 (li reg-rsi 3)
    in let st26 = st-append-code st25 (mov-rr reg-rax reg-rsp)
-   in let st27 = st-append-code st26 (add-ri reg-rax 16)
+   in let st27 = st-append-code st26 (add-ri reg-rax 24)
    in let st28 = st-append-code st27 (mov-store-byte reg-rax reg-rsi 0)
    in let st29 = st-append-code st28 (li reg-r8 1)
    in patch-jcc-at st29 has-frac-pos (st29.code-len)
@@ -41354,7 +41455,7 @@ Section: __real_to_text
    in let strip-done-pos = st0.code-len
    in let st1 = st-append-code st0 (jcc cc-le 0)
    in let st2 = st-append-code st1 (mov-rr reg-rsi reg-rsp)
-   in let st3 = st-append-code st2 (add-ri reg-rsi 16)
+   in let st3 = st-append-code st2 (add-ri reg-rsi 24)
    in let st4 = st-append-code st3 (add-rr reg-rsi reg-r8)
    in let st5 = st-append-code st4 (sub-ri reg-rsi 1)
    in let st6 = st-append-code st5 (movzx-byte reg-rdi reg-rsi 0)
@@ -41415,7 +41516,7 @@ Section: __real_to_text
    in let frac-copy-done-pos = st26.code-len
    in let st27 = st-append-code st26 (jcc cc-ge 0)
    in let st28 = st-append-code st27 (mov-rr reg-rsi reg-rsp)
-   in let st29 = st-append-code st28 (add-ri reg-rsi 16)
+   in let st29 = st-append-code st28 (add-ri reg-rsi 24)
    in let st30 = st-append-code st29 (add-rr reg-rsi reg-rcx)
    in let st31 = st-append-code st30 (movzx-byte reg-rsi reg-rsi 0)
    in let st32 = st-append-code st31 (mov-rr reg-rdx reg-rax)
@@ -46229,12 +46330,18 @@ Chapter: IR--Lowering
   cites Codex chapter Phase Allocator (deck-bound-short-of)
 
 Section: Lower Context
+  BinderRename =
+   | BrNil
+   | BrCons (Text) (Text) (BinderRename)
+
   LowerCtx = record {
    overlay : LookupOverlay,
    base : List TypeBinding,
    ust : UnificationState,
    local-type-vars : List Integer,
-   chapter-renames : List RenameEntry
+   chapter-renames : List RenameEntry,
+   binders : BinderRename,
+   rename : Boolean
   }
 
 Section: Expression Lowering
@@ -46338,7 +46445,7 @@ Section: Expression Lowering
   lower-lazy (inner) (ty) (ctx) (s) (depth) =
    let peeled-inner = peel-fun-return ty
    in let inner-ty = when peeled-inner
-      is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) (aexpr-span inner))
+      is ErrorTy | NoExpectTy -> peel-fun-return (deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) s))
       is otherwise -> peeled-inner
    in let sfx = integer-to-text depth
    in let cell-n = "__lz-cell" & sfx
@@ -46358,7 +46465,9 @@ Section: Expression Lowering
     base = ctx.base,
     ust = ctx.ust,
     local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
+    chapter-renames = ctx.chapter-renames,
+    binders = ctx.binders,
+    rename = ctx.rename
    }
    in let body-ir = lower-expr-at inner inner-ty lctx (depth + 97)
    in let val-ty = chain-ret-or inner-ty (ir-expr-type body-ir)
@@ -46486,7 +46595,8 @@ Section: Expression Lowering
 
   lower-name-normal : Text, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-name-normal (name) (ty) (ctx) (sp) =
-   let rn = rename-lookup (ctx.chapter-renames) name
+   let local = binder-lookup (ctx.binders) name
+   in let rn = if text-length local > 0 then local else rename-lookup (ctx.chapter-renames) name
    in let recorded = lookup-expr-type (ctx.ust) sp
    in when recorded
     is ErrorTy | NoExpectTy ->
@@ -46612,7 +46722,9 @@ Section: Expression Lowering
   lower-apply-lambda-chain (lam) (args) (ty) (ctx) (sp) =
    let arg-irs = for a in args -> lower-expr a NoExpectTy ctx
    in let n = list-length arg-irs
-   in let want = expected-or-recorded-ty ty ctx sp
+   in let want = when ty
+      is ErrorTy | NoExpectTy -> peel-applied-return (deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) sp)) n
+      is otherwise -> ty
    in let fn-ty = build-curried-fun-ty arg-irs 0 n want
    in let func-ir = lower-expr lam fn-ty ctx
    in apply-chain-fold func-ir arg-irs 0 n (ir-expr-type func-ir) want sp
@@ -46919,17 +47031,8 @@ Section: Let and Lambda
    else let b = list-at binds 0
    in let val-ir = lower-expr-at (b.value) NoExpectTy ctx (depth + 1)
    in let val-ty = deep-resolve (ctx.ust) (ir-expr-type val-ir)
-   in let ctx2 = LowerCtx {
-    overlay = OverlayCons (TypeBinding {
-     name = b.name.value,
-     bound-type = val-ty
-    }) (ctx.overlay),
-    base = ctx.base,
-    ust = ctx.ust,
-    local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
-   }
-   in deck-record (IrLet (b.name.value) val-ty val-ir (lower-let-rest binds body ty ctx2 1 sp depth) sp)
+   in let ctx2 = bind-local ctx (b.name.value) val-ty
+   in deck-record (IrLet (bound-name ctx2 (b.name.value)) val-ty val-ir (lower-let-rest binds body ty ctx2 1 sp depth) sp)
 
   lower-let-rest : List ALetBind, AExpr, CodexType, LowerCtx, Integer, SourceSpan, Integer -> IRExpr
   lower-let-rest (binds) (body) (ty) (ctx) (i) (sp) (depth) =
@@ -46937,24 +47040,15 @@ Section: Let and Lambda
    else let b = list-at binds i
    in let val-ir = lower-expr-at (b.value) NoExpectTy ctx (depth + 1)
    in let val-ty = deep-resolve (ctx.ust) (ir-expr-type val-ir)
-   in let ctx2 = LowerCtx {
-    overlay = OverlayCons (TypeBinding {
-     name = b.name.value,
-     bound-type = val-ty
-    }) (ctx.overlay),
-    base = ctx.base,
-    ust = ctx.ust,
-    local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
-   }
-   in deck-record (IrLet (b.name.value) val-ty val-ir (lower-let-rest binds body ty ctx2 (i + 1) sp depth) sp)
+   in let ctx2 = bind-local ctx (b.name.value) val-ty
+   in deck-record (IrLet (bound-name ctx2 (b.name.value)) val-ty val-ir (lower-let-rest binds body ty ctx2 (i + 1) sp depth) sp)
 
   lower-lambda : List Name, AExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-lambda (params) (body) (ty) (ctx) (sp) =
    let expected = expected-or-recorded-ty ty ctx sp
    in let stripped = strip-forall-ty expected
-   in let lparams = lower-lambda-params params stripped 0 sp
    in let lctx = bind-lambda-to-ctx ctx params stripped 0
+   in let lparams = lower-lambda-params lctx params stripped 0 sp
    in let declared-ret = get-lambda-return stripped (list-length params)
    in let body-ir = lower-expr body declared-ret lctx
    in deck-record (IrLambda lparams body-ir (lambda-recorded-ty declared-ret (ir-expr-type body-ir) expected) sp)
@@ -47040,30 +47134,21 @@ Section: Let and Lambda
    else let p = list-at params i
    in let param-ty = peel-fun-param ty
    in let rest-ty = peel-fun-return ty
-   in let ctx2 = LowerCtx {
-    overlay = OverlayCons (TypeBinding {
-     name = p.value,
-     bound-type = param-ty
-    }) (ctx.overlay),
-    base = ctx.base,
-    ust = ctx.ust,
-    local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
-   }
+   in let ctx2 = bind-local ctx (p.value) param-ty
    in bind-lambda-to-ctx ctx2 params rest-ty (i + 1)
 
-  lower-lambda-params : List Name, CodexType, Integer, SourceSpan -> List IRParam
-  lower-lambda-params (params) (ty) (i) (sp) =
-   lower-lambda-params-acc params ty i sp []
+  lower-lambda-params : LowerCtx, List Name, CodexType, Integer, SourceSpan -> List IRParam
+  lower-lambda-params (lctx) (params) (ty) (i) (sp) =
+   lower-lambda-params-acc lctx params ty i sp []
 
-  lower-lambda-params-acc : List Name, CodexType, Integer, SourceSpan, List IRParam -> List IRParam
-  lower-lambda-params-acc (params) (ty) (i) (sp) (acc) =
+  lower-lambda-params-acc : LowerCtx, List Name, CodexType, Integer, SourceSpan, List IRParam -> List IRParam
+  lower-lambda-params-acc (lctx) (params) (ty) (i) (sp) (acc) =
    if i == list-length params then acc
    else let p = list-at params i
    in let param-ty = peel-fun-param ty
    in let rest-ty = peel-fun-return ty
-   in lower-lambda-params-acc params rest-ty (i + 1) sp (list-push acc (deck-record (IRParam {
-    name = p.value,
+   in lower-lambda-params-acc lctx params rest-ty (i + 1) sp (list-push acc (deck-record (IRParam {
+    name = bound-name lctx (p.value),
     type-val = param-ty,
     span = sp
    })))
@@ -47100,7 +47185,10 @@ Section: Match Lowering
    in let result-ty = when ty
       is ErrorTy | NoExpectTy -> infer-match-type branches 0 (list-length branches)
       is otherwise -> branch-recorded-ty ty (match-witness-ty branches 0 (list-length branches))
-   in deck-record (IrMatch scrut-ir branches result-ty sp)
+   in let repaired = if ty-has-error result-ty then branches
+      else if any-branch-ty-error branches 0 (list-length branches) == False then branches
+      else repair-error-arms arms branches result-ty scrut-ty ctx 0 (list-length arms) []
+   in deck-record (IrMatch scrut-ir repaired result-ty sp)
 
   list-elem-of : CodexType -> CodexType
   list-elem-of (t) =
@@ -47127,16 +47215,62 @@ Section: Match Lowering
    else arms-use-list-ctors arms (i + 1) len
 
   lower-ctx-bind-name : LowerCtx, Text, CodexType -> LowerCtx
-  lower-ctx-bind-name (ctx) (n) (t) =
-   LowerCtx {
+  lower-ctx-bind-name (ctx) (n) (t) = bind-local ctx n t
+
+  binder-lookup : BinderRename, Text -> Text
+  binder-lookup (brs) (n) =
+   when brs
+    is BrNil -> ""
+    is BrCons (src) (emitted) (rest) -> if src == n then emitted else binder-lookup rest n
+
+  bound-name : LowerCtx, Text -> Text
+  bound-name (ctx) (n) =
+   let e = binder-lookup (ctx.binders) n
+   in if text-length e == 0 then n else e
+
+  binder-free : LowerCtx, Text -> Boolean
+  binder-free (ctx) (n) =
+   when lookup-overlay (ctx.overlay) n
+    is ErrorTy ->
+     (when lookup-type-bsearch (ctx.base) n
+      is ErrorTy -> True
+      is otherwise -> False)
+    is otherwise -> False
+
+  binder-fresh : LowerCtx, Text, Integer -> Text
+  binder-fresh (ctx) (n) (k) =
+   let cand = n & "_" & integer-to-text k
+   in if binder-free ctx cand then cand else binder-fresh ctx n (k + 1)
+
+ The rename is for the targets that scope a definition flat, and it is
+ switched off for the TEXT round-trip: stage1 text is compared to the
+ source definition by definition, and a shadowed `let __seq` re-spelled
+ `__seq_1` reads as a different body to that comparison. Measured
+ 2026-09-01 on the compiler's own unit: 39 definitions at head, every one
+ a chain of two field assignments, went red in `sem-equiv` the first time
+ the phase ran after the rename landed (the rename touched only this
+ chapter, which the internal gate does not count as implicating the text
+ round-trip). IR and CDX lowering keep the rename.
+
+  binder-emitted : LowerCtx, Text -> Text
+  binder-emitted (ctx) (n) =
+   if ctx.rename == False then n
+   else if binder-free ctx n then n else binder-fresh ctx n 1
+
+  bind-local : LowerCtx, Text, CodexType -> LowerCtx
+  bind-local (ctx) (n) (t) =
+   let emitted = binder-emitted ctx n
+   in LowerCtx {
     overlay = OverlayCons (TypeBinding {
-     name = n,
+     name = emitted,
      bound-type = t
     }) (ctx.overlay),
     base = ctx.base,
     ust = ctx.ust,
     local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
+    chapter-renames = ctx.chapter-renames,
+    binders = BrCons n emitted (ctx.binders),
+    rename = ctx.rename
    }
 
   list-len-call : IRExpr, CodexType, SourceSpan -> IRExpr
@@ -47173,7 +47307,7 @@ Section: Match Lowering
     is AWildPat (s) -> lower-expr (arm.body) ty ctx
     is AVarPat (n) (s) ->
      let ctx2 = lower-ctx-bind-name ctx (n.value) lty
-     in deck-record (IrLet (n.value) lty sref (lower-expr (arm.body) ty ctx2) (arm.span))
+     in deck-record (IrLet (bound-name ctx2 (n.value)) lty sref (lower-expr (arm.body) ty ctx2) (arm.span))
     is ACtorPat (cn) (subs) (s) ->
      if (cn.value) == "Nil"
      then if i == len - 1 then lower-expr (arm.body) ty ctx
@@ -47199,10 +47333,10 @@ Section: Match Lowering
       is otherwise -> ctx1
    in let body-ir = lower-expr (arm.body) ty ctx2
    in let with-t = when t-pat
-      is AVarPat (tn) (ts) -> deck-record (IrLet (tn.value) lty (deck-record (IrApply (deck-record (IrName "__list-tail" (deck-record (FunTy lty empty-row lty)) sp)) sref lty sp)) body-ir (arm.span))
+      is AVarPat (tn) (ts) -> deck-record (IrLet (bound-name ctx2 (tn.value)) lty (deck-record (IrApply (deck-record (IrName "__list-tail" (deck-record (FunTy lty empty-row lty)) sp)) sref lty sp)) body-ir (arm.span))
       is otherwise -> body-ir
    in let with-h = when h-pat
-      is AVarPat (hn) (hs) -> deck-record (IrLet (hn.value) elem (deck-record (IrApply (deck-record (IrName "__list-head" (deck-record (FunTy lty empty-row elem)) sp)) sref elem sp)) with-t (arm.span))
+      is AVarPat (hn) (hs) -> deck-record (IrLet (bound-name ctx2 (hn.value)) elem (deck-record (IrApply (deck-record (IrName "__list-head" (deck-record (FunTy lty empty-row elem)) sp)) sref elem sp)) with-t (arm.span))
       is otherwise -> with-t
    in if i == len - 1 then with-h
    else let cond = deck-record (IrBinary IrGt (list-len-call sref lty sp) (deck-record (IrIntLit 0 sp)) BooleanTy sp)
@@ -47223,6 +47357,28 @@ Section: Match Lowering
      is ErrorTy | NoExpectTy -> infer-match-type branches (i + 1) len
      is otherwise -> body-ty
 
+  any-branch-ty-error : List IRBranch, Integer, Integer -> Boolean
+  any-branch-ty-error (branches) (i) (len) =
+   if i == len then False
+   else if ty-has-error (ir-expr-type ((list-at branches i).body)) then True
+   else any-branch-ty-error branches (i + 1) len
+
+  repair-error-arms : List AMatchArm, List IRBranch, CodexType, CodexType, LowerCtx, Integer, Integer, List IRBranch -> List IRBranch
+  repair-error-arms (arms) (branches) (result-ty) (scrut-ty) (ctx) (i) (len) (acc) =
+   if i == len then acc
+   else let br = list-at branches i
+   in if ty-has-error (ir-expr-type (br.body)) == False
+      then repair-error-arms arms branches result-ty scrut-ty ctx (i + 1) len (list-push acc br)
+      else let arm = list-at arms i
+      in let arm-ctx = bind-pattern-to-ctx ctx (arm.pattern) scrut-ty
+      in repair-error-arms arms branches result-ty scrut-ty ctx (i + 1) len (list-push acc (deck-record (IRBranch {
+       pattern = br.pattern,
+       body = lower-expr (arm.body) result-ty arm-ctx,
+       guard = br.guard,
+       span = br.span,
+       alt-group = br.alt-group
+      })))
+
   lower-match-arms-loop : List AMatchArm, CodexType, CodexType, LowerCtx, Integer, Integer -> List IRBranch
   lower-match-arms-loop (arms) (ty) (scrut-ty) (ctx) (i) (len) =
    lower-match-arms-acc arms ty scrut-ty ctx i len []
@@ -47233,7 +47389,7 @@ Section: Match Lowering
    else let arm = list-at arms i
    in let arm-ctx = bind-pattern-to-ctx ctx (arm.pattern) scrut-ty
    in lower-match-arms-acc arms ty scrut-ty ctx (i + 1) len (list-push acc (deck-record (IRBranch {
-    pattern = lower-pattern ctx (arm.pattern) scrut-ty,
+    pattern = lower-pattern arm-ctx (arm.pattern) scrut-ty,
     body = lower-expr (arm.body) ty arm-ctx,
     guard = lower-expr (arm.guard) BooleanTy arm-ctx,
     span = arm.span,
@@ -47243,17 +47399,7 @@ Section: Match Lowering
   bind-pattern-to-ctx : LowerCtx, APat, CodexType -> LowerCtx
   bind-pattern-to-ctx (ctx) (pat) (ty) =
    when pat
-    is AVarPat (name) (s) ->
-     LowerCtx {
-      overlay = OverlayCons (TypeBinding {
-       name = name.value,
-       bound-type = ty
-      }) (ctx.overlay),
-      base = ctx.base,
-      ust = ctx.ust,
-      local-type-vars = ctx.local-type-vars,
-      chapter-renames = ctx.chapter-renames
-     }
+    is AVarPat (name) (s) -> bind-local ctx (name.value) ty
     is ACtorPat (ctor-name) (sub-pats) (s) ->
      let ctor-raw = lookup-type-split (ctx.overlay) (ctx.base) (ctor-name.value)
      in let ctor-ty = deep-resolve (ctx.ust) ctor-raw
@@ -47290,7 +47436,7 @@ Section: Match Lowering
   lower-pattern-at (ctx) (p) (scrut-ty) (depth) =
    if depth >= max-recursion-depth then deck-record (IrWildPat (apat-span p))
    else when p
-    is AVarPat (name) (s) -> deck-record (IrVarPat (name.value) scrut-ty s)
+    is AVarPat (name) (s) -> deck-record (IrVarPat (bound-name ctx (name.value)) scrut-ty s)
     is ALitPat (text) (kind) (s) -> deck-record (IrLitPat text scrut-ty s)
     is ACtorPat (name) (subs) (s) -> deck-record (IrCtorPat (name.value) (lower-ctor-sub-patterns ctx subs scrut-ty (name.value) 0 (depth + 1)) scrut-ty s)
     is AVecPat (subs) (s) ->
@@ -47540,13 +47686,20 @@ Section: Collections and Act
 
   lower-empty-list : CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-empty-list (ty) (ctx) (sp) =
-   let resolved = deep-resolve (ctx.ust) ty
+   let resolved = empty-list-element-source (deep-resolve (ctx.ust) ty) ctx sp
    in when resolved
     is LinkedListTy (e) ->
      let ll-ty = deck-record (LinkedListTy e)
      in deck-record (IrApply (deck-record (IrName "__linked-list-empty" (deck-record (FunTy int-ty-default empty-row ll-ty)) sp)) (deck-record (IrIntLit 0 sp)) ll-ty sp)
     is ListTy (e) -> deck-record (IrList [] e sp)
     is otherwise -> deck-record (IrList [] ErrorTy sp)
+
+  empty-list-element-source : CodexType, LowerCtx, SourceSpan -> CodexType
+  empty-list-element-source (ctx-ty) (ctx) (sp) =
+   when ctx-ty
+    is ListTy (e) -> ctx-ty
+    is LinkedListTy (e) -> ctx-ty
+    is otherwise -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) sp)
 
   lower-nonempty-list : List AExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-nonempty-list (elems) (ty) (ctx) (sp) =
@@ -47556,8 +47709,16 @@ Section: Collections and Act
       is otherwise -> ErrorTy
    in let elem-ty = when from-context
       is ErrorTy | NoExpectTy -> ir-expr-type (lower-expr (list-at elems 0) NoExpectTy ctx)
-      is otherwise -> from-context
+      is otherwise ->
+       if ty-has-typevars from-context == False then from-context
+       else list-elem-witnessed from-context (ir-expr-type (lower-expr (list-at elems 0) NoExpectTy ctx))
    in deck-record (IrList (for e in elems -> lower-expr e elem-ty ctx) elem-ty sp)
+
+  list-elem-witnessed : CodexType, CodexType -> CodexType
+  list-elem-witnessed (from-context) (witness) =
+   if ty-has-error witness then from-context
+   else if ty-admits-widening witness then from-context
+   else witness
 
   lower-record : Name, List AFieldExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-record (name) (fields) (ty) (ctx) (sp) =
@@ -47663,17 +47824,8 @@ Section: Collections and Act
      is AActBindStmt (name) (val) (sp) ->
       let val-ir = lower-expr val ty ctx
    in let val-ty = peel-effectful-ty (ir-expr-type val-ir)
-   in let ctx2 = LowerCtx {
-       overlay = OverlayCons (TypeBinding {
-        name = name.value,
-        bound-type = val-ty
-       }) (ctx.overlay),
-       base = ctx.base,
-       ust = ctx.ust,
-       local-type-vars = ctx.local-type-vars,
-       chapter-renames = ctx.chapter-renames
-      }
-   in lower-act-stmts-acc stmts ty ctx2 (i + 1) len (list-push acc (deck-record (IrDoBind (name.value) val-ty val-ir sp)))
+   in let ctx2 = bind-local ctx (name.value) val-ty
+   in lower-act-stmts-acc stmts ty ctx2 (i + 1) len (list-push acc (deck-record (IrDoBind (bound-name ctx2 (name.value)) val-ty val-ir sp)))
      is AActExprStmt (e) (sp) ->
       when e
        is ALetExpr (binds) (lbody) (ls) ->
@@ -47712,17 +47864,8 @@ Section: Collections and Act
    else let b = list-at binds j
    in let val-ir = lower-expr (b.value) NoExpectTy ctx
    in let val-ty = deep-resolve (ctx.ust) (ir-expr-type val-ir)
-   in let ctx2 = LowerCtx {
-    overlay = OverlayCons (TypeBinding {
-     name = b.name.value,
-     bound-type = val-ty
-    }) (ctx.overlay),
-    base = ctx.base,
-    ust = ctx.ust,
-    local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
-   }
-   in deck-record (IrLet (b.name.value) val-ty val-ir (lower-act-let binds (j + 1) body stmts ty ctx2 i len sp) sp)
+   in let ctx2 = bind-local ctx (b.name.value) val-ty
+   in deck-record (IrLet (bound-name ctx2 (b.name.value)) val-ty val-ir (lower-act-let binds (j + 1) body stmts ty ctx2 i len sp) sp)
 
   lower-handle : Name, AExpr, List AHandleClause, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-handle (eff) (body) (clauses) (ty) (ctx) (sp) =
@@ -47766,8 +47909,8 @@ Section: Collections and Act
    else FunTy int-ty-default empty-row (build-lambda-type params ret (i + 1))
 
 Section: Definition Lowering
-  lower-def : ADef, List TypeBinding, UnificationState, List RenameEntry, List RenameEntry -> IRDef
-  lower-def (d) (types) (ust) (renames) (chapter-rn) =
+  lower-def : ADef, List TypeBinding, UnificationState, List RenameEntry, List RenameEntry, Boolean -> IRDef
+  lower-def (d) (types) (ust) (renames) (chapter-rn) (rename) =
    let rn = resolve-def-name renames (d.name.value) (d.chapter-slug)
    in let raw-type = lookup-type-bsearch types rn
    in let full-type = deep-resolve ust raw-type
@@ -47775,7 +47918,7 @@ Section: Definition Lowering
    in let local-ids = collect-type-var-ids stripped []
    in let params = lower-def-params (d.params) stripped 0
    in let ret-type = get-return-type-n stripped (list-length (d.params))
-   in let ctx = build-def-ctx types ust (d.params) stripped local-ids chapter-rn
+   in let ctx = build-def-ctx types ust (d.params) stripped local-ids chapter-rn rename
    in deck-record (IRDef {
     name = rn,
     params = params,
@@ -47794,14 +47937,16 @@ Section: Definition Lowering
     is TypeVar (id) -> if list-contains-int acc id then acc else list-push acc id
     is otherwise -> codex-type-fold-children collect-type-var-ids ty acc
 
-  build-def-ctx : List TypeBinding, UnificationState, List AParam, CodexType, List Integer, List RenameEntry -> LowerCtx
-  build-def-ctx (types) (ust) (params) (ty) (local-ids) (chapter-rn) =
+  build-def-ctx : List TypeBinding, UnificationState, List AParam, CodexType, List Integer, List RenameEntry, Boolean -> LowerCtx
+  build-def-ctx (types) (ust) (params) (ty) (local-ids) (chapter-rn) (rename) =
    let base-ctx = LowerCtx {
     overlay = OverlayNil,
     base = types,
     ust = ust,
     local-type-vars = local-ids,
-    chapter-renames = chapter-rn
+    chapter-renames = chapter-rn,
+    binders = BrNil,
+    rename = rename
    }
    in bind-params-to-ctx base-ctx params ty 0
 
@@ -47819,7 +47964,9 @@ Section: Definition Lowering
     base = ctx.base,
     ust = ctx.ust,
     local-type-vars = ctx.local-type-vars,
-    chapter-renames = ctx.chapter-renames
+    chapter-renames = ctx.chapter-renames,
+    binders = ctx.binders,
+    rename = ctx.rename
    }
    in bind-params-to-ctx ctx2 params rest-ty (i + 1)
 
@@ -47860,12 +48007,12 @@ Section: Definition Lowering
     is FunTy (p) (row) (r) -> get-return-type-n r (n - 1)
     is otherwise -> ty
 
-  lower-chapter : AChapter, List TypeBinding, UnificationState, List Text, List RenameEntry, SkipListText, List ChapterAssignment, Integer -> IRChapter
-  lower-chapter (m) (all-types) (ust) (ctor-names) (renames) (colliding) (assignments) (ceiling) =
+  lower-chapter : AChapter, List TypeBinding, UnificationState, List Text, List RenameEntry, SkipListText, List ChapterAssignment, Integer, Boolean -> IRChapter
+  lower-chapter (m) (all-types) (ust) (ctor-names) (renames) (colliding) (assignments) (ceiling) (rename) =
    let slug-cache = for a in assignments -> cite-key (a.chapter-slug)
    in deck-record (IRChapter {
     name = m.name,
-    defs = lower-defs (m.defs) all-types ust 0 renames colliding assignments (m.citations) slug-cache "" [] (m.rt-names) (m.rt-budgets) ceiling,
+    defs = lower-defs (m.defs) all-types ust 0 renames colliding assignments (m.citations) slug-cache "" [] (m.rt-names) (m.rt-budgets) ceiling rename,
     effect-op-names = lower-collect-effect-op-names (m.effect-defs) 0 (list-length (m.effect-defs)) [],
     span = m.span
    })
@@ -47876,9 +48023,9 @@ Section: Definition Lowering
    else let e = list-at effs i
    in lower-collect-effect-op-names effs (i + 1) len (acc & (for op in (e.ops) -> op.name.value))
 
-  lower-defs : List ADef, List TypeBinding, UnificationState, Integer, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List Integer, Integer -> List IRDef
-  lower-defs (defs) (types) (ust) (i) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (rt-budgets) (ceiling) =
-   lower-defs-acc defs types ust i [] renames colliding assignments citations slug-cache cur-slug cur-chapter-rn rt-names rt-budgets ceiling
+  lower-defs : List ADef, List TypeBinding, UnificationState, Integer, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List Integer, Integer, Boolean -> List IRDef
+  lower-defs (defs) (types) (ust) (i) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (rt-budgets) (ceiling) (rename) =
+   lower-defs-acc defs types ust i [] renames colliding assignments citations slug-cache cur-slug cur-chapter-rn rt-names rt-budgets ceiling rename
 
   is-in-rt-names : List Text, Text, Integer, Integer -> Boolean
   is-in-rt-names (names) (target) (i) (len) =
@@ -47910,16 +48057,16 @@ Section: Definition Lowering
  destroy the record measuring it -- and reading R10 it stops at
  8,487,976 bytes, exactly one guard band short of the floor.
 
-  lower-defs-acc : List ADef, List TypeBinding, UnificationState, Integer, List IRDef, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List Integer, Integer -> List IRDef
-  lower-defs-acc (defs) (types) (ust) (i) (acc) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (rt-budgets) (ceiling) =
+  lower-defs-acc : List ADef, List TypeBinding, UnificationState, Integer, List IRDef, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List Integer, Integer, Boolean -> List IRDef
+  lower-defs-acc (defs) (types) (ust) (i) (acc) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (rt-budgets) (ceiling) (rename) =
    if i == list-length defs then acc
    else if deck-bound-short-of ceiling demand-lower-guard-band then acc
    else let d = list-at defs i
    in let chapter-rn = if d.chapter-slug == cur-slug then cur-chapter-rn
       else apply-cite-overrides (build-chapter-rename-map colliding assignments (d.chapter-slug)) citations colliding assignments slug-cache (d.chapter-slug) 0
-   in let ir-def = lower-def d types ust renames chapter-rn
+   in let ir-def = lower-def d types ust renames chapter-rn rename
    in let tagged = if is-in-rt-names rt-names (d.name.value) 0 (list-length rt-names) then __record-set (__record-set ir-def "is-punctual" True) "wcet-budget" (find-rt-budget rt-names rt-budgets (d.name.value) 0 (list-length rt-names)) else ir-def
-   in lower-defs-acc defs types ust (i + 1) (list-push acc tagged) renames colliding assignments citations slug-cache (d.chapter-slug) chapter-rn rt-names rt-budgets ceiling
+   in lower-defs-acc defs types ust (i + 1) (list-push acc tagged) renames colliding assignments citations slug-cache (d.chapter-slug) chapter-rn rt-names rt-budgets ceiling rename
 
 Section: Constant Folding
 
@@ -48836,7 +48983,25 @@ Section: Type Substitution
     is ListTy (pe) -> subst-from-list pe arg-ty target
     is FunTy (pp) (prow) (pr) -> subst-from-fun pp pr arg-ty target
     is TypeApply (pf) (pa) -> when arg-ty is TypeApply (af) (aa) -> let t2 = subst-type-vars-from-arg pf af target in subst-type-vars-from-arg pa aa t2 is otherwise -> target
+    is SumTy (pn) (pargs) (pctors) -> when arg-ty is SumTy (an) (aargs) (actors) -> subst-from-named (pn.value) (an.value) pargs aargs target is otherwise -> target
+    is RecordTy (pn) (pargs) (pfields) -> when arg-ty is RecordTy (an) (aargs) (afields) -> subst-from-named (pn.value) (an.value) pargs aargs target is otherwise -> target
+    is ConstructedTy (pn) (pargs) -> when arg-ty is ConstructedTy (an) (aargs) -> subst-from-named (pn.value) (an.value) pargs aargs target is otherwise -> target
+    is LinkedListTy (pe) -> when arg-ty is LinkedListTy (ae) -> subst-type-vars-from-arg pe ae target is otherwise -> target
+    is VectorTy (pw) (pe) -> when arg-ty is VectorTy (aw) (ae) -> subst-type-vars-from-arg pe ae target is otherwise -> target
+    is UnitTy (pn) (pe) -> when arg-ty is UnitTy (an) (ae) -> if pn.value == an.value then subst-type-vars-from-arg pe ae target else target is otherwise -> target
+    is LinearTy (pe) -> when arg-ty is LinearTy (ae) -> subst-type-vars-from-arg pe ae target is otherwise -> target
     is otherwise -> target
+
+  subst-from-named : Text, Text, List CodexType, List CodexType, CodexType -> CodexType
+  subst-from-named (pn) (an) (pargs) (aargs) (target) =
+   if pn == an then subst-from-tyargs pargs aargs target 0 else target
+
+  subst-from-tyargs : List CodexType, List CodexType, CodexType, Integer -> CodexType
+  subst-from-tyargs (ps) (as) (target) (i) =
+   if i >= list-length ps then target
+   else if i >= list-length as then target
+   else let t2 = subst-type-vars-from-arg (list-at ps i) (list-at as i) target
+   in subst-from-tyargs ps as t2 (i + 1)
 
   subst-from-list : CodexType, CodexType, CodexType -> CodexType
   subst-from-list (pe) (arg-ty) (target) =
@@ -51319,11 +51484,29 @@ Section: Resolve All Definitions
    else let def = list-at defs i
    in let chapter-rn = if def.chapter-slug == cur-slug then cur-chapter-rn
       else apply-cite-overrides (build-chapter-rename-map colliding assignments (def.chapter-slug)) citations colliding assignments slug-cache (def.chapter-slug) 0
+   in let bivy-mark = __heap-save
+   in let deck-mark = __deck-pos
    in let fresh-scope = Scope { names = sc.names, locals = skip-list-text-empty, chapter-renames = chapter-rn }
    in let param-result = add-def-params fresh-scope (def.params) 0 (list-length (def.params)) []
    in let body-scope = add-forall-binders (param-result.scope) def
    in let errs2 = resolve-expr body-scope (def.body)
-   in resolve-all-defs sc defs (i + 1) len (errs & param-result.errors & errs2) colliding assignments citations slug-cache (def.chapter-slug) chapter-rn ceiling
+   in let errs-new = param-result.errors & errs2
+   in if list-length errs-new == 0
+      then let deck-back = __deck-set deck-mark
+       in let bivy-back = __heap-restore bivy-mark
+       in resolve-all-defs sc defs (i + 1) len errs colliding assignments citations slug-cache (def.chapter-slug) chapter-rn ceiling
+      else resolve-all-defs sc defs (i + 1) len (errs & errs-new) colliding assignments citations slug-cache (def.chapter-slug) chapter-rn ceiling
+
+ A definition's resolution answers only its diagnostics; every scope,
+ pattern result and rename lookup it built is dead once resolve-expr
+ returns, and until 2026-09-01 all of it stayed until the phase compact,
+ 251 MB of bivy and 53 MB of deck on the compiler's own unit. The marks
+ are taken AFTER the chapter rename table is computed, because that table
+ is carried into the next definition of the same chapter and must sit
+ below every rewind that follows it. A definition that raised something
+ keeps its scratch, since the diagnostics it built live there; a clean
+ unit therefore rewinds every definition, and a unit with errors degrades
+ toward the old shape one definition at a time.
 
   add-forall-binders : Scope, ADef -> Scope
   add-forall-binders (sc) (def) =
@@ -51523,8 +51706,19 @@ Section: Lexer State
 
   add-lex-error : LexState, Integer between 0 and 65535, Text, SourceSpan -> LexState
   add-lex-error (st) (code) (msg) (span) =
-   let __seq = st.errors = __linked-list-push (st.errors) (make-error code msg span)
+   let __seq = st.errors = lex-errors-push (st.errors) (make-error code msg span)
    in st
+
+ Every lexer error goes through this push. The lexer rewinds the bivy after
+ every token (`lex-state-below`), so an error cell or a diagnostic built in
+ the bivy is overwritten by the next token's scan; the cell, the diagnostic
+ and everything it points at are copied onto the deck instead, which is what
+ `copy-sx-diag` with a zero floor does. Three sites pushed cells directly
+ before 2026-09-01 and all four lexer refusal tests crashed reading them.
+
+  lex-errors-push : LinkedList Diagnostic, Diagnostic -> LinkedList Diagnostic
+  lex-errors-push (errs) (d) =
+   deck-record (__linked-list-push errs (copy-sx-diag 0 d))
 
   is-at-end : LexState -> Boolean
   is-at-end (st) =
@@ -51670,17 +51864,17 @@ Section: Character Scanning
   scan-string-body : LexState -> LexState
   scan-string-body (st) =
    let len = text-length (st.source)
+   in let entry = st.offset
    in let stop = scan-string-end (st.source) (st.offset) len
-   in if stop == st.offset then st
-      else let new-col = st.column + (stop - st.offset)
-      in let __seq = st.offset = stop
-      in let __seq = st.column = new-col
-      in let terminated = stop <= len & stop > 0 & char-code-at (st.source) (stop - 1) == cc-double-quote
-      in if terminated then st
-         else let open-span = span-at (st.line) (st.column - 1) (st.offset - 1) 1 (st.file-id)
-         in let err = make-error cdx-unterminated-text "Unterminated text literal: hit end of line before closing '\"'" open-span
-         in let __seq = st.errors = __linked-list-push (st.errors) err
-         in st
+   in let new-col = st.column + (stop - entry)
+   in let __seq = st.offset = stop
+   in let __seq = st.column = new-col
+   in let terminated = stop <= len & stop > entry & char-code-at (st.source) (stop - 1) == cc-double-quote
+   in if terminated then st
+      else let open-span = span-at (st.line) (st.column - 1) (st.offset - 1) 1 (st.file-id)
+      in let err = make-error cdx-unterminated-text "Unterminated text literal: hit end of line before closing '\"'" open-span
+      in let __seq = st.errors = lex-errors-push (st.errors) err
+      in st
 
   validate-escapes-into : Text, Integer between 0 and 131071, Integer between 0 and 4294967295, Integer between 0 and 4294967295, Integer between 0 and 65535, LinkedList Diagnostic -> LinkedList Diagnostic
   validate-escapes-into (s) (base-line) (base-col) (base-off) (fid) (errs) =
@@ -51692,8 +51886,8 @@ Section: Character Scanning
    else let c = char-code-at s i
    in if c == cc-backslash then if i + 1 < len then let nc = char-code-at s (i + 1)
    in let esc-span = span-at line (col + i) (off + i) 2 fid
-   in if nc == cc-lower-t then validate-escapes-loop s (i + 2) len line col off fid (__linked-list-push errs (make-error cdx-invalid-tab-escape "\\t escape is not valid in CCE; use spaces directly" esc-span))
-          else if nc == cc-lower-r then validate-escapes-loop s (i + 2) len line col off fid (__linked-list-push errs (make-error cdx-invalid-carriage-return-escape "\\r escape is not valid in CCE; use \\n for newlines" esc-span))
+   in if nc == cc-lower-t then validate-escapes-loop s (i + 2) len line col off fid (lex-errors-push errs (make-error cdx-invalid-tab-escape "\\t escape is not valid in CCE; use spaces directly" esc-span))
+          else if nc == cc-lower-r then validate-escapes-loop s (i + 2) len line col off fid (lex-errors-push errs (make-error cdx-invalid-carriage-return-escape "\\r escape is not valid in CCE; use \\n for newlines" esc-span))
           else validate-escapes-loop s (i + 2) len line col off fid errs
        else errs
       else validate-escapes-loop s (i + 1) len line col off fid errs
@@ -51945,7 +52139,7 @@ Section: Tokenize All
   }
 
   LexCollected = record {
-   collected-tokens : LinkedList Token,
+   collected-tokens : List Token,
    collected-errors : LinkedList Diagnostic
   }
 
@@ -51966,29 +52160,94 @@ Section: Tokenize All
  `tokens = []` the moment the bag has errors -- so the honest wind-down
  allocates nothing and the band only has to cover the error record.
 
-  tokenize-collect : LexState, LinkedList Token, Integer -> LexCollected
+ The token list is a flat list with capacity taken from the source
+ length, pushed through a deck extent so that a push within capacity is
+ a store and a push past it copies onto the deck rather than into the
+ bivy. Until 2026-09-01 the tokens were collected into a linked list and
+ flattened once at the end, which left one list cell per token in the
+ bivy, 54 MB on the compiler's own unit, and that bivy sat above the LEX
+ floor where nothing later in the compile reuses the pages. A token
+ consumes at least one source character except the synthesized layout
+ tokens, so half the source length plus a margin covers the measured
+ density with room (1.2 million tokens from 3.05 MB on the compiler's own
+ unit); a unit that exceeds it copies on the deck and loses nothing.
+
+  tokenize-collect : LexState, List Token, Integer -> LexCollected
   tokenize-collect (st) (acc) (ceiling) =
    if ceiling > 0 & __deck-pos + demand-lex-guard-band >= ceiling
     then LexCollected {
      collected-tokens = [],
      collected-errors = __linked-list-push (st.errors) (make-error cdx-deck-overflow "Deck overflow in LEX; deck floor exceeded. The lexer's deck reservation ran out mid-stream. Raise demand-lex-floor, or compile this source with a larger -Decks percentage." synthetic-span)
     }
-   else when scan-token st
+   else let mark = __heap-save
+   in when scan-token st
     is LexToken (tok) (next) ->
-     if tok.kind == EndOfFile then LexCollected { collected-tokens = __linked-list-push acc tok, collected-errors = next.errors }
-      else tokenize-collect next (__linked-list-push acc tok) ceiling
+     let acc2 = deck-record (list-push acc tok)
+     in let below = lex-state-below mark next
+     in if tok.kind == EndOfFile then LexCollected { collected-tokens = acc2, collected-errors = below.errors }
+      else tokenize-collect below acc2 ceiling
     is LexEnd ->
-     LexCollected { collected-tokens = __linked-list-push acc (make-token (deck-record EndOfFile) 0 st), collected-errors = st.errors }
+     LexCollected { collected-tokens = deck-record (list-push acc (make-token (deck-record EndOfFile) 0 st)), collected-errors = st.errors }
+
+ Scanning one token leaves the states it stepped through in the bivy, and a
+ token's own record is deck-recorded by make-token, so the only thing the
+ next step needs from above the mark is the final state. Its fields are
+ read into locals, the bivy rewinds to the mark, and the state is rebuilt
+ below it; the errors list is safe to carry because add-lex-error puts its
+ cells and its diagnostic on the deck. Measured on the compiler's own unit
+ this is 45 MB of bivy per compile that nothing later reuses, sitting
+ above the LEX floor.
+
+  lex-state-below : Integer, LexState -> LexState
+  lex-state-below (mark) (next) =
+   let src = next.source
+   in let off = next.offset
+   in let ln = next.line
+   in let col = next.column
+   in let fid = next.file-id
+   in let errs = next.errors
+   in let pm = next.prose-mode
+   in let back = __heap-restore mark
+   in LexState {
+    source = src,
+    offset = off,
+    line = ln,
+    column = col,
+    file-id = fid,
+    errors = errs,
+    prose-mode = pm
+   }
+
+  token-capacity-for : Text -> Integer
+  token-capacity-for (src) = text-length src / 2 + 1024
+
+ The capacity is one allocation of many megabytes, and the per-token guard
+ below cannot see it: a starved floor would be stepped over before the first
+ token was read, and the pushes would then write into the bivy above the
+ reservation, which is the silent corruption `build/deck-floor-test.ps1`
+ exists to catch. So the capacity is clipped to the room the floor leaves
+ above the guard band; a clipped list overflows onto the deck through the
+ copy path, where the guard sees the growth and refuses in the open.
+
+  token-capacity-within : Text, Integer -> Integer
+  token-capacity-within (src) (ceiling) =
+   let want = token-capacity-for src
+   in if ceiling <= 0 then want
+   else let room = (ceiling - demand-lex-guard-band - __deck-pos) / 8 - 16
+   in if room < 1024 then 1024
+   else if room < want then room
+   else want
 
   tokenize : Text, Integer between 0 and 65535 -> TokenizeResult
   tokenize (src) (fid) =
-   let raw = tokenize-collect (make-lex-state src fid []) [] 0
-   in TokenizeResult { tokens = __linked-list-to-list (raw.collected-tokens), errors = __linked-list-to-list (raw.collected-errors) }
+   let raw = tokenize-collect (make-lex-state src fid []) (__list-with-capacity (token-capacity-for src)) 0
+   in TokenizeResult { tokens = raw.collected-tokens, errors = __linked-list-to-list (raw.collected-errors) }
 
   tokenize-into : Text, Integer between 0 and 65535, Boolean, Integer -> TokenizeResult
   tokenize-into (src) (fid) (prose) (ceiling) =
-   let raw = tokenize-collect (make-lex-state-prose src fid [] prose) [] ceiling
-   in deck-record (TokenizeResult { tokens = __linked-list-to-list (raw.collected-tokens), errors = __linked-list-to-list (raw.collected-errors) })
+   let acc0 = deck-record (__list-with-capacity (token-capacity-within src ceiling))
+   in let raw = tokenize-collect (make-lex-state-prose src fid [] prose) acc0 ceiling
+   in deck-record (TokenizeResult { tokens = raw.collected-tokens, errors = __linked-list-to-list (raw.collected-errors) })
 
 Page 1
 
@@ -52896,10 +53155,36 @@ Section: Document Parsing
    in let (imp-list, imp-st) = parse-citations st2 "" []
    in let doc = parse-top-level [] [] [] imp-list "" [] [] [] [] imp-st
    in let short = deck-short-of ceiling demand-parse-scratch-guard-band
-   in let ci = if short then empty-class-instance-scan else scan-class-instance-defs (make-parse-state (st.tokens) "") [] []
-   in let pag-errs = if short then [] else check-pagination (scan-chapter-pages (make-parse-state (st.tokens) "") [])
+   in let ci = if short then empty-class-instance-scan else scan-class-instance-defs-kept (st.tokens)
+   in let pag-errs = if short then [] else check-pagination-kept (st.tokens)
    in let doc2 = __record-set (__record-set doc "class-defs" (ci.class-defs)) "instance-defs" (ci.instance-defs)
    in __record-set doc2 "parse-bag" (add-bag-diags (doc2.parse-bag) pag-errs 0 (list-length pag-errs))
+
+ Both scans walk the whole token stream a second time and allocate a
+ parse state per step, 66 MB of bivy on the compiler's own unit for a few
+ kilobytes of answer. Each runs above a mark, copies its answer onto the
+ deck with the syntax-node copiers, and rewinds.
+
+  scan-class-instance-defs-kept : List Token -> ClassDefsResult
+  scan-class-instance-defs-kept (tokens) =
+   let mark = __heap-save
+   in let floor = __deck-pos
+   in let ci = scan-class-instance-defs (make-parse-state tokens "") [] []
+   in let kept = deck-record (ClassDefsResult {
+    class-defs = for c in (ci.class-defs) -> copy-sx-classdef floor c,
+    instance-defs = for i in (ci.instance-defs) -> copy-sx-instancedef floor i
+   })
+   in let back = __heap-restore mark
+   in kept
+
+  check-pagination-kept : List Token -> List Diagnostic
+  check-pagination-kept (tokens) =
+   let mark = __heap-save
+   in let floor = __deck-pos
+   in let errs = check-pagination (scan-chapter-pages (make-parse-state tokens "") [])
+   in let kept = deck-record (for d in errs -> copy-sx-diag floor d)
+   in let back = __heap-restore mark
+   in kept
 
   deck-copy-text : Text -> Text
   deck-copy-text (t) =
@@ -53469,7 +53754,7 @@ Section: Chapter Pagination
     in let st-i4 = if is-where-keyword (current-kind st-i3) then skip-newlines (advance st-i3) else st-i3
     in parse-top-level defs type-defs effect-defs imports ch-title sec-titles prose blocks anns (skip-body-lines st-i4)
    else if is-claim-keyword (current-kind st) then parse-claim-arm defs type-defs effect-defs imports ch-title sec-titles prose blocks anns st
-   else if is-proof-keyword (current-kind st) then let item = parse-top-def-item defs type-defs ch-title (advance st)
+   else if is-proof-keyword (current-kind st) then let item = parse-top-def-item defs type-defs ch-title (advance st) __heap-save
     in parse-top-level (item.ti-defs) (item.ti-type-defs) effect-defs imports ch-title sec-titles prose blocks anns (item.ti-state)
    else if is-punctual-keyword (current-kind st) then let pst = advance st
      in if is-done pst then parse-top-level defs type-defs effect-defs imports ch-title sec-titles prose blocks anns pst
@@ -53477,11 +53762,11 @@ Section: Chapter Pagination
        in let pst2 = advance pst
        in let pname = if is-done pst2 then "" else token-text (current pst2)
        in let pann = deck-record (AnnotationNode { kind = "hard-realtime", target = pname, body = budget-text })
-       in let item = parse-top-def-item defs type-defs ch-title pst2
+       in let item = parse-top-def-item defs type-defs ch-title pst2 __heap-save
        in parse-top-level (item.ti-defs) (item.ti-type-defs) effect-defs imports ch-title sec-titles prose blocks (__linked-list-push anns pann) (item.ti-state)
      else let pname = token-text (current pst)
      in let pann = deck-record (AnnotationNode { kind = "hard-realtime", target = pname, body = "" })
-     in let item = parse-top-def-item defs type-defs ch-title pst
+     in let item = parse-top-def-item defs type-defs ch-title pst __heap-save
      in parse-top-level (item.ti-defs) (item.ti-type-defs) effect-defs imports ch-title sec-titles prose blocks (__linked-list-push anns pann) (item.ti-state)
    else if is-bounded-keyword (current-kind st) then let bst = advance st
      in if is-done bst then parse-top-level defs type-defs effect-defs imports ch-title sec-titles prose blocks anns bst
@@ -53489,7 +53774,7 @@ Section: Chapter Pagination
      in let bst2 = advance bst
      in let bname = if is-done bst2 then "" else token-text (current bst2)
      in let bann = deck-record (AnnotationNode { kind = "bounded", target = bname, body = bclass })
-     in let item = parse-top-def-item defs type-defs ch-title bst2
+     in let item = parse-top-def-item defs type-defs ch-title bst2 __heap-save
      in parse-top-level (item.ti-defs) (item.ti-type-defs) effect-defs imports ch-title sec-titles prose blocks (__linked-list-push anns bann) (item.ti-state)
    else if is-conversion-decl st then let conv-ann = parse-conversion-decl st
      in parse-top-level defs type-defs effect-defs imports ch-title sec-titles prose blocks (__linked-list-push anns conv-ann) (skip-to-next-line st)
@@ -53615,22 +53900,51 @@ Section: Chapter Pagination
    ti-state : ParseState
   }
 
-  parse-top-def-item : LinkedList Def, LinkedList TypeDef, Text, ParseState -> TopItem
-  parse-top-def-item (defs) (type-defs) (ch-title) (st) =
-   let def-result = parse-definition st
+ One top-level item is the unit of reclamation in the parser. The
+ syntax tree a definition parse builds lives in the bivy, and until
+ 2026-09-01 all of it stayed there until the phase compact: 162 MB on
+ the compiler's own unit for a keep copy of 14 MB, at addresses no later
+ phase touches. The item's survivors are copied onto the scratch deck
+ before the bivy rewinds to the mark taken before the item was tried: the
+ definition or type definition itself, the list cell that holds it, and
+ the parse state, whose bag may carry diagnostics whose text was built in
+ the bivy. Tokens sit on the LEX deck below the mark and are shared by
+ the copy, which is what keeps the copy small. An item that parses as
+ nothing still moves the state, so its state is kept the same way.
+
+ The copy's floor is the DECK cursor at the item's start, not the bivy
+ mark. The parser deck-records some nodes as it goes (a TypeAnn, a claim's
+ Def, a CitesDecl), and those sit below the bivy mark by address while
+ their children sit above it; a copier that shares everything below the
+ bivy mark keeps such a node and lets its children rewind. Measured by
+ the gate, 2026-09-01: 43 definitions with mismatched bodies and 396
+ phantom definitions in the text round-trip. Every deck node the item
+ made is at or above the deck cursor it started from, and so is every
+ bivy node, so that cursor is the one floor that copies both and shares
+ the tokens and earlier items beneath it.
+
+  parse-top-def-item : LinkedList Def, LinkedList TypeDef, Text, ParseState, Integer -> TopItem
+  parse-top-def-item (defs) (type-defs) (ch-title) (st) (mark) =
+   let floor = __deck-pos
+   in let def-result = parse-definition st
    in let st2 = def-result.state
    in when def-result.maybe-def
     is Just (d) ->
      let tagged = deck-record (Def {
-      name = d.name,
-      params = d.params,
-      ann = d.ann,
-      body = d.body,
+      name = copy-sx-token floor (d.name),
+      params = copy-sx-tokens floor (d.params),
+      ann = for a in (d.ann) -> copy-sx-typeann floor a,
+      body = copy-sx-expr floor (d.body),
       chapter-slug = ch-title
      })
-     in TopItem { ti-defs = __linked-list-push defs tagged, ti-type-defs = type-defs, ti-state = skip-newlines st2 }
+     in let defs2 = deck-record (__linked-list-push defs tagged)
+     in let st3 = deck-record (parse-state-keep floor (skip-newlines st2))
+     in let back = __heap-restore mark
+     in TopItem { ti-defs = defs2, ti-type-defs = type-defs, ti-state = st3 }
     is None ->
-     TopItem { ti-defs = defs, ti-type-defs = type-defs, ti-state = skip-newlines (advance st2) }
+     let st3 = deck-record (parse-state-keep floor (skip-newlines (advance st2)))
+     in let back = __heap-restore mark
+     in TopItem { ti-defs = defs, ti-type-defs = type-defs, ti-state = st3 }
 
  A type definition is tried first and the definition parse re-reads from
  the SAME state when it is not one -- st, not the type parser's returned
@@ -53638,13 +53952,19 @@ Section: Chapter Pagination
 
   parse-top-item : LinkedList Def, LinkedList TypeDef, Text, ParseState -> TopItem
   parse-top-item (defs) (type-defs) (ch-title) (st) =
-   let td-result = parse-type-def st
+   let mark = __heap-save
+   in let floor = __deck-pos
+   in let td-result = parse-type-def st
    in let st2 = td-result.state
    in when td-result.maybe-type-def
     is Just (td) ->
-     TopItem { ti-defs = defs, ti-type-defs = __linked-list-push type-defs td, ti-state = skip-newlines st2 }
+     let td2 = deck-record (copy-sx-typedef floor td)
+     in let tds2 = deck-record (__linked-list-push type-defs td2)
+     in let st3 = deck-record (parse-state-keep floor (skip-newlines st2))
+     in let back = __heap-restore mark
+     in TopItem { ti-defs = defs, ti-type-defs = tds2, ti-state = st3 }
     is None ->
-     parse-top-def-item defs type-defs ch-title st
+     parse-top-def-item defs type-defs ch-title st mark
 
   parse-claim-arm : LinkedList Def, LinkedList TypeDef, LinkedList EffectDef, List CitesDecl, Text, LinkedList Text, LinkedList Text, LinkedList ProseBlock, LinkedList AnnotationNode, ParseState -> Document
   parse-claim-arm (defs) (type-defs) (effect-defs) (imports) (ch-title) (sec-titles) (prose) (blocks) (anns) (st) =
@@ -54137,6 +54457,19 @@ Section: Parser State
 
   current-kind : ParseState -> TokenKind
   current-kind (st) = (current st).kind
+
+  parse-state-keep : Integer, ParseState -> ParseState
+  parse-state-keep (b) (st) =
+   ParseState {
+    tokens = st.tokens,
+    pos = st.pos,
+    bag = copy-sx-bag b (st.bag),
+    paren-depth = st.paren-depth,
+    fuel = st.fuel,
+    stall-pos = st.stall-pos,
+    stall = st.stall,
+    deck-ceiling = st.deck-ceiling
+   }
 
   advance : ParseState -> ParseState
   advance (st) =
@@ -57211,6 +57544,15 @@ Section: Function-Type Peeling
     is ForAllEff (id) (body) -> strip-fun-args body
     is otherwise -> ty
 
+  peel-applied-return : CodexType, Integer -> CodexType
+  peel-applied-return (ty) (k) =
+   if k <= 0 then ty
+   else when ty
+    is FunTy (p) (row) (r) -> peel-applied-return r (k - 1)
+    is ForAllTy (id) (body) -> peel-applied-return body k
+    is ForAllEff (id) (body) -> peel-applied-return body k
+    is otherwise -> ty
+
   strip-forall-ty : CodexType -> CodexType
   strip-forall-ty (ty) =
    when ty
@@ -57357,7 +57699,7 @@ Page 1
 
 
 Chapter: Types--Type Checker
-  cites Codex chapter Build Settings (substitution-capacity, expr-type-capacity, demand-check-guard-band)
+  cites Codex chapter Build Settings (substitution-capacity, expr-type-capacity, demand-check-guard-band, demand-check-batch-budget, demand-check-batch-memo-slots)
   cites Codex chapter Phase Allocator (deck-short-of)
   cites Foreword chapter Tuple
   cites Foreword chapter Capability (capability-names)
@@ -58053,7 +58395,8 @@ Section: Parameterize Type
       state = args-r.state
      }
     is RecordTy (rname) (rargs) (rfields) ->
-     let args-r = parameterize-walk-list st entries rargs 0 (list-length rargs) []
+     if list-length rargs == 0 & record-fields-have-open-names rfields 0 (list-length rfields) == False then WalkResult { walked = ty, entries = entries, state = st }
+     else let args-r = parameterize-walk-list st entries rargs 0 (list-length rargs) []
      in let fields-r = parameterize-walk-record-fields (args-r.state) (args-r.entries) rfields 0 (list-length rfields) []
      in WalkResult {
       walked = deck-record (RecordTy rname (args-r.walked-list) (fields-r.walked-fields)),
@@ -58061,7 +58404,8 @@ Section: Parameterize Type
       state = fields-r.state
      }
     is SumTy (sname) (sargs) (sctors) ->
-     let args-r = parameterize-walk-list st entries sargs 0 (list-length sargs) []
+     if list-length sargs == 0 & sum-ctors-have-open-names sctors 0 (list-length sctors) == False then WalkResult { walked = ty, entries = entries, state = st }
+     else let args-r = parameterize-walk-list st entries sargs 0 (list-length sargs) []
      in let ctors-r = parameterize-walk-sum-ctors (args-r.state) (args-r.entries) sctors 0 (list-length sctors) []
      in WalkResult {
       walked = deck-record (SumTy sname (args-r.walked-list) (ctors-r.walked-ctors)),
@@ -58121,6 +58465,52 @@ Section: Parameterize Type
    in let rr = parameterize-walk-list (r.state) (r.entries) (c.return-type) 0 (list-length (c.return-type)) []
    in let c2 = deck-record (SumCtor { name = c.name, fields = r.walked-list, return-type = rr.walked-list })
    in parameterize-walk-sum-ctors (rr.state) (rr.entries) ctors (i + 1) len (list-push acc c2)
+
+  type-has-open-names : CodexType -> Boolean
+  type-has-open-names (ty) =
+   when ty
+    is ConstructedTy (name) (args) ->
+     if is-value-name (name.value) then True
+     else types-have-open-names args 0 (list-length args)
+    is FunTy (param) (row) (ret) ->
+     if type-has-open-names param then True
+     else if text-length (row.tail-name) > 0 & row.tail-id < 0 then True
+     else type-has-open-names ret
+    is ListTy (elem) -> type-has-open-names elem
+    is LinkedListTy (elem) -> type-has-open-names elem
+    is ForAllTy (id) (body) -> type-has-open-names body
+    is ForAllEff (id) (body) -> type-has-open-names body
+    is EffectfulTy (effs) (sc) (ret) -> type-has-open-names ret
+    is LinearTy (linner) -> type-has-open-names linner
+    is TypeApply (tf) (ta) ->
+     if type-has-open-names tf then True else type-has-open-names ta
+    is RecordTy (rname) (rargs) (rfields) ->
+     if types-have-open-names rargs 0 (list-length rargs) then True
+     else record-fields-have-open-names rfields 0 (list-length rfields)
+    is SumTy (sname) (sargs) (sctors) ->
+     if types-have-open-names sargs 0 (list-length sargs) then True
+     else sum-ctors-have-open-names sctors 0 (list-length sctors)
+    is otherwise -> False
+
+  types-have-open-names : List CodexType, Integer, Integer -> Boolean
+  types-have-open-names (tys) (i) (len) =
+   if i == len then False
+   else if type-has-open-names (list-at tys i) then True
+   else types-have-open-names tys (i + 1) len
+
+  record-fields-have-open-names : List RecordField, Integer, Integer -> Boolean
+  record-fields-have-open-names (fields) (i) (len) =
+   if i == len then False
+   else if type-has-open-names ((list-at fields i).type-val) then True
+   else record-fields-have-open-names fields (i + 1) len
+
+  sum-ctors-have-open-names : List SumCtor, Integer, Integer -> Boolean
+  sum-ctors-have-open-names (ctors) (i) (len) =
+   if i == len then False
+   else let c = list-at ctors i
+   in if types-have-open-names (c.fields) 0 (list-length (c.fields)) then True
+   else if types-have-open-names (c.return-type) 0 (list-length (c.return-type)) then True
+   else sum-ctors-have-open-names ctors (i + 1) len
 
   find-param-entry : List ParamEntry, Text, Boolean, Integer, Integer -> Integer
   find-param-entry (entries) (name) (want-row) (i) (len) =
@@ -58601,7 +58991,10 @@ Section: Check Chapter
   ChapterResult = record {
    types : List TypeBinding,
    env : TypeEnv,
-   state : UnificationState
+   state : UnificationState,
+   keep-end : Integer,
+   keep-overflow : Boolean,
+   batch-note : Text
   }
 
   register-mutable-markers : TypeEnv, List ATypeDef, Integer, Integer -> TypeEnv
@@ -59659,17 +60052,24 @@ Section: Proof Acyclicity
        in check-proof-grammar-loop sorted-st defs names (i + 1) len (add-diagnostics-to-state st errs 0 (list-length errs))
       else check-proof-grammar-loop sorted-st defs names (i + 1) len st
 
-  check-chapter : AChapter, List RenameEntry, SkipListText, List ChapterAssignment, Integer -> ChapterResult
-  check-chapter (mod) (renames) (colliding) (assignments) (ceiling) =
-   let tdm = build-type-def-map (mod.type-defs) 0 (list-length (mod.type-defs)) []
+  check-chapter : AChapter, List RenameEntry, SkipListText, List ChapterAssignment, Integer, Integer, Integer, Integer, Integer -> ChapterResult
+  check-chapter (mod) (renames) (colliding) (assignments) (ceiling) (check-base) (keep-base) (keep-ceiling) (poison) =
+   let p0 = __heap-save
+   in let tdm = build-type-def-map (mod.type-defs) 0 (list-length (mod.type-defs)) []
+   in let p1 = __heap-save
    in let arity-errors = check-all-type-arities tdm mod
+   in let p2 = __heap-save
    in let tenv = register-type-defs empty-unification-state builtin-type-env tdm (mod.type-defs) 0 (list-length (mod.type-defs))
+   in let p3 = __heap-save
    in let st-with-arity = add-diagnostics-to-state (tenv.state) arity-errors 0 (list-length arity-errors)
    in let env-with-mut = register-mutable-markers (tenv.env) (mod.type-defs) 0 (list-length (mod.type-defs))
    in let env = register-all-defs st-with-arity env-with-mut tdm (mod.defs) 0 (list-length (mod.defs)) renames
+   in let p4 = __heap-save
    in let env2 = register-effect-ops (env.state) (env.env) tdm (mod.effect-defs) 0 (list-length (mod.effect-defs))
    in let env3 = register-class-methods (env2.state) (env2.env) tdm (mod.class-defs) (mod.instance-defs)
    in let sorted-env = env-finalize (env3.env)
+   in let p5 = __heap-save
+   in let reg-note = "CHECK-REG tdm=" & show (p1 - p0) & " arity=" & show (p2 - p1) & " typedefs=" & show (p3 - p2) & " defs=" & show (p4 - p3) & " effects-classes-sort=" & show (p5 - p4)
    in let def-count = list-length (mod.defs)
    in let pre-st = deck-record (UnificationState {
     substitutions = copy-list-with-headroom (env3.state.substitutions) (def-count * 12),
@@ -59680,12 +60080,16 @@ Section: Proof Acyclicity
     expr-types = copy-list-with-headroom (env3.state.expr-types) (def-count * 56),
     effect-exempt = False,
     scope-grants = [],
-    chapter-grounds = mod.ground-effects
+    chapter-grounds = mod.ground-effects,
+    dirty-slots = []
    })
    in let acc0 = deck-record (__list-with-capacity def-count)
    in let slug-cache = for a in assignments -> cite-key (a.chapter-slug)
    in let exit = __deck-exit
-   in let result = check-all-defs pre-st sorted-env (mod.defs) 0 def-count acc0 renames colliding assignments (mod.citations) slug-cache "" [] (mod.rt-names) tdm ceiling
+   in let cb = check-batch-open check-base keep-base keep-ceiling def-count demand-check-batch-budget poison
+   in let __seq = cb.cb-reg-note = reg-note & " pre-st=" & show (__deck-pos - p5)
+   in let opened = check-batch-begin cb pre-st acc0
+   in let result = check-all-defs pre-st sorted-env (mod.defs) 0 def-count acc0 renames colliding assignments (mod.citations) slug-cache "" [] (mod.rt-names) tdm ceiling cb
    in let enter = __deck-enter
    in let cycle-st = check-rt-cycles (mod.defs) (mod.rt-names) (result.state)
    in let bounded-st = check-bounded-decls cycle-st (mod.defs) (mod.annotations)
@@ -59827,8 +60231,8 @@ Section: Proof Acyclicity
  definitions left over means the types are incomplete, so the caller
  halts on the diagnostic rather than trusting them.
 
-  check-all-defs-done : UnificationState, TypeEnv, List TypeBinding -> ChapterResult
-  check-all-defs-done (st) (env) (acc) =
+  check-all-defs-done : UnificationState, TypeEnv, List TypeBinding, CheckBatch -> ChapterResult
+  check-all-defs-done (st) (env) (acc) (cb) =
    let final-st = deck-record (UnificationState {
     substitutions = copy-list-with-headroom (st.substitutions) 0,
     row-substitutions = copy-list-with-headroom (st.row-substitutions) 0,
@@ -59838,18 +60242,239 @@ Section: Proof Acyclicity
     expr-types = copy-list-with-headroom (st.expr-types) 0,
     effect-exempt = False,
     scope-grants = [],
-    chapter-grounds = st.chapter-grounds
+    chapter-grounds = st.chapter-grounds,
+    dirty-slots = []
    })
    in deck-record (ChapterResult {
     types = acc,
     env = env,
-    state = final-st
+    state = final-st,
+    keep-end = cb.cb-keep,
+    keep-overflow = cb.cb-overflow,
+    batch-note = check-batch-note cb
    })
 
-  check-all-defs : UnificationState, TypeEnv, List ADef, Integer, Integer, List TypeBinding, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List TypeBinding, Integer -> ChapterResult
-  check-all-defs (st) (env) (defs) (i) (len) (acc) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (tdm) (ceiling) =
-   if i == len then check-all-defs-done st env acc
-   else if deck-short-of ceiling demand-check-guard-band then check-all-defs-done st env acc
+Section: Check Batches
+
+ A batch is the unit of reclamation inside the walk. Every definition's
+ inference scratch is bivy and every deck-record it makes lands on the check
+ deck; both are dead once the definition's survivors have been copied out,
+ and the survivors are exactly what the phase-end keep copy already
+ enumerates: the substitution slots written since the batch opened (tracked
+ by add-subst in dirty-slots) plus the slots minted since, every row slot,
+ the expr-type entries and bindings appended since, and the bag. The copy
+ runs inside a keep-deck extent through the memoized copier, whose floor is
+ the check deck's base, so a box already in the keep is shared and a box on
+ the check deck or in the bivy is materialized once; the address memo is
+ zeroed per batch because the rewound region is reused and a stale hit would
+ answer a copy of a box that no longer exists. The cons layer persists across
+ batches, which is what keeps a type mentioned by a thousand definitions at
+ one keep box. A list that outgrew its headroom during the batch has moved
+ into the bivy; it is relocated into the keep with fresh headroom before its
+ entries are rewritten.
+
+  mutable CheckBatch = record {
+   cb-mc : MemoCtx,
+   cb-keep : Integer,
+   cb-ceiling : Integer,
+   cb-budget : Integer,
+   cb-poison : Integer,
+   cb-bivy-mark : Integer,
+   cb-deck-mark : Integer,
+   cb-subs0 : Integer,
+   cb-subs-len0 : Integer,
+   cb-rows0 : Integer,
+   cb-et0 : Integer,
+   cb-et-len0 : Integer,
+   cb-acc-len0 : Integer,
+   cb-bag0 : Integer,
+   cb-batches : Integer,
+   cb-max-bivy : Integer,
+   cb-max-deck : Integer,
+   cb-overflow : Boolean,
+   cb-walk-floor : Integer,
+   cb-reg-note : Text
+  }
+
+  check-batch-open : Integer, Integer, Integer, Integer, Integer, Integer -> CheckBatch
+  check-batch-open (floor) (keep-base) (keep-ceiling) (def-count) (budget) (poison) =
+   let memo-slots = demand-check-batch-memo-slots
+   in let memo-table = __heap-save
+   in let a1 = __heap-advance (memo-slots * 8)
+   in let cons-slots = memo-pow2-at-least (def-count * 48) 4096
+   in let cons-table = __heap-save
+   in let a2 = __heap-advance (cons-slots * 16)
+   in let cz = __memset cons-table 0 (cons-slots * 16)
+   in let tcons-slots = memo-pow2-at-least (def-count * 8) 4096
+   in let tcons-table = __heap-save
+   in let a3 = __heap-advance (tcons-slots * 16)
+   in let tz = __memset tcons-table 0 (tcons-slots * 16)
+   in let cap-ty = def-count * 48 + 4096
+   in let cap-text = def-count * 8 + 16384
+   in let cap-row = def-count * 12 + 4096
+   in let cap-list = def-count * 4 + 4096
+   in let mc = MemoCtx {
+    mc-table = memo-table,
+    mc-slots = memo-slots,
+    mc-shift = memo-shift-for memo-slots 64,
+    mc-floor = floor,
+    mc-ty = __list-with-capacity cap-ty,
+    mc-text = __list-with-capacity cap-text,
+    mc-name = __list-with-capacity cap-text,
+    mc-row = __list-with-capacity cap-row,
+    mc-tylist = __list-with-capacity cap-list,
+    mc-fieldlist = __list-with-capacity cap-list,
+    mc-ctorlist = __list-with-capacity cap-list,
+    mc-labellist = __list-with-capacity cap-list,
+    mc-cons = cons-table,
+    mc-cons-slots = cons-slots,
+    mc-cons-shift = memo-shift-for cons-slots 64,
+    mc-cap-ty = cap-ty,
+    mc-cap-text = cap-text,
+    mc-cap-name = cap-text,
+    mc-cap-row = cap-row,
+    mc-cap-list = cap-list,
+    mc-ceiling = keep-ceiling,
+    mc-tcons = tcons-table,
+    mc-tcons-slots = tcons-slots,
+    mc-tcons-shift = memo-shift-for tcons-slots 64
+   }
+   in CheckBatch {
+    cb-mc = mc,
+    cb-keep = keep-base,
+    cb-ceiling = keep-ceiling,
+    cb-budget = budget,
+    cb-poison = poison,
+    cb-bivy-mark = 0,
+    cb-deck-mark = 0,
+    cb-subs0 = 0,
+    cb-subs-len0 = 0,
+    cb-rows0 = 0,
+    cb-et0 = 0,
+    cb-et-len0 = 0,
+    cb-acc-len0 = 0,
+    cb-bag0 = 0,
+    cb-batches = 0,
+    cb-max-bivy = 0,
+    cb-max-deck = 0,
+    cb-overflow = False,
+    cb-walk-floor = __deck-pos,
+    cb-reg-note = ""
+   }
+
+  check-batch-begin : CheckBatch, UnificationState, List TypeBinding -> Integer
+  check-batch-begin (cb) (st) (acc) =
+   let mz = __memset (cb.cb-mc.mc-table) 0 (cb.cb-mc.mc-slots * 8)
+   in let __seq = cb.cb-bivy-mark = __heap-save
+   in let __seq = cb.cb-deck-mark = __deck-pos
+   in let __seq = cb.cb-subs0 = address-of (st.substitutions)
+   in let __seq = cb.cb-subs-len0 = list-length (st.substitutions)
+   in let __seq = cb.cb-rows0 = address-of (st.row-substitutions)
+   in let __seq = cb.cb-et0 = address-of (st.expr-types)
+   in let __seq = cb.cb-et-len0 = list-length (st.expr-types)
+   in let __seq = cb.cb-acc-len0 = list-length acc
+   in let __seq = cb.cb-bag0 = address-of (st.bag)
+   in let __seq = st.dirty-slots = __list-with-capacity 4096
+   in 0
+
+  check-batch-due : CheckBatch -> Boolean
+  check-batch-due (cb) =
+   (__heap-save - cb.cb-bivy-mark) + (__deck-pos - cb.cb-deck-mark) >= cb.cb-budget
+
+  check-batch-close : CheckBatch, UnificationState, List TypeBinding -> Integer
+  check-batch-close (cb) (st) (acc) =
+   let bivy-now = __heap-save
+   in let deck-now = __deck-pos
+   in let bivy-used = bivy-now - cb.cb-bivy-mark
+   in let deck-used = deck-now - cb.cb-deck-mark
+   in let __seq = cb.cb-max-bivy = if bivy-used > cb.cb-max-bivy then bivy-used else cb.cb-max-bivy
+   in let __seq = cb.cb-max-deck = if deck-used > cb.cb-max-deck then deck-used else cb.cb-max-deck
+   in let set-keep = __deck-set (cb.cb-keep)
+   in let copied = deck-record (check-batch-copy cb st acc)
+   in let keep-end = __deck-pos
+   in let __seq = cb.cb-keep = keep-end
+   in let __seq = cb.cb-overflow = if keep-end >= cb.cb-ceiling then True else cb.cb-overflow
+   in let p1 = check-batch-poison (cb.cb-deck-mark) (cb.cb-poison) (deck-now - cb.cb-deck-mark)
+   in let p2 = check-batch-poison (cb.cb-bivy-mark) (cb.cb-poison) (bivy-now - cb.cb-bivy-mark)
+   in let set-deck = __deck-set (cb.cb-deck-mark)
+   in let restored = __heap-restore (cb.cb-bivy-mark)
+   in let __seq = cb.cb-batches = cb.cb-batches + 1
+   in 0
+
+  check-batch-poison : Integer, Integer, Integer -> Nothing
+  check-batch-poison (base) (byte) (len) =
+   if byte == 0 | len <= 0 then __heap-advance 0
+   else __memset base byte len
+
+  check-batch-copy : CheckBatch, UnificationState, List TypeBinding -> Integer
+  check-batch-copy (cb) (st) (acc) =
+   let mc = cb.cb-mc
+   in let subs1 = st.substitutions
+   in let subs = if address-of subs1 == cb.cb-subs0 then subs1 else copy-list-with-headroom subs1 (list-length subs1 / 2 + 4096)
+   in let __seq = st.substitutions = subs
+   in let rows1 = st.row-substitutions
+   in let rows = if address-of rows1 == cb.cb-rows0 then rows1 else copy-list-with-headroom rows1 (list-length rows1 / 2 + 1024)
+   in let __seq = st.row-substitutions = rows
+   in let et1 = st.expr-types
+   in let et = if address-of et1 == cb.cb-et0 then et1 else copy-list-with-headroom et1 (list-length et1 / 2 + 4096)
+   in let __seq = st.expr-types = et
+   in let d = check-batch-rewrite-slots subs (st.dirty-slots) 0 (list-length (st.dirty-slots)) mc
+   in let n = check-batch-rewrite-range subs (cb.cb-subs-len0) (list-length subs) mc
+   in let r = check-batch-rewrite-rows rows 0 (list-length rows) mc
+   in let e = check-batch-rewrite-et et (cb.cb-et-len0) (list-length et) mc
+   in let a = check-batch-rewrite-acc acc (cb.cb-acc-len0) (list-length acc) mc
+   in let b = if address-of (st.bag) == cb.cb-bag0 then 0 else check-batch-copy-bag st (mc.mc-floor)
+   in 0
+
+  check-batch-copy-bag : UnificationState, Integer -> Integer
+  check-batch-copy-bag (st) (floor) =
+   let nb = copy-sx-bag floor (st.bag)
+   in let __seq = st.bag = nb
+   in 0
+
+  check-batch-rewrite-slots : List CodexType, List Integer, Integer, Integer, MemoCtx -> Integer
+  check-batch-rewrite-slots (subs) (dirty) (i) (len) (mc) =
+   if i == len then 0
+   else let id = list-at dirty i
+   in if id >= list-length subs then check-batch-rewrite-slots subs dirty (i + 1) len mc
+   else let w = list-set-at subs id (mcopy-type (list-at subs id) 0 mc)
+   in check-batch-rewrite-slots subs dirty (i + 1) len mc
+
+  check-batch-rewrite-range : List CodexType, Integer, Integer, MemoCtx -> Integer
+  check-batch-rewrite-range (subs) (i) (len) (mc) =
+   if i >= len then 0
+   else let w = list-set-at subs i (mcopy-type (list-at subs i) 0 mc)
+   in check-batch-rewrite-range subs (i + 1) len mc
+
+  check-batch-rewrite-rows : List EffectRow, Integer, Integer, MemoCtx -> Integer
+  check-batch-rewrite-rows (rows) (i) (len) (mc) =
+   if i >= len then 0
+   else let w = list-set-at rows i (mcopy-row (list-at rows i) mc)
+   in check-batch-rewrite-rows rows (i + 1) len mc
+
+  check-batch-rewrite-et : List ExprTypeEntry, Integer, Integer, MemoCtx -> Integer
+  check-batch-rewrite-et (et) (i) (len) (mc) =
+   if i >= len then 0
+   else let e = list-at et i
+   in let w = list-set-at et i (ExprTypeEntry { key = e.key, ty = mcopy-type (e.ty) 0 mc })
+   in check-batch-rewrite-et et (i + 1) len mc
+
+  check-batch-rewrite-acc : List TypeBinding, Integer, Integer, MemoCtx -> Integer
+  check-batch-rewrite-acc (acc) (i) (len) (mc) =
+   if i >= len then 0
+   else let b = list-at acc i
+   in let w = list-set-at acc i (TypeBinding { name = mcopy-text (b.name) mc, bound-type = mcopy-type (b.bound-type) 0 mc })
+   in check-batch-rewrite-acc acc (i + 1) len mc
+
+  check-batch-note : CheckBatch -> Text
+  check-batch-note (cb) =
+   cb.cb-reg-note & " CHECK-BATCH batches=" & show (cb.cb-batches) & " max-bivy=" & show (cb.cb-max-bivy) & " max-deck=" & show (cb.cb-max-deck) & " keep-end=" & show (cb.cb-keep) & " check-base=" & show (cb.cb-mc.mc-floor) & " walk-floor=" & show (cb.cb-walk-floor) & " done-deck=" & show __deck-pos & " done-bivy=" & show __heap-save & " ty=" & show (list-length (cb.cb-mc.mc-ty)) & "/" & show (cb.cb-mc.mc-cap-ty) & " text=" & show (list-length (cb.cb-mc.mc-text)) & " name=" & show (list-length (cb.cb-mc.mc-name)) & " row=" & show (list-length (cb.cb-mc.mc-row)) & " tylists=" & show (list-length (cb.cb-mc.mc-tylist)) & " fieldlists=" & show (list-length (cb.cb-mc.mc-fieldlist)) & " ctorlists=" & show (list-length (cb.cb-mc.mc-ctorlist)) & " labellists=" & show (list-length (cb.cb-mc.mc-labellist)) & " cons-slots=" & show (cb.cb-mc.mc-cons-slots) & " overflow=" & (if cb.cb-overflow then "1" else "0")
+
+  check-all-defs : UnificationState, TypeEnv, List ADef, Integer, Integer, List TypeBinding, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List TypeBinding, Integer, CheckBatch -> ChapterResult
+  check-all-defs (st) (env) (defs) (i) (len) (acc) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (tdm) (ceiling) (cb) =
+   if i == len then let closed = check-batch-close cb st acc in check-all-defs-done st env acc cb
+   else if cb.cb-overflow then check-all-defs-done st env acc cb
+   else if deck-short-of ceiling demand-check-guard-band then let closed = check-batch-close cb st acc in check-all-defs-done st env acc cb
    else let def = list-at defs i
    in let chapter-rn = if def.chapter-slug == cur-slug then cur-chapter-rn
       else apply-cite-overrides (build-chapter-rename-map colliding assignments (def.chapter-slug)) citations colliding assignments slug-cache (def.chapter-slug) 0
@@ -59866,7 +60491,12 @@ Section: Proof Acyclicity
     name = resolve-def-name renames (def.name.value) (def.chapter-slug),
     bound-type = resolved
    })
-   in check-all-defs rt-st env defs (i + 1) len (list-push acc entry) renames colliding assignments citations slug-cache (def.chapter-slug) chapter-rn rt-names tdm ceiling
+   in let acc2 = list-push acc entry
+   in if check-batch-due cb
+      then let closed = check-batch-close cb rt-st acc2
+       in let opened = check-batch-begin cb rt-st acc2
+       in check-all-defs rt-st env defs (i + 1) len acc2 renames colliding assignments citations slug-cache "" [] rt-names tdm ceiling cb
+      else check-all-defs rt-st env defs (i + 1) len acc2 renames colliding assignments citations slug-cache (def.chapter-slug) chapter-rn rt-names tdm ceiling cb
 
 Section: Induction Checking
 
@@ -61607,6 +62237,36 @@ Section: Literal Range
      else st
     is otherwise -> st
 
+ The digits either side of the point are ONE accumulator. `__text_to_double`
+ walks the whole literal, folds every digit into a single i64 as
+ `acc = acc * 10 + digit`, counts the places after the point separately, and
+ divides once at the end, so the width that matters is the total digit count
+ and not the integer part. `1152921504606846976.0` is twenty digits and wraps;
+ `1.123456789012345678` is nineteen and does not.
+
+  num-lit-out-of-range : Text -> Boolean
+  num-lit-out-of-range (val) =
+   let digits = text-replace val "." ""
+   in let len = text-length digits
+   in let start = int-lit-first-sig digits 0 len
+   in let sig = int-lit-sig-digits digits start len 0
+   in if sig < 19 then False
+      else if sig > 19 then True
+      else int-lit-exceeds digits start len "9223372036854775807" 0
+
+  check-num-lit-range : UnificationState, Text, LiteralKind, SourceSpan -> UnificationState
+  check-num-lit-range (st) (val) (kind) (span) =
+   when kind
+    is NumLit ->
+     if num-lit-out-of-range val
+     then __record-set st "bag" (bag-add (st.bag) (make-error cdx-real-literal-overflow ("Real literal '" & val & "' carries more decimal digits than fit an i64. Every digit on both sides of the point is accumulated into one wrapping i64 before the scale is applied, so this reads back as a different number with no fault") span))
+     else st
+    is otherwise -> st
+
+  check-lit-range : UnificationState, Text, LiteralKind, SourceSpan -> UnificationState
+  check-lit-range (st) (val) (kind) (span) =
+   check-num-lit-range (check-int-lit-range st val kind span) val kind span
+
 Section: Infer Name
 
   infer-name : UnificationState, TypeEnv, Text, SourceSpan -> CheckResult
@@ -62080,7 +62740,7 @@ Section: Infer Application
   infer-application (st) (env) (func) (arg) (span) (depth) =
    let fr = infer-expr-at st env func (depth + 1)
    in let ar = when arg
-       is ALitExpr (val) (kind) (s) -> infer-int-lit-arg (check-int-lit-range (fr.state) val kind s) (fr.inferred-type) val kind
+       is ALitExpr (val) (kind) (s) -> infer-int-lit-arg (check-lit-range (fr.state) val kind s) (fr.inferred-type) val kind
        is otherwise -> infer-expr-at (fr.state) env arg (depth + 1)
    in let (ret-ty, ret-st) = fresh-and-advance (ar.state)
    in let (call-row-id, row-st) = fresh-row-id ret-st
@@ -62721,7 +63381,7 @@ Section: Infer List
      in CheckResult {
       inferred-type = fr-ty,
       effect-row = empty-row,
-      state = fr-st
+      state = record-expr-type fr-st span fr-ty
      }
     else let first = infer-expr-at st env (list-at elems 0) (depth + 1)
     in let (elems-row, st2) = unify-list-elems (first.state) env elems (first.inferred-type) 1 (list-length elems) (first.effect-row) depth
@@ -63044,7 +63704,7 @@ Section: Infer Expression (dispatch)
     state = add-unify-error st cdx-resource-exhausted ("compiler resource exhausted in type-checker.infer-expr (budget " & integer-to-text max-recursion-depth & ")") (aexpr-span expr)
    }
    else when expr
-    is ALitExpr (val) (kind) (s) -> infer-literal (check-int-lit-range st val kind s) kind
+    is ALitExpr (val) (kind) (s) -> infer-literal (check-lit-range st val kind s) kind
     is ANameExpr (name) (s) -> infer-name st env (name.value) s
     is ABinaryExpr (left) (op) (right) (s) -> infer-binary st env left op right s depth
     is AUnaryExpr (operand) (s) ->
@@ -63571,7 +64231,8 @@ Section: State
    expr-types : List ExprTypeEntry,
    effect-exempt : Boolean,
    scope-grants : List EffectLabel,
-   chapter-grounds : List Text
+   chapter-grounds : List Text,
+   dirty-slots : List Integer
   }
 
 Section: Construction
@@ -63586,7 +64247,8 @@ Section: Construction
     expr-types = [],
     effect-exempt = False,
     scope-grants = [],
-    chapter-grounds = []
+    chapter-grounds = [],
+    dirty-slots = []
    }
 
 Section: Fresh Variables
@@ -63650,6 +64312,7 @@ Section: Add Substitution
   add-subst : UnificationState, Integer, CodexType -> UnificationState
   add-subst (st) (var-id) (ty) =
    let __seq = st.substitutions = list-set-at (st.substitutions) var-id ty
+   in let __seq = st.dirty-slots = list-push (st.dirty-slots) var-id
    in st
 
 Section: Expr Types
@@ -64437,8 +65100,43 @@ Section: Deep Type Copy
    mc-cap-name : Integer,
    mc-cap-row : Integer,
    mc-cap-list : Integer,
-   mc-ceiling : Integer
+   mc-ceiling : Integer,
+   mc-tcons : Integer,
+   mc-tcons-slots : Integer,
+   mc-tcons-shift : Integer
   }
+
+ The text layer. The address memo is reset every batch of the CHECK walk,
+ so a text the memo alone deduplicated would be copied again on every batch
+ that mentions it, and a Name's key mixes its text's address, so every label,
+ row and list above it would stop matching too. This table keys a text by
+ its CONTENT, 16-byte slots like the cons layer, and it persists for the
+ phase: a hit is verified by comparing the characters, so a key collision
+ costs a copy and never a wrong text.
+
+  text-content-key : Text -> Integer
+  text-content-key (t) =
+   cons-norm (text-content-key-loop t 0 (text-length t) (cons-mix 801 (text-length t)))
+
+  text-content-key-loop : Text, Integer, Integer, Integer -> Integer
+  text-content-key-loop (t) (i) (len) (acc) =
+   if i == len then acc
+   else text-content-key-loop t (i + 1) len (cons-mix acc (char-code-at t i))
+
+  tcons-probe : Integer, MemoCtx -> Integer
+  tcons-probe (k) (mc) =
+   if mc.mc-tcons == 0 then 0
+   else cons-probe-at k (mc.mc-tcons) (mc.mc-tcons-slots) (bit-shru (k * 2177342782468422677) (mc.mc-tcons-shift)) 64
+
+  tcons-lookup : Integer, Text, MemoCtx -> Integer
+  tcons-lookup (k) (t) (mc) =
+   let slot = tcons-probe k mc
+   in if slot == 0 then 0
+   else if peek-qword slot 0 /= k then 0
+   else let v = peek-32 (slot + 8) 0
+   in if v == 0 then 0
+   else if text-compare (list-at (mc.mc-text) (v - 1)) t == 0 then v
+   else 0
 
   memo-pow2-at-least : Integer, Integer -> Integer
   memo-pow2-at-least (n) (p) =
@@ -64560,7 +65258,7 @@ Section: Deep Type Copy
 
   mcopy-text-memo : Text, Integer, Integer, MemoCtx -> Text
   mcopy-text-memo (t) (a) (slot) (mc) =
-   if slot == 0 then substring t 0 (text-length t)
+   if slot == 0 then mcopy-text-content t 0 mc
    else if memo-slot-key slot == bit-and a 4294967295 then mcopy-text-hit t slot mc
    else mcopy-text-fresh t a slot mc
 
@@ -64569,15 +65267,38 @@ Section: Deep Type Copy
    let v = peek-32 slot 4
    in if v == 0 then t else list-at (mc.mc-text) (v - 1)
 
+ A saturated side list leaves the memo slot claimed with no value, and a
+ later mention of the same address would then read that as a cycle and hand
+ back the ORIGINAL, which under the batched walk is a pointer into scratch
+ about to be rewound. Every fresh path unclaims its slot on saturation, so
+ the next mention copies again instead: less deduplicated, never dangling.
+
+  memo-unclaim : Integer -> Integer
+  memo-unclaim (slot) = poke-32 slot 0 0
+
   mcopy-text-fresh : Text, Integer, Integer, MemoCtx -> Text
   mcopy-text-fresh (t) (a) (slot) (mc) =
    let claimed = poke-32 slot 0 a
-   in let copy = substring t 0 (text-length t)
+   in mcopy-text-content t slot mc
+
+  mcopy-text-content : Text, Integer, MemoCtx -> Text
+  mcopy-text-content (t) (slot) (mc) =
+   let k = text-content-key t
+   in let v = tcons-lookup k t mc
+   in if v /= 0 then mcopy-text-adopt slot v mc
+   else let copy = substring t 0 (text-length t)
    in let n = list-length (mc.mc-text)
-   in if n >= mc.mc-cap-text then copy
+   in if n >= mc.mc-cap-text then let un = if slot == 0 then 0 else memo-unclaim slot in copy
    else let pushed = list-push (mc.mc-text) copy
-   in let vset = poke-32 slot 4 (n + 1)
+   in let vset = if slot == 0 then 0 else poke-32 slot 4 (n + 1)
+   in let tslot = tcons-probe k mc
+   in let w = if tslot == 0 then 0 else cons-slot-set tslot k (n + 1)
    in copy
+
+  mcopy-text-adopt : Integer, Integer, MemoCtx -> Text
+  mcopy-text-adopt (slot) (v) (mc) =
+   let aset = if slot == 0 then 0 else poke-32 slot 4 v
+   in list-at (mc.mc-text) (v - 1)
 
   mcopy-texts : List Text, MemoCtx -> List Text
   mcopy-texts (ts) (mc) =
@@ -64608,12 +65329,23 @@ Section: Deep Type Copy
   mcopy-name-fresh : Name, Integer, Integer, MemoCtx -> Name
   mcopy-name-fresh (nm) (a) (slot) (mc) =
    let claimed = poke-32 slot 0 a
-   in let copy = Name { value = mcopy-text (nm.value) mc }
+   in let tv = mcopy-text (nm.value) mc
+   in let k = cons-norm (cons-mix 701 (address-of tv))
+   in let v = cons-lookup k mc
+   in if v /= 0 then mcopy-name-adopt slot v mc
+   else let copy = Name { value = tv }
    in let n = list-length (mc.mc-name)
-   in if n >= mc.mc-cap-name then copy
+   in if n >= mc.mc-cap-name then let un = memo-unclaim slot in copy
    else let pushed = list-push (mc.mc-name) copy
    in let vset = poke-32 slot 4 (n + 1)
+   in let cslot = cons-probe k mc
+   in let w = if cslot == 0 then 0 else cons-slot-set cslot k (n + 1)
    in copy
+
+  mcopy-name-adopt : Integer, Integer, MemoCtx -> Name
+  mcopy-name-adopt (slot) (v) (mc) =
+   let aset = poke-32 slot 4 v
+   in list-at (mc.mc-name) (v - 1)
 
   mcopy-names : List Name, MemoCtx -> List Name
   mcopy-names (ns) (mc) =
@@ -64652,7 +65384,7 @@ Section: Deep Type Copy
    in let v2 = cons-lookup k mc
    in if v2 /= 0 then mcopy-row-adopt slot v2 mc
    else let n = list-length (mc.mc-row)
-   in if n >= mc.mc-cap-row then copy
+   in if n >= mc.mc-cap-row then let un = memo-unclaim slot in copy
    else let pushed = list-push (mc.mc-row) copy
    in let aset = poke-32 slot 4 (n + 1)
    in let cslot = cons-probe k mc
@@ -64895,7 +65627,7 @@ Section: Deep Type Copy
    in let v2 = cons-lookup k mc
    in if v2 /= 0 then mcopy-type-adopt slot v2 mc
    else let n = list-length (mc.mc-ty)
-   in if n >= mc.mc-cap-ty then copy
+   in if n >= mc.mc-cap-ty then let un = memo-unclaim slot in copy
    else let pushed = list-push (mc.mc-ty) copy
    in let aset = poke-32 slot 4 (n + 1)
    in let cslot = cons-probe k mc
