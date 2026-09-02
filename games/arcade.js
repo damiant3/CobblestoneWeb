@@ -81,7 +81,7 @@ export const GAMES = [
   {
     id: 'tictactoe', name: 'Tic-Tac-Toe', cat: 'Board', icon: '❌',
     desc: 'Perfect play. The search reads every line to the end, so it has never lost one.',
-    page: 'tictactoe.html', flat: true,
+    flat: true,
     boot: e => e.ttt_new(),
     // ttt_ai answers the NEXT PACKED BOARD, not a square. Reading it as a
     // move and feeding it to ttt_play returns the board unchanged, which
@@ -119,7 +119,6 @@ export const GAMES = [
   {
     id: 'royalur', name: 'Royal Game of Ur', cat: 'Board', icon: '\u{1F3DB}',
     desc: 'The oldest rules we can still play, from about 2600 BCE. Rosettes, captures, tetrahedral dice.',
-    page: 'royalur.html',
     boot: e => e.ur_new(),
     // Takes the turn's roll from the driver when there is one, so a watcher
     // sees the number the move followed from instead of a second, unrelated
