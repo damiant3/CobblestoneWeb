@@ -34,11 +34,21 @@
   .stage.ok{border-color:#2e5e2e} .stage.ok span{color:var(--ok)}
   .stage.bad{border-color:#6b2233} .stage.bad span{color:var(--bad)}
   .stage.run span{color:#e8c04a}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:860px){.two{grid-template-columns:1fr}}
-  textarea,pre{width:100%;background:#07070f;color:#d7d7db;border:1px solid #1e1e2e;border-radius:8px;padding:10px 12px;font:12.5px/1.45 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto}
+  .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .two>div{min-width:0}
+  @media(max-width:860px){.two{grid-template-columns:minmax(0,1fr)}}
+  textarea,pre{width:100%;max-width:100%;min-width:0;background:#07070f;color:#d7d7db;border:1px solid #1e1e2e;border-radius:8px;padding:10px 12px;font:12.5px/1.45 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto}
   textarea{min-height:260px;resize:vertical}
   pre{max-height:420px;min-height:120px}
+  /* A coloured editor: the pre behind carries the highlighted copy, the
+     textarea in front is transparent text with a caret, both the same box. */
+  .ed{display:grid;height:340px}
+  .ed>pre,.ed>textarea{grid-area:1/1;height:100%;max-height:none;min-height:0;margin:0;resize:none}
+  .ed>pre{overflow:hidden;pointer-events:none}
+  .ed>textarea{background:transparent;color:transparent;caret-color:#fff;position:relative;z-index:1}
+  .ed>textarea::selection{background:rgba(212,160,23,.3)}
+  .k-head{color:#d4a017;font-weight:700}.k-type{color:#7fd0ff}.k-kw{color:#c792ea}.k-str{color:#a5d6a7}
+  .k-num{color:#ffcb6b}.k-eff{color:#ff9e64}.k-fn{color:#82aaff}.k-op{color:#89ddff}.k-prose{color:#8b949e;font-style:italic}
   .lab{color:var(--dim);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px}
   canvas{display:block;width:100%;max-width:1024px;aspect-ratio:4/3;background:#000;border:1px solid #1e1e2e;border-radius:8px}
   .verdict{font-size:14px;margin-top:10px} .verdict.ok{color:var(--ok)} .verdict.bad{color:var(--bad)}
@@ -73,7 +83,7 @@
       <div class="stage" id="w5"><b>5. run</b><span>WebGPU compute, one thread per pixel</span></div>
     </div>
     <div class="two">
-      <div><div class="lab">Codex source (editable: change a number, compile again)</div><textarea id="src-wgsl" spellcheck="false">not fetched yet: press the button</textarea></div>
+      <div><div class="lab">Codex source (editable: change a number, compile again)</div><div class="ed"><pre id="hl-wgsl" aria-hidden="true"></pre><textarea id="src-wgsl" spellcheck="false">not fetched yet: press the button</textarea></div></div>
       <div><div class="lab">WGSL, emitted here</div><pre id="out-wgsl">not compiled yet</pre></div>
     </div>
     <div class="verdict" id="v-wgsl"></div>
@@ -94,7 +104,7 @@
       <div class="stage" id="m3"><b>3. assemble</b><span>WAT &rarr; binary: not in the browser yet</span></div>
     </div>
     <div class="two">
-      <div><div class="lab">Codex source (editable)</div><textarea id="src-wasm" spellcheck="false">Chapter: Greeting
+      <div><div class="lab">Codex source (editable)</div><div class="ed"><pre id="hl-wasm" aria-hidden="true"></pre><textarea id="src-wasm" spellcheck="false">Chapter: Greeting
 
 Section: Main
 
@@ -108,7 +118,7 @@ Section: Main
     print-line-uni "Cobblestone"
     print-line-uni (integer-to-text (double (sum-to 10)))
   end
-</textarea></div>
+</textarea></div></div>
       <div><div class="lab">WAT, emitted here</div><pre id="out-wasm">not compiled yet</pre></div>
     </div>
     <div class="verdict" id="v-wasm"></div>
@@ -195,6 +205,46 @@ Section: Main
     return { text: t, ms: r.ms, mb: r.mb };
   }
 
+  // Codex syntax colouring, the rules Prism uses (tools/vscode/syntaxes/codex.tmLanguage.json).
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  const KW = /^(let|in|between|and|or|xor|not|if|then|else|when|where|is|otherwise|act|end|record|cites|grounds|quotes|trusting|above|effect|with|linear|mutable|punctual|bounded|unit|class|instance|lazy|trying|revised|for|deriving|claim|proof|qed|forall|exists|induction)$/;
+  function highlightLine(line) {
+    const head = line.match(/^(Chapter|Section|Foreword):(.*)$/);
+    if (head) return '<span class="k-head">' + esc(head[1]) + ':</span><span class="k-type">' + esc(head[2]) + '</span>';
+    if (/^Page\s+\d+/.test(line)) return '<span class="k-head">' + esc(line) + '</span>';
+    if (/^ [^ ]/.test(line) && !/[:=]/.test(line.slice(0, 40))) return '<span class="k-prose">' + esc(line) + '</span>';
+    let out = '', i = 0;
+    while (i < line.length) {
+      const rest = line.slice(i);
+      let m;
+      if ((m = rest.match(/^"(?:[^"\\]|\\.)*"?/))) { out += '<span class="k-str">' + esc(m[0]) + '</span>'; i += m[0].length; continue; }
+      if ((m = rest.match(/^#[0-9a-fA-F][0-9a-fA-F_]*/))) { out += '<span class="k-num">' + esc(m[0]) + '</span>'; i += m[0].length; continue; }
+      if ((m = rest.match(/^\[[A-Z][A-Za-z0-9.]*(\s*,\s*[A-Z][A-Za-z0-9.]*)*\]/))) { out += '<span class="k-eff">' + esc(m[0]) + '</span>'; i += m[0].length; continue; }
+      if ((m = rest.match(/^[0-9][0-9_]*(\.[0-9][0-9_]*)?/))) { out += '<span class="k-num">' + esc(m[0]) + '</span>'; i += m[0].length; continue; }
+      if ((m = rest.match(/^[A-Za-z_][A-Za-z0-9_-]*/))) {
+        const w = m[0], after = line.slice(i + w.length);
+        if (KW.test(w)) out += '<span class="k-kw">' + esc(w) + '</span>';
+        else if (/^[A-Z]/.test(w)) out += '<span class="k-type">' + esc(w) + '</span>';
+        else if (/^\s*[:(]/.test(after)) out += '<span class="k-fn">' + esc(w) + '</span>';
+        else out += esc(w);
+        i += w.length; continue;
+      }
+      if ((m = rest.match(/^(->|<-|=>|===|\/=|<=|>=|==|\+\+|::|\|>|[=+\-*/^&<>|~\\])/))) { out += '<span class="k-op">' + esc(m[0]) + '</span>'; i += m[0].length; continue; }
+      out += esc(line[i]); i++;
+    }
+    return out;
+  }
+  function wireEditor(taId, hlId) {
+    const ta = document.getElementById(taId), hl = document.getElementById(hlId);
+    const paint = () => { hl.innerHTML = ta.value.split('\n').map(highlightLine).join('\n') + '\n'; hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; };
+    ta.addEventListener('input', paint);
+    ta.addEventListener('scroll', () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; });
+    paint();
+    return paint;
+  }
+  const repaintW = wireEditor('src-wgsl', 'hl-wgsl');
+  const repaintM = wireEditor('src-wasm', 'hl-wasm');
+
   function stage(id, cls, note) {
     const el = document.getElementById(id);
     el.className = 'stage ' + cls;
@@ -210,7 +260,7 @@ Section: Main
   // The original is what the site serves; the textarea is the visitor's copy.
   // Revert puts the served text back, so a goofed edit costs nothing.
   let originalW = null, fetchedW = null;
-  rvW.addEventListener('click', () => { if (originalW !== null) { srcW.value = originalW; verdict('v-wgsl', '', 'Reverted to the shipped source. Compile again to run it.'); } });
+  rvW.addEventListener('click', () => { if (originalW !== null) { srcW.value = originalW; repaintW(); verdict('v-wgsl', '', 'Reverted to the shipped source. Compile again to run it.'); } });
   goW.addEventListener('click', async () => {
     goW.disabled = true; stW.textContent = '';
     for (const id of ['w1','w2','w3','w4','w5']) stage(id, '');
@@ -225,7 +275,7 @@ Section: Main
         ]);
         fetchedW = { dev, shipped };
         originalW = src.replace(/\r\n/g, '\n');
-        srcW.value = originalW;
+        srcW.value = originalW; repaintW();
         rvW.disabled = false;
       }
       const src = srcW.value, dev = fetchedW.dev, shipped = fetchedW.shipped;
@@ -328,7 +378,7 @@ Section: Main
   const goM = document.getElementById('go-wasm'), stM = document.getElementById('st-wasm');
   const srcM = document.getElementById('src-wasm');
   const originalM = srcM.value;
-  document.getElementById('rv-wasm').addEventListener('click', () => { srcM.value = originalM; verdict('v-wasm', '', 'Reverted to the original program. Compile again to lower it.'); });
+  document.getElementById('rv-wasm').addEventListener('click', () => { srcM.value = originalM; repaintM(); verdict('v-wasm', '', 'Reverted to the original program. Compile again to lower it.'); });
   goM.addEventListener('click', async () => {
     goM.disabled = true; stM.textContent = '';
     for (const id of ['m1','m2']) stage(id, '');
