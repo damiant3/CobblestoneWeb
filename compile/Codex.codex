@@ -1,4 +1,5 @@
 Chapter: Foreword--Sha512
+  cites Foreword chapter Wrap64
 
  SHA-512 cryptographic hash function producing a 512-bit (8-word) digest
  from an arbitrary-length byte list. The algorithm operates on 64-bit
@@ -14,9 +15,6 @@ Section: 64-bit Word Helpers
   k64 (hi) (lo) = bit-or (bit-shl hi 32) lo
 
   mask64-lo : Integer = k64 0 4294967295
-
-  w64-add : Integer, Integer -> Integer
-  w64-add (a) (b) = bit-and (a + b) (k64 4294967295 4294967295)
 
   rotr64 : Integer, Integer -> Integer
   rotr64 (x) (n) =
@@ -596,7 +594,7 @@ Section: Definitions
   hamt-djb2-hash : Text -> Integer
   hamt-djb2-hash (s) = hamt-djb2-loop s 0 (text-length s) 5381
 
-  hamt-djb2-loop : Text, Integer, Integer, Integer -> Integer
+  hamt-djb2-loop : Text, Integer, Integer, Integer between -9223372036854775808 and 9223372036854775807 wrapping -> Integer
   hamt-djb2-loop (s) (i) (len) (h) =
     if i == len then abs-int h
     else hamt-djb2-loop s (i + 1) len (h * 33 + char-code (char-at s i))
@@ -6781,6 +6779,22 @@ Section: Listing A Directory By Name
 Page 1
 
 
+Chapter: Foreword--Wrap64
+
+Section: Wrapping Multiply
+
+  w64-mul : Integer between -9223372036854775808 and 9223372036854775807 wrapping, Integer -> Integer between -9223372036854775808 and 9223372036854775807 wrapping
+  w64-mul (a) (b) = a * b
+
+Section: Wrapping Add and Subtract
+
+  w64-add : Integer between -9223372036854775808 and 9223372036854775807 wrapping, Integer -> Integer between -9223372036854775808 and 9223372036854775807 wrapping
+  w64-add (a) (b) = a + b
+
+  w64-sub : Integer between -9223372036854775808 and 9223372036854775807 wrapping, Integer -> Integer between -9223372036854775808 and 9223372036854775807 wrapping
+  w64-sub (a) (b) = a - b
+
+
 Chapter: Foreword--Maybe
 
  We say:
@@ -6819,10 +6833,27 @@ Section: Definitions
 Page 1
 
 
+Chapter: Entry Point
+  cites Codex chapter Opening (codex-opening)
+
+ Two definitions named `opening` in one compilation unit collide, so a program
+ that supplies its OWN entry point could not bundle Chapter: Opening at all,
+ and therefore could not call the compiler's phases. This chapter holds the
+ entry point and nothing else, which leaves that chapter bundlable. The body
+ is `codex-opening`, one chapter over, unchanged.
+
+Section: Entry Point
+
+  opening : [Console, FileSystem, Device.Block] Nothing = codex-opening
+
+Page 1
+
+
 Chapter: Opening
   grounds Device.Port, Device.Block
   cites Codex chapter Phase Allocator (phase-start, phase-measure, phase-took, phase-compact, phase-compact-poison, PhaseStart, PhaseMetrics, deck-short-of)
   cites Foreword chapter Maybe
+  cites Foreword chapter Wrap64
   cites Foreword chapter Fat16
   cites Foreword chapter ImportGate
   cites Foreword chapter FactDisk
@@ -7369,18 +7400,18 @@ Section: Frontend
 
   compile-desugar-and-scope : Text, ParseResult, Text, CompileFlags, Integer, Integer -> ScopeResult
   compile-desugar-and-scope (source) (pr) (chapter-name) (flags) (fk-base) (fk-height) =
-   let desugar-deck-height = scaled-floor (flags.deck-scale) demand-desugar-floor demand-desugar-guard-band
-   in let desugar-base = build desugar-deck-height
+   let dset-keep = __deck-set fk-base
+   in let fk-ceiling = fk-base + fk-height - demand-frontend-keep-guard-band
    in let desugar-phase = phase-start
-   in let dr = desugar-document source (pr.doc) chapter-name (desugar-base + desugar-deck-height)
+   in let dr = deck-record (desugar-document source (pr.doc) chapter-name fk-ceiling)
    in let ast = dr.dr-chapter
    in let desugar-metrics = phase-measure desugar-phase "DESUGAR"
-   in let desugar-ov = check-deck-overflow (desugar-metrics.deck-end - desugar-metrics.deck-origin) desugar-deck-height
-   in let dset-keep = __deck-set fk-base
+   in let desugar-ov = check-deck-overflow (desugar-metrics.deck-end - desugar-metrics.deck-origin) fk-height
    in let keep-phase = phase-start
-   in let fk-ceiling = fk-base + fk-height - demand-frontend-keep-guard-band
-   in let fkcopy = deck-record (copy-as-chapter-guarded fk-base fk-ceiling ast)
+   in let fkcopy = deck-record (relocate-chapter-tail fk-base fk-ceiling ast (dr.dr-sat))
    in let ast2 = fkcopy.chapter
+   in let keep-cursor = __deck-pos
+   in let keep-escapes = if flags.escape-check then pmap-escape-count-quiet (address-of ast2) "AChapter" keep-cursor __heap-save else 0
    in let assignments = deck-record (for a in (pr.assignments) -> deck-record (ChapterAssignment { def-name = copy-sx-text fk-base (a.def-name), chapter-slug = copy-sx-text fk-base (a.chapter-slug) }))
    in let chapter-names = deck-record (copy-sx-texts fk-base (pr.chapter-names))
    in let colliding-names = skip-list-text-to-list (pr.colliding)
@@ -7391,6 +7422,7 @@ Section: Frontend
    in let phase-metrics-d = deck-record (for m in (pr.phase-metrics) -> deck-record (PhaseMetrics { label = m.label, bivy-origin = m.bivy-origin, bivy-hwm = m.bivy-hwm, deck-origin = m.deck-origin, deck-end = m.deck-end }))
    in let keep-metrics = phase-measure keep-phase "DESUGAR-KEEP"
    in let keep-ov = check-deck-overflow (keep-metrics.deck-end - keep-metrics.deck-origin) fk-height
+   in let keep-note-bag = deck-record (if flags.phase-trace | flags.escape-check then bag-from-list [make-warning cdx-escape-violation ("DESUGAR-KEEP fk-base=" & show fk-base & " origin=" & show (keep-metrics.deck-origin) & " end=" & show (keep-metrics.deck-end) & " used=" & show (keep-metrics.deck-end - keep-metrics.deck-origin) & " desugar-deck=" & show (desugar-metrics.deck-end - desugar-metrics.deck-origin) & " desugar-bivy=" & show (desugar-metrics.bivy-hwm - desugar-metrics.bivy-origin) & " escapes-above-keep=" & show keep-escapes) synthetic-span] else no-overflow-bag)
    in let desugar-ov-bag = deck-record (if desugar-ov == 1 | dr.dr-sat == 1 then deck-overflow-bag "DESUGAR" else no-overflow-bag)
    in let keep-ov-bag = deck-record (if keep-ov == 1 | fkcopy.sat == 1 then deck-overflow-bag "DESUGAR-KEEP" else no-overflow-bag)
    in let desugar-esc-bag = deck-record (escape-check-bag (flags.escape-check) desugar-metrics "DESUGAR")
@@ -7406,7 +7438,7 @@ Section: Frontend
    in let cite-bag = deck-record (check-duplicate-cites (scoped.citations))
    in let missing-cite-bag = deck-record (check-cites-resolve (scoped.citations) assignments chapter-names)
    in let resolve-result = resolve-chapter scoped colliding assignments scope-ceiling
-   in let resolve-bag = deck-record (bag-merge-all [parse-bag-d, cite-bag, missing-cite-bag, resolve-result.bag, desugar-ov-bag, keep-ov-bag, desugar-esc-bag])
+   in let resolve-bag = deck-record (bag-merge-all [parse-bag-d, cite-bag, missing-cite-bag, resolve-result.bag, desugar-ov-bag, keep-ov-bag, desugar-esc-bag, keep-note-bag])
    in let scope-end = __deck-pos
    in let scope-sat = if deck-short-of scope-ceiling demand-scope-guard-band then 1 else 0
    in let scope-metrics = phase-measure scope-phase "SCOPE"
@@ -7468,11 +7500,10 @@ Section: Frontend
    in let check-phase-metrics = deck-record (list-push (sr.phase-metrics) check-metrics)
    in if bag-has-errors check-bag
       then halted-checked check-bag check-heap-marks
-      else let resolved-env = deck-record (for b in (check-result.env.bindings) -> deck-record (TypeBinding { name = b.name, bound-type = deep-resolve (check-result.state) (b.bound-type) }))
-      in let sorted-all0 = deck-record (resolve-all-bindings (check-result.state) (sort-bindings (check-result.types & resolved-env)) 0 (list-length (check-result.types) + list-length resolved-env) (__list-with-capacity (list-length (check-result.types) + list-length resolved-env)))
-      in let sorted-et0 = deck-record (resolve-all-expr-types (check-result.state) (sort-expr-types (check-result.state.expr-types)) 0 (list-length (check-result.state.expr-types)) (__list-with-capacity (list-length (check-result.state.expr-types))))
+      else let pre-sorted = deck-record (sort-bindings (check-result.types & check-result.env.bindings))
+      in let pre-et = deck-record (sort-expr-types (check-result.state.expr-types))
       in let post-ov-bag = if __deck-pos > check-ceiling then deck-overflow-bag "CHECK" else no-overflow-bag
-      in let memo-pop0 = list-length sorted-et0 / 4 + list-length sorted-all0 + 65536
+      in let memo-pop0 = list-length pre-et / 4 + list-length pre-sorted + 65536
       in let memo-graph = (check-metrics.deck-end - check-metrics.deck-origin) / 64
       in let memo-pop = if memo-graph > memo-pop0 then memo-graph else memo-pop0
       in let memo-slots = memo-pow2-at-least (memo-pop * 2) 4096
@@ -7512,10 +7543,17 @@ Section: Frontend
       }
       in let check-resolve-metrics = phase-measure check-phase "CHECK-RESOLVE"
       in let all-phase-metrics = deck-record (list-push check-phase-metrics check-resolve-metrics)
+      in let tail-scratch = __deck-pos
       in let keep-set = __deck-set (check-result.keep-end)
       in let keep-phase = phase-start
-      in let sorted-all = deck-record (copy-bindings-deep sorted-all0 mc)
-      in let sorted-et = deck-record (copy-expr-types-deep sorted-et0 mc)
+      in let tail-bivy = __heap-save
+      in let acc-all = deck-record (__list-with-capacity (list-length pre-sorted))
+      in let (sorted-all, kc-all) = tail-resolve-bindings (check-result.state) pre-sorted 0 (list-length pre-sorted) acc-all mc tail-scratch tail-bivy __deck-pos
+      in let acc-et = deck-record (__list-with-capacity (list-length pre-et))
+      in let (sorted-et, kc-et) = tail-resolve-expr-types (check-result.state) pre-et 0 (list-length pre-et) acc-et mc tail-scratch tail-bivy __deck-pos
+      in let tail-rewind = __heap-restore tail-bivy
+      in let tail-memo-z = __memset (mc.mc-table) 0 (mc.mc-slots * 8)
+      in let tail-bag = if flags.phase-trace then deck-record (bag-from-list [make-warning cdx-escape-violation ("CHECK-TAIL binds=" & show (list-length sorted-all) & " et=" & show (list-length sorted-et) & " keep-used=" & show (kc-et - check-result.keep-end)) synthetic-span]) else no-overflow-bag
       in let kept-subs = deck-record (mcopy-types (check-result.state.substitutions) 0 mc)
       in let kept-rows = deck-record (mcopy-rows (check-result.state.row-substitutions) mc)
       in let kept-bag = deck-record (copy-sx-bag keep-base check-bag)
@@ -7525,8 +7563,9 @@ Section: Frontend
       in let keep-metrics = phase-measure keep-phase "CHECK-KEEP"
       in let keep-ov = check-deck-overflow (keep-metrics.deck-end - keep-metrics.deck-origin) keep-height
       in let keep-ov-bag = if keep-ov == 1 | keep-metrics.deck-end >= mc.mc-ceiling | check-result.keep-overflow then deck-overflow-bag "CHECK-KEEP" else no-overflow-bag
+      in let keep-metrics-bag = if flags.phase-trace then deck-record (bag-from-list [make-warning cdx-escape-violation ("CHECK-KEEP-METRICS origin=" & show (keep-metrics.deck-origin) & " end=" & show (keep-metrics.deck-end) & " height=" & show keep-height & " ceiling=" & show (mc.mc-ceiling) & " keep-base=" & show keep-base & " walk-keep-end=" & show (check-result.keep-end) & " ov=" & show keep-ov & " walk-overflow=" & (if check-result.keep-overflow then "1" else "0")) synthetic-span]) else no-overflow-bag
       in let keep-stat-bag = if flags.escape-check then deck-record (bag-from-list [make-warning cdx-escape-violation ("KEEP-STAT used=" & show (keep-metrics.deck-end - keep-metrics.deck-origin) & " ty=" & show (list-length (mc.mc-ty)) & " text=" & show (list-length (mc.mc-text)) & " name=" & show (list-length (mc.mc-name)) & " row=" & show (list-length (mc.mc-row)) & " tylists=" & show (list-length (mc.mc-tylist)) & "/" & show (sum-tylist-lens (mc.mc-tylist) 0 (list-length (mc.mc-tylist)) 0) & " fieldlists=" & show (list-length (mc.mc-fieldlist)) & "/" & show (sum-fieldlist-lens (mc.mc-fieldlist) 0 (list-length (mc.mc-fieldlist)) 0) & " ctorlists=" & show (list-length (mc.mc-ctorlist)) & "/" & show (sum-ctorlist-lens (mc.mc-ctorlist) 0 (list-length (mc.mc-ctorlist)) 0) & " labellists=" & show (list-length (mc.mc-labellist)) & "/" & show (sum-labellist-lens (mc.mc-labellist) 0 (list-length (mc.mc-labellist)) 0) & " subs=" & show (list-length kept-subs) & " et=" & show (list-length sorted-et) & " binds=" & show (list-length sorted-all)) synthetic-span]) else bag-from-list []
-      in let final-bag = deck-record (bag-merge-all [kept-bag, keep-ov-bag, keep-stat-bag, post-ov-bag])
+      in let final-bag = deck-record (bag-merge-all [kept-bag, keep-ov-bag, keep-stat-bag, post-ov-bag, tail-bag, keep-metrics-bag])
       in let pre-sorted-ust = deck-record (UnificationState {
        substitutions = kept-subs,
        row-substitutions = kept-rows,
@@ -7598,12 +7637,18 @@ Section: Frontend
   compile-frontend-passes (source) (chapter-name) (flags) (run-passes) =
    let checked = compile-checked source chapter-name flags
    in if bag-has-errors (checked.bag) then halted-frontend (checked.bag) (checked.heap-marks)
-   else let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
+   else let lower-keep-height = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
+   in let lower-keep-base = build lower-keep-height
+   in let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
    in let lower-base = build lower-deck-height
    in let lower-ceiling = lower-base + lower-deck-height
+   in let set-lo = __deck-set lower-keep-base
    in let lower-origin = __deck-pos
    in let lower-phase = phase-start
-   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling run-passes)
+   in let set-ls = __deck-set lower-base
+   in let (ir-raw, lower-keep-end) = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling run-passes lower-keep-base (lower-keep-base + lower-keep-height))
+   in let lower-keep-sat = lower-keep-end + demand-lower-guard-band >= lower-keep-base + lower-keep-height
+   in let lower-keep-bag = deck-record (if flags.phase-trace then bag-from-list [make-warning cdx-escape-violation ("LOWER-KEEP used=" & integer-to-text (lower-keep-end - lower-keep-base) & " of " & integer-to-text lower-keep-height) synthetic-span] else no-overflow-bag)
    in let passed = if run-passes then deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
       else IRPassResult { chapter = ir-raw, violations = [], infos = [] }
    in let ir-passed = passed.chapter
@@ -7618,15 +7663,15 @@ Section: Frontend
     ground-effects = checked.scoped.ground-effects
    })
    in let lower-end = __deck-pos
-   in let lower-sat = if deck-short-of lower-ceiling demand-lower-guard-band then 1 else 0
+   in let lower-sat = if list-length (ir-raw.defs) < list-length (checked.scoped.defs) then 1 else 0
    in let lower-metrics = phase-measure lower-phase "LOWER"
    in let lower-ov = check-deck-overflow (lower-end - lower-origin) lower-deck-height
    in let lower-precise-bag = deck-record (precise-escape-bag (flags.escape-check) (address-of ir) "IRChapter" lower-metrics "LOWER")
    in let blank-ir = IRChapter { name = ir.name, defs = [], effect-op-names = ir.effect-op-names, span = ir.span }
    in let pm1 = deck-record (list-push (checked.phase-metrics) lower-metrics)
-   in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then deck-overflow-bag "LOWER" else no-overflow-bag
+   in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then deck-overflow-bag "LOWER" else if lower-keep-sat then deck-overflow-bag "LOWER-KEEP" else no-overflow-bag
    in let lower-esc-bag = escape-check-bag (flags.escape-check) lower-metrics "LOWER"
-   in let fe-bag = deck-record (frontend-bag-with-passes (checked.bag) lower-ov-bag lower-esc-bag lower-precise-bag passed)
+   in let fe-bag = deck-record (frontend-bag-with-passes (checked.bag) (bag-merge-all [lower-ov-bag, lower-keep-bag]) lower-esc-bag lower-precise-bag passed)
    in let lower-sealed = compact-phase flags poison-lower
    in let resolved-defs = if run-passes then
        let resolve-deck-height = scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band
@@ -7655,18 +7700,24 @@ Section: Frontend
   compile-frontend-cdx (source) (chapter-name) (flags) =
    let checked = compile-checked source chapter-name flags
    in if bag-has-errors (checked.bag) then halted-frontend (checked.bag) (checked.heap-marks)
-   else let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
+   else let lower-keep-height = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
+   in let lower-keep-base = build lower-keep-height
+   in let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
    in let lower-base = build lower-deck-height
    in let lower-ceiling = lower-base + lower-deck-height
+   in let set-lo = __deck-set lower-keep-base
    in let lower-origin = __deck-pos
    in let lower-phase = phase-start
-   in let ir-raw = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling True)
+   in let set-ls = __deck-set lower-base
+   in let (ir-raw, lower-keep-end) = deck-record (lower-chapter (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names) (checked.renames) (checked.colliding) (checked.assignments) lower-ceiling True lower-keep-base (lower-keep-base + lower-keep-height))
+   in let lower-keep-sat = lower-keep-end + demand-lower-guard-band >= lower-keep-base + lower-keep-height
+   in let lower-keep-bag = deck-record (if flags.phase-trace then bag-from-list [make-warning cdx-escape-violation ("LOWER-KEEP used=" & integer-to-text (lower-keep-end - lower-keep-base) & " of " & integer-to-text lower-keep-height) synthetic-span] else no-overflow-bag)
    in let passed = deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
    in let ir = passed.chapter
    in let ir-check-bag = deck-record (ir-check-violation-bag (passed.violations))
    in let occ-report-bag = deck-record (occ-info-bag (passed.infos))
    in let lower-end = __deck-pos
-   in let lower-sat = if deck-short-of lower-ceiling demand-lower-guard-band then 1 else 0
+   in let lower-sat = if list-length (ir-raw.defs) < list-length (checked.scoped.defs) then 1 else 0
    in let lower-metrics = phase-measure lower-phase "LOWER"
    in let lower-ov = check-deck-overflow (lower-end - lower-origin) lower-deck-height
    in let lower-precise-bag = deck-record (precise-escape-bag (flags.escape-check) (address-of ir) "IRChapter" lower-metrics "LOWER")
@@ -7707,7 +7758,7 @@ Section: Frontend
    in let pm1 = deck-record (list-push (checked.phase-metrics) lower-metrics)
    in let pm2 = deck-record (list-push pm1 resolve-metrics)
    in let pm3 = deck-record (list-push pm2 lift-metrics)
-   in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then deck-overflow-bag "LOWER" else no-overflow-bag
+   in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then deck-overflow-bag "LOWER" else if lower-keep-sat then deck-overflow-bag "LOWER-KEEP" else no-overflow-bag
    in let resolve-ov-bag = if resolve-ov == 1 | resolve-sat == 1 then deck-overflow-bag "RESOLVE" else no-overflow-bag
    in let lift-ov-bag = if lift-ov == 1 | lift-sat == 1 then deck-overflow-bag "LIFT" else no-overflow-bag
    in let lower-esc-bag = escape-check-bag (flags.escape-check) lower-metrics "LOWER"
@@ -7740,7 +7791,7 @@ Section: Frontend
    in let lir-report-bag = deck-record (occ-info-bag (lir-report-if lir-target-x86 (flags.pipeline) cdx-chapter))
    in let lir-probe-bag = deck-record (occ-info-bag (lir-alloc-probe-if lir-target-a64-shape "A64" "lir-dump-a64" (flags.pipeline) cdx-chapter))
    in let lir-narrow-bag = deck-record (occ-info-bag (lir-alloc-probe-if lir-target-narrow-shape "NARROW" "lir-dump-a64" (flags.pipeline) cdx-chapter))
-   in let fe-bag = deck-record (bag-merge-all [checked.bag, ir-check-bag, occ-report-bag, lir-report-bag, lir-probe-bag, lir-narrow-bag, lower-ov-bag, resolve-ov-bag, lift-ov-bag, lower-esc-bag, resolve-esc-bag, lift-esc-bag, lower-precise-bag, dl-bag, pmap-selftest-bag True])
+   in let fe-bag = deck-record (bag-merge-all [checked.bag, ir-check-bag, occ-report-bag, lir-report-bag, lir-probe-bag, lir-narrow-bag, lower-ov-bag, lower-keep-bag, resolve-ov-bag, lift-ov-bag, lower-esc-bag, resolve-esc-bag, lift-esc-bag, lower-precise-bag, dl-bag, pmap-selftest-bag True])
    in let result = deck-record (CompileFrontend {
     type-defs = checked.scoped.type-defs,
     text-meta = tm,
@@ -8251,6 +8302,64 @@ Section: Expr-Type Pre-Resolution
    else let b = list-at bindings i
    in let resolved = deck-record (TypeBinding { name = b.name, bound-type = deep-resolve st (b.bound-type) })
    in resolve-all-bindings st bindings (i + 1) len (list-push acc resolved)
+
+  tail-resolve-bindings : UnificationState, List TypeBinding, Integer, Integer, List TypeBinding, MemoCtx, Integer, Integer, Integer -> (List TypeBinding, Integer)
+  tail-resolve-bindings (st) (bs) (i) (len) (acc) (mc) (scratch-base) (bivy-base) (kc) =
+   if i >= len then let set-k = __deck-set kc in (acc, kc)
+   else let set-s = __deck-set scratch-base
+   in let chunk = deck-record (__list-with-capacity (len - i))
+   in let n = tail-resolve-binding-chunk st bs i len chunk scratch-base bivy-base 0
+   in let set-k = __deck-set kc
+   in let acc2 = tail-copy-binding-chunk chunk 0 n acc mc
+   in let kc2 = __deck-pos
+   in let z = __memset (mc.mc-table) 0 (mc.mc-slots * 8)
+   in let r = __heap-restore bivy-base
+   in tail-resolve-bindings st bs (i + n) len acc2 mc scratch-base bivy-base kc2
+
+  tail-resolve-binding-chunk : UnificationState, List TypeBinding, Integer, Integer, List TypeBinding, Integer, Integer, Integer -> Integer
+  tail-resolve-binding-chunk (st) (bs) (i) (len) (chunk) (scratch-base) (bivy-base) (n) =
+   if i >= len then n
+   else if n > 0 & (__deck-pos - scratch-base) + (__heap-save - bivy-base) >= demand-check-batch-budget then n
+   else let b = list-at bs i
+   in let resolved = deck-record (TypeBinding { name = b.name, bound-type = deep-resolve st (b.bound-type) })
+   in let pushed = list-push chunk resolved
+   in tail-resolve-binding-chunk st bs (i + 1) len chunk scratch-base bivy-base (n + 1)
+
+  tail-copy-binding-chunk : List TypeBinding, Integer, Integer, List TypeBinding, MemoCtx -> List TypeBinding
+  tail-copy-binding-chunk (chunk) (j) (n) (acc) (mc) =
+   if j >= n then acc
+   else let b = list-at chunk j
+   in let kept = deck-record (TypeBinding { name = mcopy-text (b.name) mc, bound-type = mcopy-type (b.bound-type) 0 mc })
+   in tail-copy-binding-chunk chunk (j + 1) n (list-push acc kept) mc
+
+  tail-resolve-expr-types : UnificationState, List ExprTypeEntry, Integer, Integer, List ExprTypeEntry, MemoCtx, Integer, Integer, Integer -> (List ExprTypeEntry, Integer)
+  tail-resolve-expr-types (st) (es) (i) (len) (acc) (mc) (scratch-base) (bivy-base) (kc) =
+   if i >= len then let set-k = __deck-set kc in (acc, kc)
+   else let set-s = __deck-set scratch-base
+   in let chunk = deck-record (__list-with-capacity (len - i))
+   in let n = tail-resolve-expr-type-chunk st es i len chunk scratch-base bivy-base 0
+   in let set-k = __deck-set kc
+   in let acc2 = tail-copy-expr-type-chunk chunk 0 n acc mc
+   in let kc2 = __deck-pos
+   in let z = __memset (mc.mc-table) 0 (mc.mc-slots * 8)
+   in let r = __heap-restore bivy-base
+   in tail-resolve-expr-types st es (i + n) len acc2 mc scratch-base bivy-base kc2
+
+  tail-resolve-expr-type-chunk : UnificationState, List ExprTypeEntry, Integer, Integer, List ExprTypeEntry, Integer, Integer, Integer -> Integer
+  tail-resolve-expr-type-chunk (st) (es) (i) (len) (chunk) (scratch-base) (bivy-base) (n) =
+   if i >= len then n
+   else if n > 0 & (__deck-pos - scratch-base) + (__heap-save - bivy-base) >= demand-check-batch-budget then n
+   else let e = list-at es i
+   in let resolved = deck-record (ExprTypeEntry { key = e.key, ty = deep-resolve st (e.ty) })
+   in let pushed = list-push chunk resolved
+   in tail-resolve-expr-type-chunk st es (i + 1) len chunk scratch-base bivy-base (n + 1)
+
+  tail-copy-expr-type-chunk : List ExprTypeEntry, Integer, Integer, List ExprTypeEntry, MemoCtx -> List ExprTypeEntry
+  tail-copy-expr-type-chunk (chunk) (j) (n) (acc) (mc) =
+   if j >= n then acc
+   else let e = list-at chunk j
+   in let kept = deck-record (ExprTypeEntry { key = e.key, ty = mcopy-type (e.ty) 0 mc })
+   in tail-copy-expr-type-chunk chunk (j + 1) n (list-push acc kept) mc
 
 Section: Codegen Diagnostics
 
@@ -8946,7 +9055,7 @@ Section: Entry Point
   disk-fnv : List Integer, Integer, Integer, Integer -> Integer
   disk-fnv (bs) (i) (n) (h) =
    if i >= n then h
-   else disk-fnv bs (i + 1) n ((bit-xor h (list-at bs i)) * 1099511628211)
+   else disk-fnv bs (i + 1) n (w64-mul (bit-xor h (list-at bs i)) 1099511628211)
 
  The seed constant is FNV-1a 64's offset basis, #CBF29CE484222325. Its top bit
  is set, so read back as a signed i64 it is a large negative number, which is
@@ -9110,7 +9219,7 @@ Section: Entry Point
    end
   end
 
-  opening : [Console, FileSystem, Device.Block] Nothing = act
+  codex-opening : [Console, FileSystem, Device.Block] Nothing = act
    disk-rung "entered" 1 bp-cyan bp-red
    mode-result <- read-line
    when mode-result
@@ -9740,12 +9849,39 @@ Section: Deck Copies
        span = copy-sx-span b (ch.span)
       }, sat = 0 }
 
+  relocate-chapter-tail : Integer, Integer, AChapter, Integer -> GuardedChapterCopy
+  relocate-chapter-tail (b) (ceiling) (ch) (sat) =
+   let pbs2 = copy-as-proseblocks-guarded b ceiling (ch.prose-blocks) 0 (list-length (ch.prose-blocks)) []
+   in let anns2 = copy-as-annotations-guarded b ceiling (ch.annotations) 0 (list-length (ch.annotations)) []
+   in if sat == 1 | __heap-save >= ceiling
+      then GuardedChapterCopy { chapter = empty-as-chapter b ch, sat = 1 }
+      else GuardedChapterCopy { chapter = AChapter {
+       name = ch.name,
+       defs = ch.defs,
+       type-defs = ch.type-defs,
+       effect-defs = ch.effect-defs,
+       class-defs = ch.class-defs,
+       instance-defs = ch.instance-defs,
+       citations = ch.citations,
+       ground-effects = copy-sx-texts b (ch.ground-effects),
+       chapter-title = copy-sx-text b (ch.chapter-title),
+       prose = copy-sx-text b (ch.prose),
+       prose-blocks = pbs2,
+       annotations = anns2,
+       section-titles = copy-sx-texts b (ch.section-titles),
+       rt-names = copy-sx-texts b (ch.rt-names),
+       rt-budgets = for x in (ch.rt-budgets) -> x,
+       conversions = copy-sx-texts b (ch.conversions),
+       span = ch.span
+      }, sat = 0 }
+
 Page 1
 
 
 Chapter: Ast--Desugarer
   cites Codex chapter Build Settings (max-recursion-depth, demand-desugar-guard-band)
   cites Codex chapter Phase Allocator (deck-short-of)
+  cites Codex chapter Syntax Nodes (copy-sx-span, copy-sx-ov, copy-sx-text)
 
 Section: Span Helpers
   token-span : Token -> SourceSpan
@@ -9789,7 +9925,7 @@ Section: Expression Desugaring
     is MatchExpr (scrut) (arms) ->
      let ds = desugar-expr-at scrut (depth + 1)
      in deck-record (AMatchExpr ds (map-list desugar-match-arm arms) (desugared-span (aexpr-span ds)))
-    is ListExpr (elems) (sp) -> deck-record (AListExpr (map-list desugar-expr elems) sp)
+    is ListExpr (elems) (sp) -> deck-record (AListExpr (map-list desugar-expr elems) (copy-sx-span 0 sp))
     is RecordExpr (type-tok) (fields) -> deck-record (ARecordExpr (make-name (token-text type-tok)) (map-list desugar-field-expr fields) (token-span type-tok))
     is FieldExpr (rec) (field-tok) -> deck-record (AFieldAccess (desugar-expr-at rec (depth + 1)) (make-name (token-text field-tok)) (token-span field-tok))
     is ParenExpr (inner) -> desugar-expr-at inner (depth + 1)
@@ -10064,11 +10200,11 @@ Section: Type Desugaring
      in deck-record (AEffectType (map-list make-type-param-name effs) (map-list extract-scope-text scopes) (map-list make-type-param-name tail) dr (atype-span dr))
     is BoundedIntType (base) (lo) (hi) (mode) ->
      let db = desugar-type-expr-at base (depth + 1)
-     in deck-record (ABoundedIntType db lo hi mode (atype-span db))
+     in deck-record (ABoundedIntType db lo hi (copy-sx-ov mode) (atype-span db))
     is PropEqType (left) (right) (sp) ->
      let dl = desugar-type-expr-at left (depth + 1)
      in let dr = desugar-type-expr-at right (depth + 1)
-     in deck-record (APropEqType dl dr sp)
+     in deck-record (APropEqType dl dr (copy-sx-span 0 sp))
     is ConstrainedType (constraint) (body) ->
      let db = desugar-type-expr-at body (depth + 1)
      in desugar-constraint constraint db
@@ -10117,7 +10253,7 @@ Section: Definition Desugaring
     params = map-list desugar-param (d.params),
     declared-type = ann-types,
     body = desugar-expr (d.body),
-    chapter-slug = d.chapter-slug,
+    chapter-slug = substring (d.chapter-slug) 0 (text-length (d.chapter-slug)),
     span = token-span (d.name)
    })
 
@@ -10707,9 +10843,9 @@ Section: Document Desugaring
   desugar-cite (imp) =
    deck-record (ACitesDecl {
     quire = make-name (token-text (imp.quire)),
-    chapter-name = make-name (imp.chapter-name),
+    chapter-name = make-name (copy-sx-text 0 (imp.chapter-name)),
     selected-names = map-list desugar-cite-name (imp.selected-names),
-    citing-chapter = imp.citing-chapter,
+    citing-chapter = copy-sx-text 0 (imp.citing-chapter),
     span = token-span (imp.quire)
    })
 
@@ -10747,7 +10883,7 @@ Section: Document Desugaring
       })
      in list-insert-at method-fields 0 super-field
      else method-fields
-   in let tparams = if count-class-instances ids (token-text (cd.name)) 0 (list-length ids) 0 > 1 then [make-name "a"] else []
+   in let tparams = [make-name "a"]
    in let td = deck-record (ARecordTypeDef dict-name tparams fields False synthetic-span)
    in synth-class-type-defs cds ids (i + 1) len (__linked-list-push acc td)
 
@@ -11080,7 +11216,7 @@ Section: Document Desugaring
   find-single-instance-type (ids) (class-name) (i) (len) =
    if i >= len then ""
    else let id = list-at ids i
-   in if token-text (id.class-name) == class-name then token-text (id.type-name)
+   in if token-text (id.class-name) == class-name then instance-head-key (id.type-name)
    else find-single-instance-type ids class-name (i + 1) len
 
   insert-dicts-at-call-sites : List ADef, List ConstrainedFnInfo, Integer, Integer, List ADef, Integer -> List ADef
@@ -11146,12 +11282,34 @@ Section: Document Desugaring
    else if list-at xs i == target then True
    else is-in-list target xs (i + 1) len
 
+ The key must render IDENTICALLY to `type-key-of` in `IR/Lowering.codex`,
+ which builds the same name from the RESOLVED type. A head with no
+ arguments renders to exactly the bare name both sides produced before,
+ so only a compound head changes.
+
+  instance-head-key : TypeExpr -> Text
+  instance-head-key (te) =
+   when te
+    is NamedType (t) -> token-text t
+    is ParenType (inner) -> instance-head-key inner
+    is ListType (inner) -> "List[" & instance-head-key inner & "]"
+    is AppType (head) (args) ->
+     let b = instance-head-key head
+     in if list-length args == 0 then b
+     else b & "[" & instance-head-key-args args 0 (list-length args) & "]"
+    is otherwise -> ""
+
+  instance-head-key-args : List TypeExpr, Integer, Integer -> Text
+  instance-head-key-args (as) (i) (n) =
+   if i >= n then ""
+   else (if i == 0 then "" else ",") & instance-head-key (list-at as i) & instance-head-key-args as (i + 1) n
+
   synth-instance-defs : List ClassDef, List InstanceDef, Integer, Integer, LinkedList ADef -> LinkedList ADef
   synth-instance-defs (cds) (ids) (i) (len) (acc) =
    if i >= len then acc
    else let id = list-at ids i
    in let class-name = token-text (id.class-name)
-   in let type-name = token-text (id.type-name)
+   in let type-name = instance-head-key (id.type-name)
    in let dict-name = class-name & "Dict"
    in let def-name = make-name (class-name & "-dict-" & type-name)
    in let method-fields = synth-instance-fields (id.methods) 0 (list-length (id.methods)) []
@@ -11262,7 +11420,7 @@ Section: Document Desugaring
    else let id = list-at ids i
    in let aid = deck-record (AInstanceDef {
     class-name = make-name (token-text (id.class-name)),
-    type-name = make-name (token-text (id.type-name)),
+    type-name = make-name (instance-head-key (id.type-name)),
     methods = desugar-instance-methods (id.methods) 0 (list-length (id.methods)) [],
     span = token-span (id.class-name)
    })
@@ -11853,6 +12011,12 @@ Section: Demand Decks
   demand-frontend-keep-guard-band : Integer = 8388608
   demand-lower-floor : Integer = 343932928
   demand-lower-guard-band : Integer = 8388608
+ The LOWER keep holds the memoized copies of a definition's finished IRDef, a
+ deduplicated subset of what the single LOWER deck used to hold, so the keep
+ floor is the LOWER floor: it cannot need more, and 96 MiB refused
+ codex/test/desk-root-guard at 92.7 MB kept (measured 2026-09-02).
+
+  demand-lower-keep-floor : Integer = 343932928
   demand-resolve-floor : Integer = 209715200
   demand-resolve-guard-band : Integer = 8388608
   demand-lift-floor : Integer = 109051904
@@ -13527,6 +13691,8 @@ Section: Register Constants
   callee-saved-regs : List Integer = [3, 12, 13, 14, 15]
 
 Section: Condition Codes
+  cc-no : Integer = 1
+
   cc-b : Integer = 2
 
   cc-ae : Integer = 3
@@ -14586,48 +14752,6 @@ Section: Full CCE Conversion (tier0/1/2, inlined from Foreword CCE)
     in if utf8-has-high s 0 len
     then raw-bytes-to-text (utf8-to-cce-loop s 0 len (__list-with-capacity (len + 1)))
     else s
-
-  build-cce0u2 : Integer, Integer, List Integer -> List Integer
-  build-cce0u2 (i) (n) (acc) =
-    if i >= n then acc
-    else build-cce0u2 (i + 1) n (list-push acc (cce-to-uni i))
-
-  cce0u2-vals : List Integer
-  cce0u2-vals = build-cce0u2 0 2176 (__list-with-capacity 2176)
-
-  cce0u2-lo : List Integer
-  cce0u2-lo = for x in cce0u2-vals -> int-mod x 256
-
-  cce0u2-hi : List Integer
-  cce0u2-hi = for x in cce0u2-vals -> int-mod (x / 256) 256
-
-  cce-t2-cbases : List Integer
-  cce-t2-cbases = [2176, 2240, 2336, 2432, 23424, 30016, 41188, 41444, 41956, 42980]
-
-  cce-t2-sizes : List Integer
-  cce-t2-sizes = [64, 96, 96, 20992, 6592, 11172, 256, 512, 1024, 256]
-
-  cce-t2-ubases : List Integer
-  cce-t2-ubases = [12288, 12352, 12448, 19968, 13312, 44032, 3584, 8192, 127744, 9728]
-
-  le8-of : Integer -> List Integer
-  le8-of (x) = [int-mod x 256, int-mod (x / 256) 256, int-mod (x / 65536) 256, int-mod (x / 16777216) 256, 0, 0, 0, 0]
-
-  le8-cat : List Integer, Integer, Integer, List Integer -> List Integer
-  le8-cat (xs) (i) (n) (acc) =
-    if i >= n then acc else le8-cat xs (i + 1) n (acc & le8-of (list-at xs i))
-
-  cce-t2-rodata : List Integer
-  cce-t2-rodata = le8-cat cce-t2-cbases 0 10 [] & le8-cat cce-t2-sizes 0 10 [] & le8-cat cce-t2-ubases 0 10 []
-
-  cce0u2-rodata-offset : Integer
-  cce0u2-rodata-offset = list-length cce-to-unicode-byte-table + list-length unicode-to-cce-byte-table + list-length tier1-block-rodata
-
-  cce0u2-hi-rodata-offset : Integer
-  cce0u2-hi-rodata-offset = cce0u2-rodata-offset + 2176
-
-  cce-t2-rodata-offset : Integer
-  cce-t2-rodata-offset = cce0u2-rodata-offset + 4352
 
 Section: State Helpers
  Three targets share one selector so a build cannot be half-hosted: 0 is bare
@@ -16173,6 +16297,8 @@ Page 1
 
 
 Chapter: Emit--Emit Allocator
+  cites Codex chapter Phase Allocator (deck-reservation-guard, poke-qword-cell, deck-reservation-top-cell)
+  cites Codex chapter Build Settings (deck-guard-enabled)
 
 Section: Workspace
 
@@ -16183,10 +16309,19 @@ Section: Workspace
    data-capacity : Integer between 0 and 4294967295
   }
 
+ These two lines are `build`'s and must stay `build`'s. Without them an emit
+ reservation published no ceiling, so `__deck-enter` armed whatever the last
+ phase had left in the cell: measured 2026-09-02 at ceiling 449,847,088 against
+ an emit top of 16,392,728, 27x above the extent, which made the UD2
+ unreachable and emit the one phase where a deck overflow corrupted instead of
+ faulting (COMPILER-48 instance 5, Steve Howell's issue 115).
+
   emit-build : Integer -> Integer
   emit-build (size) =
    let p = __heap-save
    in let deck-init = __deck-set p
+   in let guarded = deck-reservation-guard p size
+   in let top = if deck-guard-enabled == 0 | hosted-kind /= 0 then 0 else poke-qword-cell deck-reservation-top-cell (p + size)
    in let advanced = __heap-advance size
    in p
 
@@ -16217,6 +16352,15 @@ Section: Identifier Atoms
     is OvError -> "ov-error"
     is OvWrapping -> "ov-wrap"
     is OvClamping -> "ov-clamp"
+
+  bin-op-atom-typed : IRBinaryOp, CodexType -> Text
+  bin-op-atom-typed (op) (ty) =
+   if int-ty-wraps ty then (when op
+    is IrAddInt -> "add-int-wrapping"
+    is IrSubInt -> "sub-int-wrapping"
+    is IrMulInt -> "mul-int-wrapping"
+    is otherwise -> bin-op-atom op)
+   else bin-op-atom op
 
   bin-op-atom : IRBinaryOp -> Text
   bin-op-atom (op) =
@@ -16584,7 +16728,7 @@ Section: IRExpr Emission
     is IrBoolLit (b) (sp) -> if b then "(bool-lit true)" else "(bool-lit false)"
     is IrCharLit (c) (sp) -> "(char-lit " & integer-to-text c & ")"
     is IrName (n) (ty) (sp) -> "(name " & ir-quote n & " " & ir-emit-type ty & ")"
-    is IrBinary (op) (l) (r) (ty) (sp) -> "(binary " & bin-op-atom op & " " & ir-emit-expr l & " " & ir-emit-expr r & " " & ir-emit-type ty & ")"
+    is IrBinary (op) (l) (r) (ty) (sp) -> "(binary " & bin-op-atom-typed op ty & " " & ir-emit-expr l & " " & ir-emit-expr r & " " & ir-emit-type ty & ")"
     is IrNegate (x) (ty) (sp) -> "(negate " & ir-emit-expr x & " " & ir-emit-type ty & ")"
     is IrIf (c) (t) (el) (ty) (sp) -> "(if " & ir-emit-expr c & " " & ir-emit-expr t & " " & ir-emit-expr el & " " & ir-emit-type ty & ")"
     is IrLet (n) (ty) (v) (b) (sp) -> ir-cat (ir-emit-let-chain e [] 0)
@@ -18283,7 +18427,7 @@ Section: Expression Emission
     is IrError (msg) (ty) (sp) -> emit-int-lit (st-add-error st cdx-ir-error msg sp) 0
     is IrName (name) (ty) (sp) -> emit-name st name ty
     is IrLet (name) (ty) (value) (body) (sp) -> emit-let st name value body
-    is IrBinary (op) (left) (right) (ty) (sp) -> emit-binary st op left right
+    is IrBinary (op) (left) (right) (ty) (sp) -> emit-binary st op left right ty
     is IrIf (cond) (then-e) (else-e) (ty) (sp) -> emit-if st cond then-e else-e
     is IrApply (func) (arg) (ty) (sp) -> emit-apply st func arg ty
     is IrRecord (rname) (fields) (ty) (sp) -> emit-record st fields ty
@@ -18955,6 +19099,9 @@ Section: Expression Emission
   real-arith-is-f32 : CodegenState, CodexType -> Boolean
   real-arith-is-f32 (st) (ty) = is-real-f32 (strip-unit-ty (resolve-to-sum-with-defs st ty))
 
+  int-trap-after : CodexType -> List Integer
+  int-trap-after (ty) = if int-ty-wraps ty then [] else jcc cc-no 2 & [15, 11]
+
   emit-real-trapping-arith : CodegenState, Integer, Integer, Integer, Boolean -> EmitResult
   emit-real-trapping-arith (st) (l-reg) (r-reg) (sse-op) (f32) =
    let rd = alloc-temp st
@@ -19514,8 +19661,8 @@ Section: Expression Emission
    in let st2 = emit-operand-to st1 left reg-r8
    in emit-helper-call-2-regs st2 reg-r8 reg-r9 "__str_concat_inplace"
 
-  emit-binary : CodegenState, IRBinaryOp, IRExpr, IRExpr -> EmitResult
-  emit-binary (st) (op) (left) (right) =
+  emit-binary : CodegenState, IRBinaryOp, IRExpr, IRExpr, CodexType -> EmitResult
+  emit-binary (st) (op) (left) (right) (ty) =
    if is-inplace-append st op left then emit-inplace-append st left right
    else if is-append-list-op op then emit-append-list st left right
    else if is-and-op op then emit-short-circuit-and st left right
@@ -19524,36 +19671,36 @@ Section: Expression Emission
     is IrIntLit (v) (s) ->
      if v >= (0 - 2147483648) & v <= 2147483647 then
       when op
-       is IrAddInt -> emit-binary-add-imm st left v
-       is IrSubInt -> emit-binary-sub-imm st left v
-       is IrMulInt -> emit-binary-mul-imm st left v
+       is IrAddInt -> emit-binary-add-imm st left v ty
+       is IrSubInt -> emit-binary-sub-imm st left v ty
+       is IrMulInt -> emit-binary-mul-imm st left v ty
        is IrDivInt -> if v > 0 & bit-and v (v - 1) == 0 & pow2-dividend-nonneg (st.range-env) left then emit-binary-div-pow2 st left v
-        else emit-binary-or-standard st op left right
+        else emit-binary-or-standard st op left right ty
        is IrRemInt -> if v > 0 & bit-and v (v - 1) == 0 & pow2-dividend-nonneg (st.range-env) left then emit-binary-rem-pow2 st left v
-        else emit-binary-or-standard st op left right
+        else emit-binary-or-standard st op left right ty
        is otherwise -> if is-fusable-int-comparison st op left then emit-binary-cmp-imm st op left v
-        else emit-binary-or-standard st op left right
-     else emit-binary-or-standard st op left right
-    is IrName (n) (ty) (sp) ->
+        else emit-binary-or-standard st op left right ty
+     else emit-binary-or-standard st op left right ty
+    is IrName (n) (rty) (sp) ->
      let slot = lookup-local (st.locals) n
      in if slot >= 0 & slot < spill-base then
       when left
        is IrIntLit (lv) (ls) ->
         if lv >= (0 - 2147483648) & lv <= 2147483647 then
          when op
-          is IrMulInt -> emit-binary-mul-imm st right lv
-          is IrAddInt -> emit-binary-add-imm st right lv
-          is otherwise -> emit-binary-reg-right st op left slot right
-        else emit-binary-reg-right st op left slot right
-       is otherwise -> emit-binary-reg-right st op left slot right
-     else emit-binary-or-standard st op left right
+          is IrMulInt -> emit-binary-mul-imm st right lv ty
+          is IrAddInt -> emit-binary-add-imm st right lv ty
+          is otherwise -> emit-binary-reg-right st op left slot right ty
+        else emit-binary-reg-right st op left slot right ty
+       is otherwise -> emit-binary-reg-right st op left slot right ty
+     else emit-binary-or-standard st op left right ty
     is otherwise ->
      when left
       is IrName (ln) (lty) (lsp) ->
        let lslot = lookup-local (st.locals) ln
-       in if lslot >= 0 & lslot < spill-base then emit-binary-reg-left st op left lslot lty right
-       else emit-binary-or-standard st op left right
-      is otherwise -> emit-binary-or-standard st op left right
+       in if lslot >= 0 & lslot < spill-base then emit-binary-reg-left st op left lslot ty right
+       else emit-binary-or-standard st op left right ty
+      is otherwise -> emit-binary-or-standard st op left right ty
 
  Staged binary emission. The standard path parks both operands in
  alloc-locals, which are anonymous and never released: each binary
@@ -19580,10 +19727,10 @@ Section: Expression Emission
  RSP-relative spill offsets read inside the right operand's emission,
  so that mode keeps the standard path.
 
-  emit-binary-or-standard : CodegenState, IRBinaryOp, IRExpr, IRExpr -> EmitResult
-  emit-binary-or-standard (st) (op) (left) (right) =
-   if st.omit-frame-pointer then emit-binary-standard st op left right
-   else emit-binary-staged st op left right
+  emit-binary-or-standard : CodegenState, IRBinaryOp, IRExpr, IRExpr, CodexType -> EmitResult
+  emit-binary-or-standard (st) (op) (left) (right) (ty) =
+   if st.omit-frame-pointer then emit-binary-standard st op left right ty
+   else emit-binary-staged st op left right ty
 
   is-staged-operand : CodegenState, IRExpr -> Boolean
   is-staged-operand (st) (e) =
@@ -19604,24 +19751,24 @@ Section: Expression Emission
      else st-append-code st (mov-load scratch reg-rbp (-((slot - spill-base + 1) * 8 + 32)))
     is otherwise -> st
 
-  emit-binary-staged : CodegenState, IRBinaryOp, IRExpr, IRExpr -> EmitResult
-  emit-binary-staged (st) (op) (left) (right) =
+  emit-binary-staged : CodegenState, IRBinaryOp, IRExpr, IRExpr, CodexType -> EmitResult
+  emit-binary-staged (st) (op) (left) (right) (ty) =
    let operand-ty = ir-expr-type left
    in if is-staged-operand st left then
        if is-staged-operand st right then
         let st1 = emit-operand-to st left reg-r8
         in let st2 = emit-operand-to st1 right reg-r9
-        in emit-binary-op st2 op reg-r8 reg-r9 operand-ty
+        in emit-binary-op st2 op reg-r8 reg-r9 operand-ty ty
        else
         let r = emit-expr (st-set-tail-pos st False) right
         in let st1 = st-append-code (r.state) (mov-rr reg-r9 (r.reg))
         in let st2 = emit-operand-to st1 left reg-r8
-        in emit-binary-op st2 op reg-r8 reg-r9 operand-ty
+        in emit-binary-op st2 op reg-r8 reg-r9 operand-ty ty
       else if is-staged-operand st right then
        let l = emit-expr (st-set-tail-pos st False) left
        in let st1 = st-append-code (l.state) (mov-rr reg-r8 (l.reg))
        in let st2 = emit-operand-to st1 right reg-r9
-       in emit-binary-op st2 op reg-r8 reg-r9 operand-ty
+       in emit-binary-op st2 op reg-r8 reg-r9 operand-ty ty
       else
        let l = emit-expr (st-set-tail-pos st False) left
        in let st1 = st-append-code (l.state) (push-r (l.reg))
@@ -19629,36 +19776,36 @@ Section: Expression Emission
        in when op
         is IrAddInt ->
          let pop-reg = if r.reg == reg-r8 then reg-r9 else reg-r8
-         in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (pop-r pop-reg & add-rr (r.reg) pop-reg)
+         in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (pop-r pop-reg & add-rr (r.reg) pop-reg & int-trap-after ty)
          in EmitResult { state = __record-set st2 "next-temp" (st2.next-temp + 1), reg = r.reg }
         is IrMulInt ->
          let pop-reg = if r.reg == reg-r8 then reg-r9 else reg-r8
-         in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (pop-r pop-reg & imul-rr (r.reg) pop-reg)
+         in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (pop-r pop-reg & imul-rr (r.reg) pop-reg & int-trap-after ty)
          in EmitResult { state = __record-set st2 "next-temp" (st2.next-temp + 1), reg = r.reg }
         is otherwise ->
          let st2 = st-append-code (r.state) (mov-rr reg-r9 (r.reg))
          in let st3 = st-append-code st2 (pop-r reg-r8)
-         in emit-binary-op st3 op reg-r8 reg-r9 operand-ty
+         in emit-binary-op st3 op reg-r8 reg-r9 operand-ty ty
 
-  emit-binary-add-imm : CodegenState, IRExpr, Integer -> EmitResult
-  emit-binary-add-imm (st) (left) (imm) =
+  emit-binary-add-imm : CodegenState, IRExpr, Integer, CodexType -> EmitResult
+  emit-binary-add-imm (st) (left) (imm) (ty) =
    let l = emit-expr (st-set-tail-pos st False) left
    in let rd = alloc-temp (l.state)
-   in if rd.reg /= l.reg then EmitResult { state = st-append-code (rd.state) (lea (rd.reg) (l.reg) imm), reg = rd.reg }
-   else EmitResult { state = st-append-code (rd.state) (add-ri (rd.reg) imm), reg = rd.reg }
+   in if int-ty-wraps ty & rd.reg /= l.reg then EmitResult { state = st-append-code (rd.state) (lea (rd.reg) (l.reg) imm), reg = rd.reg }
+   else EmitResult { state = st-append-code (rd.state) (mov-rr (rd.reg) (l.reg) & add-ri (rd.reg) imm & int-trap-after ty), reg = rd.reg }
 
-  emit-binary-sub-imm : CodegenState, IRExpr, Integer -> EmitResult
-  emit-binary-sub-imm (st) (left) (imm) =
+  emit-binary-sub-imm : CodegenState, IRExpr, Integer, CodexType -> EmitResult
+  emit-binary-sub-imm (st) (left) (imm) (ty) =
    let l = emit-expr (st-set-tail-pos st False) left
    in let rd = alloc-temp (l.state)
-   in if rd.reg /= l.reg then EmitResult { state = st-append-code (rd.state) (lea (rd.reg) (l.reg) (0 - imm)), reg = rd.reg }
-   else EmitResult { state = st-append-code (rd.state) (sub-ri (rd.reg) imm), reg = rd.reg }
+   in if int-ty-wraps ty & rd.reg /= l.reg then EmitResult { state = st-append-code (rd.state) (lea (rd.reg) (l.reg) (0 - imm)), reg = rd.reg }
+   else EmitResult { state = st-append-code (rd.state) (mov-rr (rd.reg) (l.reg) & sub-ri (rd.reg) imm & int-trap-after ty), reg = rd.reg }
 
-  emit-binary-mul-imm : CodegenState, IRExpr, Integer -> EmitResult
-  emit-binary-mul-imm (st) (left) (imm) =
+  emit-binary-mul-imm : CodegenState, IRExpr, Integer, CodexType -> EmitResult
+  emit-binary-mul-imm (st) (left) (imm) (ty) =
    let l = emit-expr (st-set-tail-pos st False) left
    in let rd = alloc-temp (l.state)
-   in EmitResult { state = st-append-code (rd.state) (imul-rri (rd.reg) (l.reg) imm), reg = rd.reg }
+   in EmitResult { state = st-append-code (rd.state) (imul-rri (rd.reg) (l.reg) imm & int-trap-after ty), reg = rd.reg }
 
   int-log2 : Integer -> Integer
   int-log2 (v) = if v <= 1 then 0 else 1 + int-log2 (bit-shru v 1)
@@ -19703,19 +19850,19 @@ Section: Expression Emission
  standard path must not clobber -- is-temp-reg restricts the fold to
  the dead-temp case, where l.reg holds a complex result.
 
-  emit-reg-right-inplace : CodegenState, IRBinaryOp, Integer, Integer -> EmitResult
-  emit-reg-right-inplace (st) (op) (l-reg) (right-reg) =
-   let st2 = st-append-code (fc-evict-reg st l-reg) (inplace-int-op op l-reg right-reg)
+  emit-reg-right-inplace : CodegenState, IRBinaryOp, Integer, Integer, CodexType -> EmitResult
+  emit-reg-right-inplace (st) (op) (l-reg) (right-reg) (lty) =
+   let st2 = st-append-code (fc-evict-reg st l-reg) (inplace-int-op op l-reg right-reg lty)
    in EmitResult { state = __record-set st2 "next-temp" (st2.next-temp + 1), reg = __narrow l-reg }
 
-  emit-binary-reg-right : CodegenState, IRBinaryOp, IRExpr, Integer, IRExpr -> EmitResult
-  emit-binary-reg-right (st) (op) (left) (right-reg) (right) =
+  emit-binary-reg-right : CodegenState, IRBinaryOp, IRExpr, Integer, IRExpr, CodexType -> EmitResult
+  emit-binary-reg-right (st) (op) (left) (right-reg) (right) (ty) =
    if is-safe-for-reg-right st op left then
     let l = emit-expr (st-set-tail-pos st False) left
     in if is-reg-right-inplace-op op & is-temp-reg (l.reg)
-       then emit-reg-right-inplace (l.state) op (l.reg) right-reg
-       else emit-binary-op (l.state) op (l.reg) right-reg (ir-expr-type left)
-   else emit-binary-or-standard st op left right
+       then emit-reg-right-inplace (l.state) op (l.reg) right-reg ty
+       else emit-binary-op (l.state) op (l.reg) right-reg (ir-expr-type left) ty
+   else emit-binary-or-standard st op left right ty
 
   is-safe-for-reg-left : CodegenState, IRBinaryOp, IRExpr -> Boolean
   is-safe-for-reg-left (st) (op) (right) =
@@ -19742,12 +19889,12 @@ Section: Expression Emission
     is 0 | 1 | 2 | 6 | 7 | 11 -> True
     is otherwise -> False
 
-  inplace-int-op : IRBinaryOp, Integer, Integer -> List Integer
-  inplace-int-op (op) (dest) (src) =
+  inplace-int-op : IRBinaryOp, Integer, Integer, CodexType -> List Integer
+  inplace-int-op (op) (dest) (src) (lty) =
    when op
-    is IrMulInt -> imul-rr dest src
-    is IrSubInt -> sub-rr dest src
-    is otherwise -> add-rr dest src
+    is IrMulInt -> imul-rr dest src & int-trap-after lty
+    is IrSubInt -> sub-rr dest src & int-trap-after lty
+    is otherwise -> add-rr dest src & int-trap-after lty
 
  On the reg-left path the right operand is always complex (a literal
  or register-local right is handled earlier in emit-binary), so its
@@ -19763,23 +19910,23 @@ Section: Expression Emission
  and non-integer ops keep the emit-binary-op path.
 
   emit-binary-reg-left : CodegenState, IRBinaryOp, IRExpr, Integer, CodexType, IRExpr -> EmitResult
-  emit-binary-reg-left (st) (op) (left) (left-reg) (lty) (right) =
+  emit-binary-reg-left (st) (op) (left) (left-reg) (ty) (right) =
    if is-commutative-int-op op then
     let r = emit-expr (st-set-tail-pos st False) right
-    in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (inplace-int-op op (r.reg) left-reg)
+    in let st2 = st-append-code (fc-evict-reg (r.state) (r.reg)) (inplace-int-op op (r.reg) left-reg ty)
     in EmitResult { state = __record-set st2 "next-temp" (st2.next-temp + 1), reg = r.reg }
    else if is-safe-for-reg-left st op right then
     let r = emit-expr (st-set-tail-pos st False) right
-    in emit-binary-op (r.state) op left-reg (r.reg) lty
-   else emit-binary-or-standard st op left right
+    in emit-binary-op (r.state) op left-reg (r.reg) (ir-expr-type left) ty
+   else emit-binary-or-standard st op left right ty
 
   emit-append-list : CodegenState, IRExpr, IRExpr -> EmitResult
   emit-append-list (st) (left) (right) =
    let chain = flatten-append-chain left [right]
    in emit-concat-many st chain
 
-  emit-binary-standard : CodegenState, IRBinaryOp, IRExpr, IRExpr -> EmitResult
-  emit-binary-standard (st) (op) (left) (right) =
+  emit-binary-standard : CodegenState, IRBinaryOp, IRExpr, IRExpr, CodexType -> EmitResult
+  emit-binary-standard (st) (op) (left) (right) (ty) =
    let l = emit-expr (st-set-tail-pos st False) left
    in let l-loc = alloc-local (l.state)
    in let st1 = store-local (l-loc.state) (l-loc.reg) (l.reg)
@@ -19788,23 +19935,23 @@ Section: Expression Emission
     is IrIntLit (v) (s) ->
      let l-load = load-local (r.state) (l-loc.reg)
      in when op
-      is IrAddInt -> EmitResult { state = st-append-code (l-load.state) (add-rr (l-load.reg) (r.reg)), reg = l-load.reg }
-      is IrSubInt -> EmitResult { state = st-append-code (l-load.state) (sub-rr (l-load.reg) (r.reg)), reg = l-load.reg }
-      is IrMulInt -> EmitResult { state = st-append-code (l-load.state) (imul-rr (l-load.reg) (r.reg)), reg = l-load.reg }
+      is IrAddInt -> EmitResult { state = st-append-code (l-load.state) (add-rr (l-load.reg) (r.reg) & int-trap-after ty), reg = l-load.reg }
+      is IrSubInt -> EmitResult { state = st-append-code (l-load.state) (sub-rr (l-load.reg) (r.reg) & int-trap-after ty), reg = l-load.reg }
+      is IrMulInt -> EmitResult { state = st-append-code (l-load.state) (imul-rr (l-load.reg) (r.reg) & int-trap-after ty), reg = l-load.reg }
       is otherwise ->
        let r-loc = alloc-local (r.state)
        in let st2 = store-local (r-loc.state) (r-loc.reg) (r.reg)
        in let l-load2 = load-local st2 (l-loc.reg)
        in let r-load = load-local (l-load2.state) (r-loc.reg)
        in let operand-ty = ir-expr-type left
-       in emit-binary-op (r-load.state) op (l-load2.reg) (r-load.reg) operand-ty
+       in emit-binary-op (r-load.state) op (l-load2.reg) (r-load.reg) operand-ty ty
     is otherwise ->
      let r-loc = alloc-local (r.state)
      in let st2 = store-local (r-loc.state) (r-loc.reg) (r.reg)
      in let l-load = load-local st2 (l-loc.reg)
      in let r-load = load-local (l-load.state) (r-loc.reg)
      in let operand-ty = ir-expr-type left
-     in emit-binary-op (r-load.state) op (l-load.reg) (r-load.reg) operand-ty
+     in emit-binary-op (r-load.state) op (l-load.reg) (r-load.reg) operand-ty ty
 
  The destination temp must avoid r-reg: the register ops write rd
  before reading r-reg (mov rd, l-reg destroys a colliding right
@@ -19838,20 +19985,20 @@ Section: Expression Emission
    in let result = load-local st2 (alloc.ptr-loc)
    in EmitResult { state = result.state, reg = result.reg }
 
-  emit-binary-op : CodegenState, IRBinaryOp, Integer, Integer, CodexType -> EmitResult
-  emit-binary-op (st) (op) (l-reg) (r-reg) (operand-ty) =
+  emit-binary-op : CodegenState, IRBinaryOp, Integer, Integer, CodexType, CodexType -> EmitResult
+  emit-binary-op (st) (op) (l-reg) (r-reg) (operand-ty) (node-ty) =
    let rd = alloc-temp-avoiding st r-reg
    in when op
     is IrAddInt -> EmitResult {
-     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & add-rr (rd.reg) r-reg),
+     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & add-rr (rd.reg) r-reg & int-trap-after node-ty),
      reg = rd.reg
     }
     is IrSubInt -> EmitResult {
-     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & sub-rr (rd.reg) r-reg),
+     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & sub-rr (rd.reg) r-reg & int-trap-after node-ty),
      reg = rd.reg
     }
     is IrMulInt -> EmitResult {
-     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & imul-rr (rd.reg) r-reg),
+     state = st-append-code (rd.state) (mov-rr (rd.reg) l-reg & imul-rr (rd.reg) r-reg & int-trap-after node-ty),
      reg = rd.reg
     }
     is IrDivInt -> let div-reg = if r-reg == reg-rdx then reg-r11
@@ -20016,6 +20163,64 @@ Section: Expression Emission
   eq-helper-name : Text -> Text
   eq-helper-name (sn) = deck-record ("__eq_" & sn)
 
+  eq-key-of : CodexType -> Text
+  eq-key-of (ty) =
+   when strip-unit-ty ty
+    is TextTy -> "Text"
+    is BooleanTy -> "Boolean"
+    is CharTy -> "Char"
+    is IntegerTy (lo) (hi) (m) -> "Integer"
+    is RealTy (w) (m) -> if is-width-f32 w then "Real32" else "Real64"
+    is ListTy (e) -> "List[" & eq-key-of e & "]"
+    is LinkedListTy (e) -> "LinkedList[" & eq-key-of e & "]"
+    is SumTy (n) (as) (cs) -> (n.value) & eq-key-wrap as
+    is RecordTy (n) (as) (fs) -> (n.value) & eq-key-wrap as
+    is ConstructedTy (n) (as) -> (n.value) & eq-key-wrap as
+    is TypeVar (id) -> "#" & show id
+    is otherwise -> "?"
+
+  eq-key-wrap : List CodexType -> Text
+  eq-key-wrap (as) =
+   if list-length as == 0 then "" else "[" & eq-key-args as 0 (list-length as) & "]"
+
+  eq-key-args : List CodexType, Integer, Integer -> Text
+  eq-key-args (as) (i) (n) =
+   if i >= n then ""
+   else (if i == 0 then "" else ",") & eq-key-of (list-at as i) & eq-key-args as (i + 1) n
+
+ The instantiated name is CONCATENATED, so it must be deck-recorded for the
+ same reason the bare name above is: emit-call-to keeps the target name in
+ cp-targets across a per-function __heap-restore, and a bivy allocation is
+ reclaimed before the patch pass reads it.
+
+  eq-helper-name-inst : Text, List CodexType -> Text
+  eq-helper-name-inst (sn) (actuals) =
+   if list-length actuals == 0 then eq-helper-name sn
+   else deck-record ("__eq_" & sn & "@" & eq-key-args actuals 0 (list-length actuals))
+
+  eq-site-actuals : CodexType -> List CodexType
+  eq-site-actuals (ty) =
+   when ty
+    is ConstructedTy (cn) (ca) -> ca
+    is otherwise -> eq-empty-type-args
+
+  eq-subst-deep : List CodexType, List CodexType, Integer, CodexType -> CodexType
+  eq-subst-deep (formals) (actuals) (fuel) (ty) =
+   if fuel <= 0 then ty
+   else let here = subst-field-type ty formals actuals
+   in when here
+    is ConstructedTy (n) (a) ->
+     if list-length a == 0 then here
+     else deck-record (ConstructedTy n (for x in a -> eq-subst-deep formals actuals (fuel - 1) x))
+    is ListTy (e) -> deck-record (ListTy (eq-subst-deep formals actuals (fuel - 1) e))
+    is LinkedListTy (e) -> deck-record (LinkedListTy (eq-subst-deep formals actuals (fuel - 1) e))
+    is otherwise -> here
+
+  eq-subst-fields : List CodexType, List CodexType, List CodexType -> List CodexType
+  eq-subst-fields (fs) (formals) (actuals) =
+   if list-length actuals == 0 then fs
+   else for f in fs -> eq-subst-deep formals actuals eq-rec-fuel f
+
   emit-eq-op : CodegenState, Integer, Integer, CodexType -> EmitResult
   emit-eq-op (st) (l-reg) (r-reg) (ty) =
    let resolved = strip-unit-ty (resolve-to-sum-with-defs st ty)
@@ -20024,11 +20229,8 @@ Section: Expression Emission
     is RealTy (rw) (rm) -> emit-num-comparison st cc-e l-reg r-reg
     is SumTy (sn) (args) (cs) ->
      if eq-sum-is-recursive st (sn.value) cs
-     then emit-helper-call-2-regs st l-reg r-reg (eq-helper-name (sn.value))
-     else let type-args = (when ty
-      is ConstructedTy (cn) (ca) -> ca
-      is otherwise -> eq-empty-type-args)
-     in emit-sum-structural-eq st l-reg r-reg cs type-args
+     then emit-helper-call-2-regs st l-reg r-reg (eq-helper-name-inst (sn.value) (eq-site-actuals ty))
+     else emit-sum-structural-eq st l-reg r-reg cs args (eq-site-actuals ty)
     is otherwise -> emit-comparison st cc-e l-reg r-reg ty
 
   emit-neq-op : CodegenState, Integer, Integer, CodexType -> EmitResult
@@ -20045,11 +20247,8 @@ Section: Expression Emission
     is RealTy (rw) (rm) -> emit-num-comparison st cc-ne l-reg r-reg
     is SumTy (sn) (args) (cs) ->
      let eq-result = (if eq-sum-is-recursive st (sn.value) cs
-      then emit-helper-call-2-regs st l-reg r-reg (eq-helper-name (sn.value))
-      else let type-args = (when ty
-       is ConstructedTy (cn) (ca) -> ca
-       is otherwise -> eq-empty-type-args)
-      in emit-sum-structural-eq st l-reg r-reg cs type-args)
+      then emit-helper-call-2-regs st l-reg r-reg (eq-helper-name-inst (sn.value) (eq-site-actuals ty))
+      else emit-sum-structural-eq st l-reg r-reg cs args (eq-site-actuals ty))
      in let rd = alloc-temp (eq-result.state)
      in EmitResult {
       state = st-append-code (rd.state) (cmp-ri (eq-result.reg) 0 & setcc cc-e (rd.reg) & movzx-byte-self (rd.reg)),
@@ -20063,11 +20262,11 @@ Section: Expression Emission
    eq-jumps : List Integer
   }
 
-  emit-sum-structural-eq : CodegenState, Integer, Integer, List SumCtor, List CodexType -> EmitResult
-  emit-sum-structural-eq (st) (l-reg) (r-reg) (ctors) (type-args) =
+  emit-sum-structural-eq : CodegenState, Integer, Integer, List SumCtor, List CodexType, List CodexType -> EmitResult
+  emit-sum-structural-eq (st) (l-reg) (r-reg) (ctors) (formals) (type-args) =
    if all-ctors-nullary ctors 0 (list-length ctors)
    then emit-sum-tag-eq st l-reg r-reg
-   else emit-sum-full-eq st l-reg r-reg ctors type-args
+   else emit-sum-full-eq st l-reg r-reg ctors formals type-args
 
   all-ctors-nullary : List SumCtor, Integer, Integer -> Boolean
   all-ctors-nullary (cs) (i) (len) =
@@ -20083,14 +20282,43 @@ Section: Expression Emission
    in let st2 = st-append-code (r-tag.state) (mov-load (r-tag.reg) r-reg 0)
    in emit-comparison st2 cc-e (l-tag.reg) (r-tag.reg) int-ty-default
 
-  subst-field-type : CodexType, List CodexType -> CodexType
-  subst-field-type (ty) (args) =
+ A type parameter reaches here as a `ConstructedTy` carrying its NAME and no
+ arguments, not as a `TypeVar`, so matching only `TypeVar` substitutes
+ nothing for the one case this function exists to serve. It is a silent
+ no-op: the field keeps the parameter's own type, `emit-eq-op` finds no arm
+ for it and falls through to `emit-comparison`, and a word compare on two
+ heap pointers is a POINTER comparison. Measured 2026-09-01 by tracing
+ `emit-eq-op`, which reported `ty=Ctor:Pair[Text]` against
+ `resolved=Sum:Pair[Ctor:a]`: the instantiation is on the SITE type, while
+ resolution answers the declaration's own formal parameters. So the formals
+ and the actuals arrive from different places and the substitution is a zip
+ of the two, keyed by NAME. The `TypeVar` arm is kept because nothing has
+ shown it is dead.
+
+  subst-formal-name : CodexType -> Text
+  subst-formal-name (ty) =
    when ty
-    is TypeVar (id) -> if id < list-length args then list-at args id else ty
+    is ConstructedTy (n) (a) -> n.value
+    is otherwise -> ""
+
+  subst-by-formal-name : Text, List CodexType, List CodexType, Integer, Integer, CodexType -> CodexType
+  subst-by-formal-name (nm) (formals) (actuals) (i) (n) (dflt) =
+   if i >= n then dflt
+   else if subst-formal-name (list-at formals i) == nm
+    then (if i < list-length actuals then list-at actuals i else dflt)
+    else subst-by-formal-name nm formals actuals (i + 1) n dflt
+
+  subst-field-type : CodexType, List CodexType, List CodexType -> CodexType
+  subst-field-type (ty) (formals) (actuals) =
+   when ty
+    is TypeVar (id) -> if id < list-length actuals then list-at actuals id else ty
+    is ConstructedTy (n) (a) ->
+     if list-length a == 0 then subst-by-formal-name (n.value) formals actuals 0 (list-length formals) ty
+     else ty
     is otherwise -> ty
 
-  emit-sum-full-eq : CodegenState, Integer, Integer, List SumCtor, List CodexType -> EmitResult
-  emit-sum-full-eq (st) (l-reg) (r-reg) (ctors) (type-args) =
+  emit-sum-full-eq : CodegenState, Integer, Integer, List SumCtor, List CodexType, List CodexType -> EmitResult
+  emit-sum-full-eq (st) (l-reg) (r-reg) (ctors) (formals) (type-args) =
    let l-loc = alloc-local st
    in let st0 = store-local (l-loc.state) (l-loc.reg) l-reg
    in let r-loc = alloc-local st0
@@ -20106,7 +20334,7 @@ Section: Expression Emission
    in let st5 = st-append-code st4 (jcc cc-ne 0)
    in let tag-loc = alloc-local st5
    in let st6 = store-local (tag-loc.state) (tag-loc.reg) (l-tag.reg)
-   in let dispatch = emit-sum-ctor-eq-dispatch st6 ctors type-args (l-loc.reg) (r-loc.reg) (tag-loc.reg) 0 (list-length ctors) [] []
+   in let dispatch = emit-sum-ctor-eq-dispatch st6 ctors formals type-args (l-loc.reg) (r-loc.reg) (tag-loc.reg) 0 (list-length ctors) [] []
    in let rd = alloc-temp (dispatch.state)
    in let st7 = patch-eq-jumps (rd.state) (dispatch.eq-jumps) 0
    in let st8 = st-append-code st7 (li (rd.reg) 1)
@@ -20118,27 +20346,27 @@ Section: Expression Emission
    in let st13 = patch-jmp-at st12 done-jmp-pos (st12.code-len)
    in EmitResult { state = st13, reg = rd.reg }
 
-  emit-sum-ctor-eq-dispatch : CodegenState, List SumCtor, List CodexType, Integer, Integer, Integer, Integer, Integer, List Integer, List Integer -> SumEqAccum
-  emit-sum-ctor-eq-dispatch (st) (ctors) (type-args) (l-loc) (r-loc) (tag-loc) (i) (len) (ne-acc) (eq-acc) =
+  emit-sum-ctor-eq-dispatch : CodegenState, List SumCtor, List CodexType, List CodexType, Integer, Integer, Integer, Integer, Integer, List Integer, List Integer -> SumEqAccum
+  emit-sum-ctor-eq-dispatch (st) (ctors) (formals) (type-args) (l-loc) (r-loc) (tag-loc) (i) (len) (ne-acc) (eq-acc) =
    if i == len then SumEqAccum { state = st, ne-jumps = ne-acc, eq-jumps = eq-acc }
    else let c = list-at ctors i
    in let fc = list-length (c.fields)
-   in if fc == 0 then emit-sum-ctor-eq-dispatch st ctors type-args l-loc r-loc tag-loc (i + 1) len ne-acc eq-acc
+   in if fc == 0 then emit-sum-ctor-eq-dispatch st ctors formals type-args l-loc r-loc tag-loc (i + 1) len ne-acc eq-acc
    else let tag-ld = load-local st tag-loc
    in let st1 = st-append-code (tag-ld.state) (cmp-ri (tag-ld.reg) i)
    in let skip-pos = st1.code-len
    in let st2 = st-append-code st1 (jcc cc-ne 0)
-   in let field-result = emit-sum-fields-eq st2 (c.fields) type-args l-loc r-loc 0 fc ne-acc
+   in let field-result = emit-sum-fields-eq st2 (c.fields) formals type-args l-loc r-loc 0 fc ne-acc
    in let eq-jmp-pos = (field-result.state).code-len
    in let st3 = st-append-code (field-result.state) (jmp 0)
    in let st4 = patch-jcc-at st3 skip-pos (st3.code-len)
-   in emit-sum-ctor-eq-dispatch st4 ctors type-args l-loc r-loc tag-loc (i + 1) len (field-result.ne-jumps) (list-push eq-acc eq-jmp-pos)
+   in emit-sum-ctor-eq-dispatch st4 ctors formals type-args l-loc r-loc tag-loc (i + 1) len (field-result.ne-jumps) (list-push eq-acc eq-jmp-pos)
 
-  emit-sum-fields-eq : CodegenState, List CodexType, List CodexType, Integer, Integer, Integer, Integer, List Integer -> SumEqAccum
-  emit-sum-fields-eq (st) (fields) (type-args) (l-loc) (r-loc) (i) (len) (ne-acc) =
+  emit-sum-fields-eq : CodegenState, List CodexType, List CodexType, List CodexType, Integer, Integer, Integer, Integer, List Integer -> SumEqAccum
+  emit-sum-fields-eq (st) (fields) (formals) (type-args) (l-loc) (r-loc) (i) (len) (ne-acc) =
    if i == len then SumEqAccum { state = st, ne-jumps = ne-acc, eq-jumps = [] }
    else let decl-ty = list-at fields i
-   in let field-ty = subst-field-type decl-ty type-args
+   in let field-ty = subst-field-type decl-ty formals type-args
    in let offset = sum-ctor-field-offset fields i
    in let fw = field-byte-width decl-ty
    in let fsigned = field-byte-signed decl-ty
@@ -20152,7 +20380,7 @@ Section: Expression Emission
    in let st3 = st-append-code (eq-result.state) (cmp-ri (eq-result.reg) 0)
    in let ne-pos = st3.code-len
    in let st4 = st-append-code st3 (jcc cc-e 0)
-   in emit-sum-fields-eq st4 fields type-args l-loc r-loc (i + 1) len (list-push ne-acc ne-pos)
+   in emit-sum-fields-eq st4 fields formals type-args l-loc r-loc (i + 1) len (list-push ne-acc ne-pos)
 
   patch-ne-jumps : CodegenState, List Integer, Integer -> CodegenState
   patch-ne-jumps (st) (patches) (i) =
@@ -20181,13 +20409,27 @@ Section: Recursive Structural Equality Helpers
   EqHelperReq = record {
    eq-sum-name : Text,
    eq-sum-ty : CodexType,
+   eq-sum-actuals : List CodexType,
    eq-sum-ctors : List SumCtor
   }
+
+  eq-req-formals : EqHelperReq -> List CodexType
+  eq-req-formals (req) =
+   when req.eq-sum-ty
+    is SumTy (n) (as) (cs) -> as
+    is otherwise -> eq-empty-type-args
+
+ The key is the INSTANTIATED name. Keyed on the bare sum name, Box Text and
+ Box Integer share one helper and the first instantiation to arrive decides
+ how both compare their field, which compares an Integer with __str_eq.
+
+  eq-req-name : EqHelperReq -> Text
+  eq-req-name (req) = eq-helper-name-inst (req.eq-sum-name) (req.eq-sum-actuals)
 
   eq-req-has : List EqHelperReq, Text, Integer -> Boolean
   eq-req-has (xs) (n) (i) =
    if i >= list-length xs then False
-   else if ((list-at xs i).eq-sum-name) == n then True
+   else if eq-req-name (list-at xs i) == n then True
    else eq-req-has xs n (i + 1)
 
  A comparison at a NON-recursive sum still descends: emit-sum-fields-eq calls
@@ -20203,23 +20445,25 @@ Section: Recursive Structural Equality Helpers
   eq-note-site : CodegenState, CodexType, List EqHelperReq, Integer -> List EqHelperReq
   eq-note-site (st) (ty) (acc) (fuel) =
    if fuel <= 0 then acc
-   else let resolved = strip-unit-ty (resolve-to-sum-with-defs st ty)
+   else let actuals = eq-site-actuals ty
+   in let resolved = strip-unit-ty (resolve-to-sum-with-defs st ty)
    in when resolved
     is SumTy (sn) (args) (cs) ->
      if eq-sum-is-recursive st (sn.value) cs
-     then (if eq-req-has acc (sn.value) 0 then acc
+     then (if eq-req-has acc (eq-helper-name-inst (sn.value) actuals) 0 then acc
       else list-push acc (deck-record (EqHelperReq {
         eq-sum-name = sn.value,
         eq-sum-ty = resolved,
+        eq-sum-actuals = actuals,
         eq-sum-ctors = cs
        })))
-     else eq-site-ctors st cs 0 acc (fuel - 1)
+     else eq-site-ctors st cs 0 acc (fuel - 1) args actuals
     is otherwise -> acc
 
-  eq-site-ctors : CodegenState, List SumCtor, Integer, List EqHelperReq, Integer -> List EqHelperReq
-  eq-site-ctors (st) (cs) (i) (acc) (fuel) =
+  eq-site-ctors : CodegenState, List SumCtor, Integer, List EqHelperReq, Integer, List CodexType, List CodexType -> List EqHelperReq
+  eq-site-ctors (st) (cs) (i) (acc) (fuel) (formals) (actuals) =
    if i >= list-length cs then acc
-   else eq-site-ctors st cs (i + 1) (eq-site-fields st ((list-at cs i).fields) 0 acc fuel) fuel
+   else eq-site-ctors st cs (i + 1) (eq-site-fields st (eq-subst-fields ((list-at cs i).fields) formals actuals) 0 acc fuel) fuel formals actuals
 
   eq-site-fields : CodegenState, List CodexType, Integer, List EqHelperReq, Integer -> List EqHelperReq
   eq-site-fields (st) (fs) (i) (acc) (fuel) =
@@ -20303,7 +20547,8 @@ Section: Recursive Structural Equality Helpers
   eq-close-reqs : CodegenState, List EqHelperReq, Integer -> List EqHelperReq
   eq-close-reqs (st) (reqs) (i) =
    if i >= list-length reqs then reqs
-   else eq-close-reqs st (eq-site-ctors st ((list-at reqs i).eq-sum-ctors) 0 reqs eq-rec-fuel) (i + 1)
+   else let r = list-at reqs i
+   in eq-close-reqs st (eq-site-ctors st (r.eq-sum-ctors) 0 reqs eq-rec-fuel (eq-req-formals r) (r.eq-sum-actuals)) (i + 1)
 
   eq-helper-var : Text, Integer -> Text
   eq-helper-var (prefix) (i) = prefix & show i
@@ -20362,9 +20607,15 @@ Section: Recursive Structural Equality Helpers
   eq-helper-def : EqHelperReq -> IRDef
   eq-helper-def (req) =
    let sty = req.eq-sum-ty
-   in let cs = req.eq-sum-ctors
+   in let formals = eq-req-formals req
+   in let actuals = req.eq-sum-actuals
+   in let cs = for c in (req.eq-sum-ctors) -> deck-record (SumCtor {
+     name = c.name,
+     fields = eq-subst-fields (c.fields) formals actuals,
+     return-type = c.return-type
+    })
    in deck-record (IRDef {
-    name = eq-helper-name (req.eq-sum-name),
+    name = eq-req-name req,
     params = [
       deck-record (IRParam { name = "__eqa", type-val = sty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqb", type-val = sty, span = synthetic-span })
@@ -20845,6 +21096,11 @@ Section: Memory Address Map
  at runtime, long after the tables exist, and they occupy PML4 entries no
  canonical address reaches. This cell is the one exception, because the UEFI
  stub primes it before jumping, and that write is the one the page tables eat.
+ The spawn-affinity REST VALUE was the second exception (COMPILER-49,
+ 2026-09-02): emit-process-setup stored its -1 into 36224 twelve instructions
+ before emit-build-process-page-tables zeroed the page, so a program's first
+ spawn read 0 and pinned to the BSP. Any cell in 0x8000..0x9FFF that must hold
+ a value at rest is written AFTER the tables are built.
 
  Measured under -EntryStart: cell read 0 and 0x8000 read 0x9023, a PML4 entry
  pointing at the PDPT. Every uefi-* helper then dereferenced null, which is
@@ -23186,10 +23442,7 @@ Section: Process Management
    in let dvv0 = st-append-code dvc2 (li reg-rdi devint-last-vec-addr)
    in let dvv1 = st-append-code dvv0 (li reg-rax 0)
    in let dvv2 = st-append-code dvv1 (mov-store reg-rdi reg-rax 0)
-   in let saff0 = st-append-code dvv2 (li reg-rdi spawn-affinity-addr)
-   in let saff1 = st-append-code saff0 (li reg-rax (-1))
-   in let saff2 = st-append-code saff1 (mov-store reg-rdi reg-rax 0)
-   in let slt0 = st-append-code saff2 (li reg-rdi slice-table-addr)
+   in let slt0 = st-append-code dvv2 (li reg-rdi slice-table-addr)
    in let slt1 = st-append-code slt0 (li reg-rax 0)
    in let slt2 = st-append-code slt1 (mov-store reg-rdi reg-rax 0)
    in let slt3 = st-append-code slt2 (li reg-rax proc-slice-system)
@@ -23200,7 +23453,10 @@ Section: Process Management
    in let slt8 = st-append-code slt7 (mov-store reg-rdi reg-rax 24)
    in let st5 = emit-build-process-page-tables slt8 32768 6291456
    in let st5u = emit-demand-unmap st5
-   in let st6 = emit-create-process st5u 0 proc-state-running 32768 6291456
+   in let saff0 = st-append-code st5u (li reg-rdi spawn-affinity-addr)
+   in let saff1 = st-append-code saff0 (li reg-rax (-1))
+   in let saff2 = st-append-code saff1 (mov-store reg-rdi reg-rax 0)
+   in let st6 = emit-create-process saff2 0 proc-state-running 32768 6291456
    in let p0aff0 = st-append-code st6 (li reg-rdi (proc-table-base + proc-affinity-offset))
    in let p0aff1 = st-append-code p0aff0 (li reg-rax 0)
    in let p0aff2 = st-append-code p0aff1 (mov-store reg-rdi reg-rax 0)
@@ -23226,18 +23482,24 @@ Section: Device Seed
 
 Section: Capabilities
 
- emit-grant-cap-mask writes a whole capability mask in one or-store --
- the boot path grants proc 0 exactly the mask derived from the
- binary's own manifest (stage 4 of the capability wiring: authority
- comes from the declared effect rows, not a grant-all list).
+ The mask goes through a REGISTER, never an immediate. x86-64 encodes the
+ ALU immediate forms as imm32 and the CPU SIGN-EXTENDS it under REX.W, so
+ `or rax, 0x80000000` sets bits 31 through 63 and an immediate above 32 bits
+ cannot be expressed at all. `li` picks mov-ri64 above the imm32 range, so
+ loading the mask into rdi and OR-ing register to register is exact for every
+ bit. rdi carries the address, is clobbered by the mask, and is re-materialised
+ for the store: cap-addr is a compile-time constant, so re-loading it costs ten
+ bytes of boot code and avoids asking which third register is live here.
 
   emit-grant-cap-mask : CodegenState, Integer, Integer -> CodegenState
   emit-grant-cap-mask (st) (proc-index) (mask) =
    let cap-addr = proc-table-base + proc-index * proc-entry-size + proc-cap-offset
    in let st1 = st-append-code st (li reg-rdi cap-addr)
    in let st2 = st-append-code st1 (mov-load reg-rax reg-rdi 0)
-   in let st3 = st-append-code st2 (or-ri reg-rax mask)
-   in st-append-code st3 (mov-store reg-rdi reg-rax 0)
+   in let st3 = st-append-code st2 (li reg-rdi mask)
+   in let st4 = st-append-code st3 (or-rr reg-rax reg-rdi)
+   in let st5 = st-append-code st4 (li reg-rdi cap-addr)
+   in st-append-code st5 (mov-store reg-rdi reg-rax 0)
 
   emit-grant-capability : CodegenState, Integer, Integer -> CodegenState
   emit-grant-capability (st) (proc-index) (cap-bit) =
@@ -23245,8 +23507,10 @@ Section: Capabilities
    in let st1 = st-append-code st (li reg-rdi cap-addr)
    in let st2 = st-append-code st1 (mov-load reg-rax reg-rdi 0)
    in let bit-mask = shl-1 cap-bit
-   in let st3 = st-append-code st2 (or-ri reg-rax bit-mask)
-   in st-append-code st3 (mov-store reg-rdi reg-rax 0)
+   in let st3 = st-append-code st2 (li reg-rdi bit-mask)
+   in let st4 = st-append-code st3 (or-rr reg-rax reg-rdi)
+   in let st5 = st-append-code st4 (li reg-rdi cap-addr)
+   in st-append-code st5 (mov-store reg-rdi reg-rax 0)
 
   emit-revoke-capability : CodegenState, Integer, Integer -> CodegenState
   emit-revoke-capability (st) (proc-index) (cap-bit) =
@@ -23254,8 +23518,10 @@ Section: Capabilities
    in let st1 = st-append-code st (li reg-rdi cap-addr)
    in let st2 = st-append-code st1 (mov-load reg-rax reg-rdi 0)
    in let inv-mask = bit-xor (shl-1 cap-bit) (0 - 1)
-   in let st3 = st-append-code st2 (and-ri reg-rax inv-mask)
-   in st-append-code st3 (mov-store reg-rdi reg-rax 0)
+   in let st3 = st-append-code st2 (li reg-rdi inv-mask)
+   in let st4 = st-append-code st3 (and-rr reg-rax reg-rdi)
+   in let st5 = st-append-code st4 (li reg-rdi cap-addr)
+   in st-append-code st5 (mov-store reg-rdi reg-rax 0)
 
   shl-1 : Integer -> Integer
   shl-1 (n) =
@@ -27769,17 +28035,17 @@ Section: Function Application
          when op
           is IrAddInt ->
            let l = emit-expr (st-set-tail-pos st False) left
-           in st-append-code (l.state) (lea target (l.reg) v)
+           in st-append-code (l.state) (tail-add-imm target (l.reg) v ty)
           is IrSubInt ->
            let l = emit-expr (st-set-tail-pos st False) left
-           in st-append-code (l.state) (lea target (l.reg) (0 - v))
+           in st-append-code (l.state) (tail-sub-imm target (l.reg) v ty)
           is otherwise -> emit-to-local st arg target False
         else emit-to-local st arg target False
        is IrName (n) (nty) (nsp) ->
         let slot = lookup-local (st.locals) n
         in if slot >= 0 & slot < spill-base & is-tco-binop op then
          let l = emit-expr (st-set-tail-pos st False) left
-         in st-append-code (l.state) (mov-rr target (l.reg) & emit-tco-binop op target slot)
+         in st-append-code (l.state) (mov-rr target (l.reg) & emit-tco-binop op target slot ty)
         else emit-to-local st arg target False
        is otherwise -> emit-to-local st arg target False
      is otherwise -> emit-to-local st arg target False
@@ -27791,13 +28057,23 @@ Section: Function Application
     is IrAddInt | IrSubInt | IrMulInt -> True
     is otherwise -> False
 
-  emit-tco-binop : IRBinaryOp, Integer, Integer -> List Integer
-  emit-tco-binop (op) (target) (right-reg) =
+  emit-tco-binop : IRBinaryOp, Integer, Integer, CodexType -> List Integer
+  emit-tco-binop (op) (target) (right-reg) (lty) =
    when op
-    is IrAddInt -> add-rr target right-reg
-    is IrSubInt -> sub-rr target right-reg
-    is IrMulInt -> imul-rr target right-reg
-    is otherwise -> add-rr target right-reg
+    is IrAddInt -> add-rr target right-reg & int-trap-after lty
+    is IrSubInt -> sub-rr target right-reg & int-trap-after lty
+    is IrMulInt -> imul-rr target right-reg & int-trap-after lty
+    is otherwise -> add-rr target right-reg & int-trap-after lty
+
+  tail-add-imm : Integer, Integer, Integer, CodexType -> List Integer
+  tail-add-imm (target) (src) (imm) (ty) =
+   if int-ty-wraps ty then lea target src imm
+   else mov-rr target src & add-ri target imm & int-trap-after ty
+
+  tail-sub-imm : Integer, Integer, Integer, CodexType -> List Integer
+  tail-sub-imm (target) (src) (imm) (ty) =
+   if int-ty-wraps ty then lea target src (0 - imm)
+   else mov-rr target src & sub-ri target imm & int-trap-after ty
 
   eval-tail-arg-standard : CodegenState, IRExpr, Integer -> CodegenState
   eval-tail-arg-standard (st) (arg) (target) =
@@ -28008,9 +28284,9 @@ Section: Function Application
      in when right
       is IrIntLit (v) (s) ->
        when op
-        is IrAddInt -> st-append-code (lload.state) (lea target (lload.reg) v)
-        is IrSubInt -> st-append-code (lload.state) (lea target (lload.reg) (0 - v))
-        is IrMulInt -> st-append-code (lload.state) (imul-rri target (lload.reg) v)
+        is IrAddInt -> st-append-code (lload.state) (tail-add-imm target (lload.reg) v (ir-expr-type arg))
+        is IrSubInt -> st-append-code (lload.state) (tail-sub-imm target (lload.reg) v (ir-expr-type arg))
+        is IrMulInt -> st-append-code (lload.state) (imul-rri target (lload.reg) v & int-trap-after (ir-expr-type arg))
         is IrDivInt -> if v > 0 & bit-and v (v - 1) == 0 & pow2-dividend-nonneg (st.range-env) left then
          let shift = int-log2 v
          in if lload.reg == target then st-append-code (lload.state) (sar-ri target shift)
@@ -28023,9 +28299,9 @@ Section: Function Application
         is otherwise -> emit-to-local st arg target False
       is IrName (rn) (rt) (rs) ->
        let rload = load-local (lload.state) (lookup-local (st.locals) rn)
-       in if rload.reg == target then st-append-code (rload.state) (emit-tco-binop op target (lload.reg))
-          else if lload.reg == target then st-append-code (rload.state) (emit-tco-binop op target (rload.reg))
-          else st-append-code (rload.state) (mov-rr target (lload.reg) & emit-tco-binop op target (rload.reg))
+       in if rload.reg == target then st-append-code (rload.state) (emit-tco-binop op target (lload.reg) (ir-expr-type arg))
+          else if lload.reg == target then st-append-code (rload.state) (emit-tco-binop op target (rload.reg) (ir-expr-type arg))
+          else st-append-code (rload.state) (mov-rr target (lload.reg) & emit-tco-binop op target (rload.reg) (ir-expr-type arg))
       is otherwise -> emit-to-local st arg target False
     is otherwise -> emit-to-local st arg target False
 
@@ -28469,7 +28745,7 @@ Section: Narrow-store with overflow-mode dispatch
          else int-ty-default
         is otherwise -> int-ty-default
       is otherwise -> int-ty-default
-    is IrBinary (op) (left) (right) (ty) (sp) -> proven-binary-range env op left right
+    is IrBinary (op) (left) (right) (ty) (sp) -> proven-binary-range env op left right ty
     is IrNegate (x) (t) (s) -> proven-negate-range env x
     is IrIf (cond) (then-e) (else-e) (ty) (sp) -> proven-if-range env then-e else-e
     is IrLet (name) (lty) (value) (body) (sp) -> ir-expr-proven-range (range-env-bind env name (ir-expr-proven-range env value)) body
@@ -28512,8 +28788,8 @@ Section: Narrow-store with overflow-mode dispatch
       is otherwise -> int-ty-default
     is otherwise -> int-ty-default
 
-  proven-binary-range : List RangeBind, IRBinaryOp, IRExpr, IRExpr -> CodexType
-  proven-binary-range (env) (op) (left) (right) =
+  proven-binary-range : List RangeBind, IRBinaryOp, IRExpr, IRExpr, CodexType -> CodexType
+  proven-binary-range (env) (op) (left) (right) (ty) =
    let lr = ir-expr-proven-range env left
    in let rr = ir-expr-proven-range env right
    in when lr
@@ -28523,7 +28799,7 @@ Section: Narrow-store with overflow-mode dispatch
        when op
         is IrAddInt -> proven-add-range l-lo l-hi r-lo r-hi
         is IrSubInt -> proven-sub-range l-lo l-hi r-lo r-hi
-        is IrMulInt -> proven-mul-range l-lo l-hi r-lo r-hi
+        is IrMulInt -> if int-ty-wraps ty then int-ty-default else proven-mul-range l-lo l-hi r-lo r-hi
         is IrDivInt -> proven-div-range l-lo l-hi r-lo r-hi
         is otherwise -> int-ty-default
       is otherwise -> int-ty-default
@@ -30645,185 +30921,6 @@ Section: I/O Boundary Helpers
    in let st24 = patch-jcc-at st23 done-pos (st23.code-len)
    in st-append-code st24 x86-ret
 
-  emit-cce-to-utf8-helper : CodegenState -> CodegenState
-  emit-cce-to-utf8-helper (st) =
-   let st0 = record-func-offset st "__cce_print"
-   in let st1 = st-append-code st0 (push-r reg-rbx & push-r reg-r12 & push-r reg-r14 & push-r reg-r15)
-   in let st2 = st-append-code st1 (mov-rr reg-rbx reg-rdi)
-   in let st3 = st-append-code st2 (mov-load reg-r12 reg-rbx 0)
-   in let st8 = st-append-code st3 (li reg-r15 0)
-   in let loop-top = st8.code-len
-   in let st9 = st-append-code st8 (cmp-rr reg-r15 reg-r12)
-   in let done-pos = st9.code-len
-   in let st10 = st-append-code st9 (jcc cc-ge 0)
-   in let st11 = st-append-code st10 (mov-rr reg-r11 reg-rbx)
-   in let st12 = st-append-code st11 (add-rr reg-r11 reg-r15)
-   in let st13 = st-append-code st12 (movzx-byte reg-rax reg-r11 8)
-   in let st14 = st-append-code st13 (li reg-rcx 1)
-   in let st15 = st-append-code st14 (mov-rr reg-rdx reg-rax)
-   in let st16 = st-append-code st15 (cmp-ri reg-rax 128)
-   in let dec-done-1 = st16.code-len
-   in let st17 = st-append-code st16 (jcc cc-l 0)
-   in let st18 = st-append-code st17 (mov-rr reg-rsi reg-rax)
-   in let st19 = st-append-code st18 (and-ri reg-rsi 224)
-   in let st20 = st-append-code st19 (cmp-ri reg-rsi 192)
-   in let not2-pos = st20.code-len
-   in let st21 = st-append-code st20 (jcc cc-ne 0)
-   in let st22 = st-append-code st21 (li reg-rcx 2)
-   in let st23 = st-append-code st22 (mov-rr reg-rdx reg-rax)
-   in let st24 = st-append-code st23 (and-ri reg-rdx 31)
-   in let st25 = st-append-code st24 (shl-ri reg-rdx 6)
-   in let st26 = st-append-code st25 (movzx-byte reg-rsi reg-r11 9)
-   in let st27 = st-append-code st26 (and-ri reg-rsi 63)
-   in let st28 = st-append-code st27 (add-rr reg-rdx reg-rsi)
-   in let st29 = st-append-code st28 (add-ri reg-rdx 128)
-   in let dec-done-2 = st29.code-len
-   in let st30 = st-append-code st29 (jmp 0)
-   in let st31 = patch-jcc-at st30 not2-pos (st30.code-len)
-   in let st32 = st-append-code st31 (mov-rr reg-rsi reg-rax)
-   in let st33 = st-append-code st32 (and-ri reg-rsi 240)
-   in let st34 = st-append-code st33 (cmp-ri reg-rsi 224)
-   in let not3-pos = st34.code-len
-   in let st35 = st-append-code st34 (jcc cc-ne 0)
-   in let st36 = st-append-code st35 (li reg-rcx 3)
-   in let st37 = st-append-code st36 (mov-rr reg-rdx reg-rax)
-   in let st38 = st-append-code st37 (and-ri reg-rdx 15)
-   in let st39 = st-append-code st38 (shl-ri reg-rdx 12)
-   in let st40 = st-append-code st39 (movzx-byte reg-rsi reg-r11 9)
-   in let st41 = st-append-code st40 (and-ri reg-rsi 63)
-   in let st42 = st-append-code st41 (shl-ri reg-rsi 6)
-   in let st43 = st-append-code st42 (add-rr reg-rdx reg-rsi)
-   in let st44 = st-append-code st43 (movzx-byte reg-rsi reg-r11 10)
-   in let st45 = st-append-code st44 (and-ri reg-rsi 63)
-   in let st46 = st-append-code st45 (add-rr reg-rdx reg-rsi)
-   in let st47 = st-append-code st46 (add-ri reg-rdx 2176)
-   in let st48 = patch-jcc-at st47 dec-done-1 (st47.code-len)
-   in let st49 = patch-jcc-at st48 not3-pos (st48.code-len)
-   in let st50 = patch-jmp-at st49 dec-done-2 (st49.code-len)
-   in let st51 = st-append-code st50 (add-rr reg-r15 reg-rcx)
-   in let st52 = st-append-code st51 (cmp-ri reg-rdx 2176)
-   in let t2-pos = st52.code-len
-   in let st53 = st-append-code st52 (jcc cc-ge 0)
-   in let st54 = emit-load-rodata-addr st53 reg-rdi cce0u2-rodata-offset
-   in let st55 = st-append-code st54 (add-rr reg-rdi reg-rdx)
-   in let st56 = st-append-code st55 (movzx-byte reg-rsi reg-rdi 0)
-   in let st57 = emit-load-rodata-addr st56 reg-rdi cce0u2-hi-rodata-offset
-   in let st58 = st-append-code st57 (add-rr reg-rdi reg-rdx)
-   in let st59 = st-append-code st58 (movzx-byte reg-rax reg-rdi 0)
-   in let st60 = st-append-code st59 (shl-ri reg-rax 8)
-   in let st61 = st-append-code st60 (add-rr reg-rsi reg-rax)
-   in let tu-done-1 = st61.code-len
-   in let st62 = st-append-code st61 (jmp 0)
-   in let st63 = patch-jcc-at st62 t2-pos (st62.code-len)
-   in let st64 = st-append-code st63 (li reg-rsi 65533)
-   in let st65 = st-append-code st64 (li reg-rcx 0)
-   in let t2-loop = st65.code-len
-   in let st66 = st-append-code st65 (cmp-ri reg-rcx 10)
-   in let t2-end = st66.code-len
-   in let st67 = st-append-code st66 (jcc cc-ge 0)
-   in let st68 = emit-load-rodata-addr st67 reg-rdi cce-t2-rodata-offset
-   in let st69 = st-append-code st68 (mov-rr reg-rax reg-rcx)
-   in let st70 = st-append-code st69 (shl-ri reg-rax 3)
-   in let st71 = st-append-code st70 (add-rr reg-rdi reg-rax)
-   in let st72 = st-append-code st71 (mov-load reg-r11 reg-rdi 0)
-   in let st73 = st-append-code st72 (cmp-rr reg-rdx reg-r11)
-   in let t2-next1 = st73.code-len
-   in let st74 = st-append-code st73 (jcc cc-l 0)
-   in let st75 = st-append-code st74 (mov-load reg-rax reg-rdi 80)
-   in let st76 = st-append-code st75 (add-rr reg-rax reg-r11)
-   in let st77 = st-append-code st76 (cmp-rr reg-rdx reg-rax)
-   in let t2-next2 = st77.code-len
-   in let st78 = st-append-code st77 (jcc cc-ge 0)
-   in let st79 = st-append-code st78 (mov-load reg-rax reg-rdi 160)
-   in let st80 = st-append-code st79 (mov-rr reg-rsi reg-rdx)
-   in let st81 = st-append-code st80 (sub-rr reg-rsi reg-r11)
-   in let st82 = st-append-code st81 (add-rr reg-rsi reg-rax)
-   in let t2-found-jmp = st82.code-len
-   in let st83 = st-append-code st82 (jmp 0)
-   in let st84 = patch-jcc-at st83 t2-next1 (st83.code-len)
-   in let st85 = patch-jcc-at st84 t2-next2 (st84.code-len)
-   in let st86 = st-append-code st85 (add-ri reg-rcx 1)
-   in let st87 = st-append-code st86 (jmp (t2-loop - (st86.code-len + 5)))
-   in let st88 = patch-jcc-at st87 t2-end (st87.code-len)
-   in let st89 = patch-jmp-at st88 t2-found-jmp (st88.code-len)
-   in let st90 = patch-jmp-at st89 tu-done-1 (st89.code-len)
-   in let st91 = st-append-code st90 (mov-rr reg-r14 reg-rsi)
-   in let st92 = st-append-code st91 (cmp-ri reg-r14 128)
-   in let enc-not1 = st92.code-len
-   in let st93 = st-append-code st92 (jcc cc-ge 0)
-   in let st94 = st-append-code st93 (mov-rr reg-rdi reg-r14)
-   in let st95 = emit-call-to st94 "__putb"
-   in let enc-done-1 = st95.code-len
-   in let st96 = st-append-code st95 (jmp 0)
-   in let st97 = patch-jcc-at st96 enc-not1 (st96.code-len)
-   in let st98 = st-append-code st97 (cmp-ri reg-r14 2048)
-   in let enc-not2 = st98.code-len
-   in let st99 = st-append-code st98 (jcc cc-ge 0)
-   in let st100 = st-append-code st99 (mov-rr reg-rax reg-r14)
-   in let st101 = st-append-code st100 (shr-ri reg-rax 6)
-   in let st102 = st-append-code st101 (or-ri reg-rax 192)
-   in let st103 = st-append-code st102 (mov-rr reg-rdi reg-rax)
-   in let st104 = emit-call-to st103 "__putb"
-   in let st105 = st-append-code st104 (mov-rr reg-rax reg-r14)
-   in let st106 = st-append-code st105 (and-ri reg-rax 63)
-   in let st107 = st-append-code st106 (or-ri reg-rax 128)
-   in let st108 = st-append-code st107 (mov-rr reg-rdi reg-rax)
-   in let st109 = emit-call-to st108 "__putb"
-   in let enc-done-2 = st109.code-len
-   in let st110 = st-append-code st109 (jmp 0)
-   in let st111 = patch-jcc-at st110 enc-not2 (st110.code-len)
-   in let st112 = st-append-code st111 (cmp-ri reg-r14 65536)
-   in let enc-not3 = st112.code-len
-   in let st113 = st-append-code st112 (jcc cc-ge 0)
-   in let st114 = st-append-code st113 (mov-rr reg-rax reg-r14)
-   in let st115 = st-append-code st114 (shr-ri reg-rax 12)
-   in let st116 = st-append-code st115 (or-ri reg-rax 224)
-   in let st117 = st-append-code st116 (mov-rr reg-rdi reg-rax)
-   in let st118 = emit-call-to st117 "__putb"
-   in let st119 = st-append-code st118 (mov-rr reg-rax reg-r14)
-   in let st120 = st-append-code st119 (shr-ri reg-rax 6)
-   in let st121 = st-append-code st120 (and-ri reg-rax 63)
-   in let st122 = st-append-code st121 (or-ri reg-rax 128)
-   in let st123 = st-append-code st122 (mov-rr reg-rdi reg-rax)
-   in let st124 = emit-call-to st123 "__putb"
-   in let st125 = st-append-code st124 (mov-rr reg-rax reg-r14)
-   in let st126 = st-append-code st125 (and-ri reg-rax 63)
-   in let st127 = st-append-code st126 (or-ri reg-rax 128)
-   in let st128 = st-append-code st127 (mov-rr reg-rdi reg-rax)
-   in let st129 = emit-call-to st128 "__putb"
-   in let enc-done-3 = st129.code-len
-   in let st130 = st-append-code st129 (jmp 0)
-   in let st131 = patch-jcc-at st130 enc-not3 (st130.code-len)
-   in let st132 = st-append-code st131 (mov-rr reg-rax reg-r14)
-   in let st133 = st-append-code st132 (shr-ri reg-rax 18)
-   in let st134 = st-append-code st133 (or-ri reg-rax 240)
-   in let st135 = st-append-code st134 (mov-rr reg-rdi reg-rax)
-   in let st136 = emit-call-to st135 "__putb"
-   in let st137 = st-append-code st136 (mov-rr reg-rax reg-r14)
-   in let st138 = st-append-code st137 (shr-ri reg-rax 12)
-   in let st139 = st-append-code st138 (and-ri reg-rax 63)
-   in let st140 = st-append-code st139 (or-ri reg-rax 128)
-   in let st141 = st-append-code st140 (mov-rr reg-rdi reg-rax)
-   in let st142 = emit-call-to st141 "__putb"
-   in let st143 = st-append-code st142 (mov-rr reg-rax reg-r14)
-   in let st144 = st-append-code st143 (shr-ri reg-rax 6)
-   in let st145 = st-append-code st144 (and-ri reg-rax 63)
-   in let st146 = st-append-code st145 (or-ri reg-rax 128)
-   in let st147 = st-append-code st146 (mov-rr reg-rdi reg-rax)
-   in let st148 = emit-call-to st147 "__putb"
-   in let st149 = st-append-code st148 (mov-rr reg-rax reg-r14)
-   in let st150 = st-append-code st149 (and-ri reg-rax 63)
-   in let st151 = st-append-code st150 (or-ri reg-rax 128)
-   in let st152 = st-append-code st151 (mov-rr reg-rdi reg-rax)
-   in let st153 = emit-call-to st152 "__putb"
-   in let st154 = patch-jmp-at st153 enc-done-1 (st153.code-len)
-   in let st155 = patch-jmp-at st154 enc-done-2 (st154.code-len)
-   in let st156 = patch-jmp-at st155 enc-done-3 (st155.code-len)
-   in let st157 = st-append-code st156 (jmp (loop-top - (st156.code-len + 5)))
-   in let st158 = patch-jcc-at st157 done-pos (st157.code-len)
-   in let st159 = st-append-code st158 (pop-r reg-r15 & pop-r reg-r14 & pop-r reg-r12 & pop-r reg-rbx)
-   in st-append-code st159 x86-ret
-
   emit-read-line-helper : CodegenState -> CodegenState
 
   emit-read-line-helper (st) =
@@ -31671,7 +31768,9 @@ Section: I/O Boundary Helpers
 
    in let st36e16 = emit-peek-16-helper st36e
 
-   in let st36eq = emit-peek-qword-helper st36e16
+   in let st36eqp = emit-peek-qword-helper st36e16
+
+   in let st36eq = emit-poke-qword-helper st36eqp
 
    in let st36f = emit-poke-32-helper st36eq
 
@@ -34496,6 +34595,36 @@ Section: Binary Output
    in let st5 = st-append-code st4 x86-ret
 
    in patch-jcc-at st5 (g.deny-offset) fail-pos
+
+  emit-poke-qword-helper : CodegenState -> CodegenState
+
+  emit-poke-qword-helper (st) =
+
+   let fn-off = st.code-len
+
+   in let n = list-push (st.fo-names) "poke-qword"
+
+   in let o = list-push (st.fo-offsets) fn-off
+
+   in let st0 = __record-set (__record-set st "fo-names" n) "fo-offsets" o
+
+   in let st1 = st-append-code st0 (add-rr reg-rdi reg-rsi)
+
+   in let g = emit-gpu-mem-guard st1
+
+   in let st2 = st-append-code (g.state) [72, 137, 23]
+
+   in let st3 = st-append-code st2 (li reg-rax 0)
+
+   in let st4 = st-append-code st3 x86-ret
+
+   in let fail-pos = st4.code-len
+
+   in let st5 = st-append-code st4 (li reg-rax (0 - 1))
+
+   in let st6 = st-append-code st5 x86-ret
+
+   in patch-jcc-at st6 (g.deny-offset) fail-pos
 
   emit-poke-32-helper : CodegenState -> CodegenState
 
@@ -38181,9 +38310,9 @@ Section: LIR Instruction Selection (x86-64)
   lir-alu-rr : CodegenState, LirOp, Integer, Integer -> CodegenState
   lir-alu-rr (st) (op) (pd) (pr) =
    when op
-    is LoAdd -> st-append-code st (add-rr pd pr)
-    is LoSub -> st-append-code st (sub-rr pd pr)
-    is LoMul -> st-append-code st (imul-rr pd pr)
+    is LoAdd -> st-append-code st (add-rr pd pr & jcc cc-no 2 & [15, 11])
+    is LoSub -> st-append-code st (sub-rr pd pr & jcc cc-no 2 & [15, 11])
+    is LoMul -> st-append-code st (imul-rr pd pr & jcc cc-no 2 & [15, 11])
     is LoRem -> st
     is LoDiv -> st
 
@@ -38195,9 +38324,9 @@ Section: LIR Instruction Selection (x86-64)
   lir-alu-imm : CodegenState, LirOp, Integer, Integer -> CodegenState
   lir-alu-imm (st) (op) (pd) (k) =
    when op
-    is LoAdd -> st-append-code st (add-ri pd k)
-    is LoSub -> st-append-code st (sub-ri pd k)
-    is LoMul -> st-append-code st (imul-rri pd pd k)
+    is LoAdd -> st-append-code st (add-ri pd k & jcc cc-no 2 & [15, 11])
+    is LoSub -> st-append-code st (sub-ri pd k & jcc cc-no 2 & [15, 11])
+    is LoMul -> st-append-code st (imul-rri pd pd k & jcc cc-no 2 & [15, 11])
     is LoRem -> st
     is LoDiv -> st
 
@@ -38212,25 +38341,6 @@ Section: LIR Instruction Selection (x86-64)
      if imm-fits-i32 k then lir-alu-imm st op w k
      else lir-alu-rr (st-append-code st (li lir-scratch2 k)) op w lir-scratch2
 
- Fusing an add or subtract of a constant into an `lea`. x86's ALU is
- two-operand -- `dst op= src` -- so a binary whose destination is not its left
- operand has to move first: `v = n - 1` with `v` and `n` in different
- registers costs `mov v, n; sub v, 1`. `lea` reads a base and a displacement
- and writes a third register, so the same value is one instruction:
- `lea v, [n - 1]`.
-
- Only for add and subtract (a multiply is not a displacement), only for an
- immediate right operand that fits one, and only when the left operand is in
- a register that is *not* the destination. If it were the destination the move
- is already nothing -- `mov-rr` elides a self-move -- and `sub dst, 1` is
- optimal on its own; fusing there would trade one instruction for one
- instruction and change the bytes for no reason.
-
- `lea` does not write flags, where `add`/`sub` do. That is a safe direction
- and not a coincidence to rely on: the LIR never reuses arithmetic flags, it
- emits `LiCmp` to set them and `LiBranch` to read them, and the lowering only
- ever puts those two next to each other at the end of a block.
-
   lir-lea-src : LirValue, List Location -> Integer
   lir-lea-src (l) (assign) =
    when l
@@ -38240,49 +38350,6 @@ Section: LIR Instruction Selection (x86-64)
       is LocSlot (ks) -> 0 - 1
     is LvImm (k) -> 0 - 1
 
-  lir-lea-disp : LirOp, LirValue -> Integer
-  lir-lea-disp (op) (r) =
-   when r
-    is LvImm (k) -> when op is LoSub -> 0 - k is otherwise -> k
-    is LvReg (rr) -> 0
-
-  lir-lea-ok : LirOp, Integer, LirValue, LirValue, List Location -> Boolean
-  lir-lea-ok (op) (w) (l) (r) (assign) =
-   when op
-    is LoMul -> False
-    is otherwise ->
-     when r
-      is LvReg (rr) -> False
-      is LvImm (k) ->
-       if imm-fits-i32 (lir-lea-disp op r) == False then False
-       else let lw = lir-lea-src l assign
-       in if lw < 0 then False
-          else lw /= w
-
- The same trade for a sum of two registers. `v = a + b` with all three in
- different registers is `mov v, a; add v, b`; `lea v, [a + b]` is one
- instruction. Add only -- there is no `lea` for a difference of two registers,
- and a product only for the scale factors.
-
- Both operands must be in registers, and neither may be the destination. The
- allocator does not hand a definition the register of a live operand, so a
- binary over three distinct vregs always qualifies; the exclusions are for the
- shapes where the destination *is* an operand, which is how a loop's own
- parameter update looks (`v1 = add v1 v0`). There the move is already elided
- and `add v1, v0` is one instruction, so fusing would trade nothing for
- nothing and change the bytes.
-
-  lir-lea-rr-ok : LirOp, Integer, LirValue, LirValue, List Location -> Boolean
-  lir-lea-rr-ok (op) (w) (l) (r) (assign) =
-   when op
-    is LoAdd ->
-     let lw = lir-lea-src l assign
-     in let rw = lir-lea-src r assign
-     in if lw < 0 then False
-        else if rw < 0 then False
-        else if lw == w then False
-        else rw /= w
-    is otherwise -> False
 
  The destination sharing the right operand's register. The two-operand
  lowering is `mov w, l; op w, r`, which writes `w` before it reads `r`, so
@@ -38290,11 +38357,10 @@ Section: LIR Instruction Selection (x86-64)
  when the numbering started modelling read-then-write and let a definition
  take a register its operand was still nominally holding.
 
- `w` already holds `r`, which is most of the work. Add and multiply commute,
- so `op w, l` is the answer and it is one instruction rather than two.
- Subtract does not: `l - r` with `r` in `w` is `-(r - l)`, so negate and add.
- Two instructions -- the same as the move-and-subtract it replaces, and
- correct, which that would not be.
+ `w` already holds `r`. Add and multiply commute, so `op w, l` is the
+ answer. Subtract does not, and `neg w; add w, l` would raise OF on
+ `r == i64-min` where `l - r` does not, so `r` is parked in the scratch
+ register and the subtract runs the right way round.
 
   lir-alias-r : Integer, LirValue, LirValue, List Location -> Boolean
   lir-alias-r (w) (l) (r) (assign) =
@@ -38305,7 +38371,7 @@ Section: LIR Instruction Selection (x86-64)
   lir-sel-bin-aliased : CodegenState, LirOp, Integer, LirValue, List Location -> CodegenState
   lir-sel-bin-aliased (st) (op) (w) (l) (assign) =
    when op
-    is LoSub -> lir-alu-gen (st-append-code st (neg-r w)) LoAdd w l assign
+    is LoSub -> lir-alu-rr (lir-load-into (st-append-code st (mov-rr lir-scratch2 w)) w l assign) LoSub w lir-scratch2
     is otherwise -> lir-alu-gen st op w l assign
 
  A remainder, and the only operator here that does not get to pick its
@@ -38412,11 +38478,7 @@ Section: LIR Instruction Selection (x86-64)
    when (list-at assign dst)
     is LocReg (pr) ->
      let w = list-at lir-phys pr
-     in if lir-lea-ok op w l r assign
-        then st-append-code st (lea w (lir-lea-src l assign) (lir-lea-disp op r))
-        else if lir-lea-rr-ok op w l r assign
-        then st-append-code st (lea-rr w (lir-lea-src l assign) (lir-lea-src r assign))
-        else if lir-mul-rri-ok op l r assign
+     in if lir-mul-rri-ok op l r assign
         then lir-sel-mul-rri st w l r assign
         else if lir-alias-r w l r assign
         then lir-sel-bin-aliased st op w l assign
@@ -43423,6 +43485,12 @@ Section: Lowering
     is IrDivInt -> LoDiv
     is otherwise -> LoAdd
 
+  lir-op-wraps : IRBinaryOp, CodexType -> Boolean
+  lir-op-wraps (op) (t) =
+   when op
+    is IrAddInt | IrSubInt | IrMulInt -> int-ty-wraps t
+    is otherwise -> False
+
   lir-op-whitelisted : IRBinaryOp -> Boolean
   lir-op-whitelisted (op) =
    when op
@@ -43559,7 +43627,7 @@ Section: Lowering
      in if i < 0 then lower-fail counter blocks cur curi bctr
         else LowerRes { val = (list-at env i).val, counter = counter, blocks = blocks, cur = cur, curi = curi, bctr = bctr, ok = True, term = False }
     is IrBinary (op) (l) (r) (t) (s) ->
-     if lir-op-whitelisted op == False then lower-fail counter blocks cur curi bctr
+     if lir-op-whitelisted op == False | lir-op-wraps op t then lower-fail counter blocks cur curi bctr
      else let rl = lower-lir-expr env l counter blocks cur curi bctr (depth + 1) (loop-notail lc)
      in if rl.ok == False then rl
         else let rr = lower-lir-expr env r (rl.counter) (rl.blocks) (rl.cur) (rl.curi) (rl.bctr) (depth + 1) (loop-notail lc)
@@ -46328,6 +46396,9 @@ Section: The Narrow Probe
 Chapter: IR--Lowering
   cites Codex chapter Build Settings (max-recursion-depth, demand-lower-guard-band)
   cites Codex chapter Phase Allocator (deck-bound-short-of)
+  cites Codex chapter Unification (MemoCtx, mcopy-type, mcopy-text, mcopy-texts, memo-pow2-at-least, memo-shift-for)
+  cites Codex chapter Syntax Nodes (copy-sx-span)
+  cites Foreword chapter Tuple
 
 Section: Lower Context
   BinderRename =
@@ -46558,7 +46629,7 @@ Section: Expression Lowering
       is otherwise -> deep-resolve (ctx.ust) recorded
    in let cls-dict = type-name-of cand
    in let args = dict-type-args cand
-   in let arg-tn = if list-length args > 0 then type-name-of (deep-resolve (ctx.ust) (list-at args 0)) else ""
+   in let arg-tn = if list-length args > 0 then type-key-of (deep-resolve (ctx.ust) (list-at args 0)) else ""
    in if text-length arg-tn == 0 then dict-placeholder-fallback name ty ctx sp
       else if text-length cls-dict <= 4 then dict-placeholder-fallback name ty ctx sp
       else let concrete = rename-lookup (ctx.chapter-renames) (substring cls-dict 0 (text-length cls-dict - 4) & "-dict-" & arg-tn)
@@ -46588,7 +46659,7 @@ Section: Expression Lowering
    in let cand = when recorded
       is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) ty
       is otherwise -> deep-resolve (ctx.ust) recorded
-   in let spec-rn = method-spec-rn name (type-name-of cand) ctx
+   in let spec-rn = method-spec-rn name (type-key-of cand) ctx
    in if text-length spec-rn == 0 then lower-name-normal name ty ctx sp
       else let fty = strip-forall-ty (deep-resolve (ctx.ust) (lookup-type-split (ctx.overlay) (ctx.base) spec-rn))
       in deck-record (IrName spec-rn fty sp)
@@ -46789,7 +46860,7 @@ Section: Expression Lowering
    in let func-ty = deep-resolve (ctx.ust) (ir-expr-type func-ir)
    in let arg-ir = lower-expr a NoExpectTy ctx
    in let arg-ty = deep-resolve (ctx.ust) (ir-expr-type arg-ir)
-   in let dict-rn = constrained-dict-rn pname (type-name-of arg-ty) ctx
+   in let dict-rn = constrained-dict-rn pname (type-key-of arg-ty) ctx
    in if text-length dict-rn > 0
       then let db = lookup-type-split (ctx.overlay) (ctx.base) dict-rn
       in let dict-ir = deck-record (IrName dict-rn (deep-resolve (ctx.ust) db) sp)
@@ -46800,7 +46871,7 @@ Section: Expression Lowering
       in let param-name = "__" & cls-name & "-dict"
       in let pb = lookup-type-split (ctx.overlay) (ctx.base) param-name
       in when pb
-       is ErrorTy | NoExpectTy -> lower-apply-dispatch (deck-record (IrName ("__no-instance-" & cls-name & "-" & type-name-of arg-ty) ty sp)) arg-ir ty sp
+       is ErrorTy | NoExpectTy -> lower-apply-dispatch (deck-record (IrName ("__no-instance-" & cls-name & "-" & type-key-of arg-ty) ty sp)) arg-ir ty sp
        is otherwise -> let dict-ir = deck-record (IrName param-name (deep-resolve (ctx.ust) pb) sp)
         in let inner-ret = peel-fun-return func-ty
         in let inner-apply = deck-record (IrApply func-ir dict-ir inner-ret sp)
@@ -46833,7 +46904,7 @@ Section: Expression Lowering
   lower-method-apply (mname) (a) (ty) (ctx) (sp) (f) =
    let arg-ir = lower-expr a NoExpectTy ctx
    in let arg-ty = deep-resolve (ctx.ust) (ir-expr-type arg-ir)
-   in let tn = type-name-of arg-ty
+   in let tn = type-key-of arg-ty
    in let spec-rn = method-spec-rn mname tn ctx
    in if text-length spec-rn == 0
       then lower-apply-dispatch (deck-record (IrName ("__no-instance-" & mname & "-" & tn) ty sp)) arg-ir ty sp
@@ -46988,8 +47059,10 @@ Section: Expression Lowering
 
   lower-eq-dispatch : CodexType, IRExpr, IRExpr, CodexType, LowerCtx, SourceSpan, Boolean -> IRExpr
   lower-eq-dispatch (left-ty) (left-ir) (right-ir) (ty) (ctx) (s) (positive) =
-   let tn = type-name-of (deep-resolve (ctx.ust) left-ty)
-   in let probe = if text-length tn == 0 then ErrorTy else lookup-type-split (ctx.overlay) (ctx.base) ("__eq_" & tn)
+   let resolved-left = deep-resolve (ctx.ust) left-ty
+   in let tn = type-name-of resolved-left
+   in let probe = if text-length tn == 0 | eq-type-has-args (strip-unit-ty resolved-left) then ErrorTy
+    else lookup-type-split (ctx.overlay) (ctx.base) ("__eq_" & tn)
    in when probe
     is ErrorTy | NoExpectTy -> deck-record (IrBinary (lower-bin-op (eq-op-for positive) left-ty) left-ir right-ir (binary-result-type (eq-op-for positive) left-ty ty) s)
     is otherwise -> let fty = strip-forall-ty (deep-resolve (ctx.ust) probe)
@@ -46997,6 +47070,20 @@ Section: Expression Lowering
      in let call = deck-record (IrApply inner right-ir BooleanTy s)
      in if positive then call
         else deck-record (IrIf call (deck-record (IrBoolLit False s)) (deck-record (IrBoolLit True s)) BooleanTy s)
+
+ The desugarer mints one __eq_<T> per type NAME, and type-name-of has already
+ dropped the arguments, so every instantiation of a parameterised type would
+ share a helper whose field stays at the declaration's own type variable. An
+ instantiated type is sent to the emitter instead, which carries the actuals
+ and substitutes them.
+
+  eq-type-has-args : CodexType -> Boolean
+  eq-type-has-args (ty) =
+   when ty
+    is ConstructedTy (n) (as) -> list-length as > 0
+    is SumTy (n) (as) (cs) -> list-length as > 0
+    is RecordTy (n) (as) (fs) -> list-length as > 0
+    is otherwise -> False
 
   is-primitive-type-name : Text -> Boolean
   is-primitive-type-name (tn) =
@@ -47014,6 +47101,35 @@ Section: Expression Lowering
     is ListTy (e) | LinkedListTy (e) -> "List"
     is ConstructedTy (n) (args) | RecordTy (n) (ar) (fs) | SumTy (n) (ar) (cs) -> n.value
     is otherwise -> ""
+
+ `type-name-of` DISCARDS type arguments and has ten callers that all want
+ the bare name, so the instance key is computed BESIDE it rather than
+ folded into it. It renders identically to `instance-head-key` in
+ `Ast/Desugarer.codex`, which builds the same name from the SYNTAX head:
+ with no arguments it is exactly `type-name-of`, so every nullary
+ instance keeps the name it had.
+
+  type-key-args : CodexType -> List CodexType
+  type-key-args (ty) =
+   when ty
+    is ConstructedTy (n) (as) -> as
+    is SumTy (n) (as) (cs) -> as
+    is RecordTy (n) (as) (fs) -> as
+    is ListTy (e) | LinkedListTy (e) -> [e]
+    is otherwise -> []
+
+  type-key-of : CodexType -> Text
+  type-key-of (ty) =
+   let base = type-name-of ty
+   in if text-length base == 0 then ""
+   else let as = type-key-args ty
+   in if list-length as == 0 then base
+   else base & "[" & type-key-of-args as 0 (list-length as) & "]"
+
+  type-key-of-args : List CodexType, Integer, Integer -> Text
+  type-key-of-args (as) (i) (n) =
+   if i >= n then ""
+   else (if i == 0 then "" else ",") & type-key-of (list-at as i) & type-key-of-args as (i + 1) n
 
   lower-apply-dispatch : IRExpr, IRExpr, CodexType, SourceSpan -> IRExpr
   lower-apply-dispatch (func-ir) (arg-ir) (ret-ty) (sp) =
@@ -48007,15 +48123,29 @@ Section: Definition Lowering
     is FunTy (p) (row) (r) -> get-return-type-n r (n - 1)
     is otherwise -> ty
 
-  lower-chapter : AChapter, List TypeBinding, UnificationState, List Text, List RenameEntry, SkipListText, List ChapterAssignment, Integer, Boolean -> IRChapter
-  lower-chapter (m) (all-types) (ust) (ctor-names) (renames) (colliding) (assignments) (ceiling) (rename) =
+  lower-chapter : AChapter, List TypeBinding, UnificationState, List Text, List RenameEntry, SkipListText, List ChapterAssignment, Integer, Boolean, Integer, Integer -> (IRChapter, Integer)
+  lower-chapter (m) (all-types) (ust) (ctor-names) (renames) (colliding) (assignments) (ceiling) (rename) (keep-base) (keep-ceiling) =
    let slug-cache = for a in assignments -> cite-key (a.chapter-slug)
-   in deck-record (IRChapter {
+   in let def-count = list-length (m.defs)
+   in let exit = __deck-exit
+   in let scratch-base = __deck-pos
+   in let set-k0 = __deck-set keep-base
+   in let acc0 = deck-record (__list-with-capacity def-count)
+   in let eff-names = deck-record (lower-collect-effect-op-names (m.effect-defs) 0 (list-length (m.effect-defs)) [])
+   in let keep0 = __deck-pos
+   in let set-s0 = __deck-set scratch-base
+   in let mc = lower-keep-open scratch-base keep-ceiling def-count
+   in let (defs, keep-end) = lower-defs-keep (m.defs) all-types ust 0 acc0 renames colliding assignments (m.citations) slug-cache "" [] (m.rt-names) (m.rt-budgets) ceiling rename mc keep0 keep-ceiling
+   in let set-k1 = __deck-set keep-end
+   in let ch = deck-record (IRChapter {
     name = m.name,
-    defs = lower-defs (m.defs) all-types ust 0 renames colliding assignments (m.citations) slug-cache "" [] (m.rt-names) (m.rt-budgets) ceiling rename,
-    effect-op-names = lower-collect-effect-op-names (m.effect-defs) 0 (list-length (m.effect-defs)) [],
+    defs = defs,
+    effect-op-names = eff-names,
     span = m.span
    })
+   in let keep-end2 = __deck-pos
+   in let enter = __deck-enter
+   in (ch, keep-end2)
 
   lower-collect-effect-op-names : List AEffectDef, Integer, Integer, List Text -> List Text
   lower-collect-effect-op-names (effs) (i) (len) (acc) =
@@ -48067,6 +48197,239 @@ Section: Definition Lowering
    in let ir-def = lower-def d types ust renames chapter-rn rename
    in let tagged = if is-in-rt-names rt-names (d.name.value) 0 (list-length rt-names) then __record-set (__record-set ir-def "is-punctual" True) "wcet-budget" (find-rt-budget rt-names rt-budgets (d.name.value) 0 (list-length rt-names)) else ir-def
    in lower-defs-acc defs types ust (i + 1) (list-push acc tagged) renames colliding assignments citations slug-cache (d.chapter-slug) chapter-rn rt-names rt-budgets ceiling rename
+
+Section: Per-Definition Reclamation
+
+  lower-keep-open : Integer, Integer, Integer -> MemoCtx
+  lower-keep-open (floor) (ceiling) (def-count) =
+   let memo-slots = 4096
+   in let memo-table = __heap-save
+   in let a1 = __heap-advance (memo-slots * 8)
+   in let cons-slots = memo-pow2-at-least (def-count * 48) 4096
+   in let cons-table = __heap-save
+   in let a2 = __heap-advance (cons-slots * 16)
+   in let cz = __memset cons-table 0 (cons-slots * 16)
+   in let tcons-slots = memo-pow2-at-least (def-count * 8) 4096
+   in let tcons-table = __heap-save
+   in let a3 = __heap-advance (tcons-slots * 16)
+   in let tz = __memset tcons-table 0 (tcons-slots * 16)
+   in let cap-ty = def-count * 48 + 4096
+   in let cap-text = def-count * 8 + 16384
+   in let cap-row = def-count * 12 + 4096
+   in let cap-list = def-count * 4 + 4096
+   in let l-ty = __list-with-capacity cap-ty
+   in let l-text = __list-with-capacity cap-text
+   in let l-name = __list-with-capacity cap-text
+   in let l-row = __list-with-capacity cap-row
+   in let l-tylist = __list-with-capacity cap-list
+   in let l-fieldlist = __list-with-capacity cap-list
+   in let l-ctorlist = __list-with-capacity cap-list
+   in let l-labellist = __list-with-capacity cap-list
+   in MemoCtx {
+    mc-table = memo-table,
+    mc-slots = memo-slots,
+    mc-shift = memo-shift-for memo-slots 64,
+    mc-floor = floor,
+    mc-ty = l-ty,
+    mc-text = l-text,
+    mc-name = l-name,
+    mc-row = l-row,
+    mc-tylist = l-tylist,
+    mc-fieldlist = l-fieldlist,
+    mc-ctorlist = l-ctorlist,
+    mc-labellist = l-labellist,
+    mc-cons = cons-table,
+    mc-cons-slots = cons-slots,
+    mc-cons-shift = memo-shift-for cons-slots 64,
+    mc-cap-ty = cap-ty,
+    mc-cap-text = cap-text,
+    mc-cap-name = cap-text,
+    mc-cap-row = cap-row,
+    mc-cap-list = cap-list,
+    mc-ceiling = ceiling,
+    mc-tcons = tcons-table,
+    mc-tcons-slots = tcons-slots,
+    mc-tcons-shift = memo-shift-for tcons-slots 64
+   }
+
+  lower-defs-keep : List ADef, List TypeBinding, UnificationState, Integer, List IRDef, List RenameEntry, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, List Text, List Integer, Integer, Boolean, MemoCtx, Integer, Integer -> (List IRDef, Integer)
+  lower-defs-keep (defs) (types) (ust) (i) (acc) (renames) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-chapter-rn) (rt-names) (rt-budgets) (ceiling) (rename) (mc) (keep) (keep-ceiling) =
+   if i == list-length defs then (acc, keep)
+   else if keep + demand-lower-guard-band >= keep-ceiling then (acc, keep)
+   else if deck-short-of ceiling demand-lower-guard-band then (acc, keep)
+   else let d = list-at defs i
+   in let scratch-mark = __deck-pos
+   in let bivy-mark = __heap-save
+   in let (chapter-rn, keep1) = if d.chapter-slug == cur-slug then (cur-chapter-rn, keep)
+      else let set-k = __deck-set keep
+      in let rn = deck-record (apply-cite-overrides (build-chapter-rename-map colliding assignments (d.chapter-slug)) citations colliding assignments slug-cache (d.chapter-slug) 0)
+      in let k2 = __deck-pos
+      in let set-s = __deck-set scratch-mark
+      in (rn, k2)
+   in let ir-def = lower-def d types ust renames chapter-rn rename
+   in let tagged = if is-in-rt-names rt-names (d.name.value) 0 (list-length rt-names) then __record-set (__record-set ir-def "is-punctual" True) "wcet-budget" (find-rt-budget rt-names rt-budgets (d.name.value) 0 (list-length rt-names)) else ir-def
+   in let z = __memset (mc.mc-table) 0 (mc.mc-slots * 8)
+   in let set-keep = __deck-set keep1
+   in let kept = deck-record (lcopy-def tagged mc)
+   in let keep2 = __deck-pos
+   in let set-scratch = __deck-set scratch-mark
+   in let r = __heap-restore bivy-mark
+   in lower-defs-keep defs types ust (i + 1) (list-push acc kept) renames colliding assignments citations slug-cache (d.chapter-slug) chapter-rn rt-names rt-budgets ceiling rename mc keep2 keep-ceiling
+
+  lcopy-text : Text, MemoCtx -> Text
+  lcopy-text (t) (mc) = mcopy-text t mc
+
+  lcopy-type : CodexType, MemoCtx -> CodexType
+  lcopy-type (t) (mc) = mcopy-type t 0 mc
+
+  lcopy-span : SourceSpan, MemoCtx -> SourceSpan
+  lcopy-span (s) (mc) = copy-sx-span (mc.mc-floor) s
+
+  lcopy-def : IRDef, MemoCtx -> IRDef
+  lcopy-def (d) (mc) =
+   IRDef {
+    name = lcopy-text (d.name) mc,
+    params = lcopy-params (d.params) mc,
+    type-val = lcopy-type (d.type-val) mc,
+    body = lcopy-expr (d.body) mc,
+    chapter-slug = lcopy-text (d.chapter-slug) mc,
+    is-punctual = d.is-punctual,
+    wcet-budget = d.wcet-budget,
+    unique-params = mcopy-texts (d.unique-params) mc,
+    span = lcopy-span (d.span) mc
+   }
+
+  lcopy-params : List IRParam, MemoCtx -> List IRParam
+  lcopy-params (ps) (mc) =
+   if address-of ps < mc.mc-floor then ps
+   else for p in ps -> lcopy-param p mc
+
+  lcopy-param : IRParam, MemoCtx -> IRParam
+  lcopy-param (p) (mc) =
+   if address-of p < mc.mc-floor then p
+   else IRParam { name = lcopy-text (p.name) mc, type-val = lcopy-type (p.type-val) mc, span = lcopy-span (p.span) mc }
+
+  lcopy-exprs : List IRExpr, MemoCtx -> List IRExpr
+  lcopy-exprs (es) (mc) =
+   if address-of es < mc.mc-floor then es
+   else for e in es -> lcopy-expr e mc
+
+  lcopy-expr : IRExpr, MemoCtx -> IRExpr
+  lcopy-expr (e) (mc) =
+   if address-of e < mc.mc-floor then e
+   else when e
+    is IrIntLit (v) (s) -> IrIntLit v (lcopy-span s mc)
+    is IrNumLit (v) (s) -> IrNumLit v (lcopy-span s mc)
+    is IrTextLit (v) (s) -> IrTextLit (lcopy-text v mc) (lcopy-span s mc)
+    is IrBoolLit (v) (s) -> IrBoolLit v (lcopy-span s mc)
+    is IrCharLit (v) (s) -> IrCharLit v (lcopy-span s mc)
+    is IrName (n) (t) (s) -> IrName (lcopy-text n mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrBinary (op) (l) (r) (t) (s) -> IrBinary (lcopy-op op) (lcopy-expr l mc) (lcopy-expr r mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrNegate (x) (t) (s) -> IrNegate (lcopy-expr x mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrIf (c) (th) (el) (t) (s) -> IrIf (lcopy-expr c mc) (lcopy-expr th mc) (lcopy-expr el mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrLet (n) (t) (v) (b) (s) -> IrLet (lcopy-text n mc) (lcopy-type t mc) (lcopy-expr v mc) (lcopy-expr b mc) (lcopy-span s mc)
+    is IrApply (f) (a) (t) (s) -> IrApply (lcopy-expr f mc) (lcopy-expr a mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrLambda (ps) (b) (t) (s) -> IrLambda (lcopy-params ps mc) (lcopy-expr b mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrList (es) (t) (s) -> IrList (lcopy-exprs es mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrMatch (sc) (bs) (t) (s) -> IrMatch (lcopy-expr sc mc) (lcopy-branches bs mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrAct (ss) (t) (s) -> IrAct (lcopy-stmts ss mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrHandle (eff) (h) (cs) (t) (s) -> IrHandle (lcopy-text eff mc) (lcopy-expr h mc) (lcopy-clauses cs mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrWithTimeout (secs) (effs) (scopes) (body) (t) (s) -> IrWithTimeout secs (mcopy-texts effs mc) (mcopy-texts scopes mc) (lcopy-expr body mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrRecord (n) (fs) (t) (s) -> IrRecord (lcopy-text n mc) (lcopy-fields fs mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrFieldAccess (r) (f) (t) (s) -> IrFieldAccess (lcopy-expr r mc) (lcopy-text f mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrFork (body) (t) (s) -> IrFork (lcopy-expr body mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrAwait (task) (t) (s) -> IrAwait (lcopy-expr task mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrTry (max) (body) (fb) (fail) (t) (s) -> IrTry max (lcopy-stmts body mc) (lcopy-stmts fb mc) (lcopy-stmts fail mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrFieldStore (r) (f) (v) (t) (s) -> IrFieldStore (lcopy-expr r mc) (lcopy-text f mc) (lcopy-expr v mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrError (m) (t) (s) -> IrError (lcopy-text m mc) (lcopy-type t mc) (lcopy-span s mc)
+
+  lcopy-branches : List IRBranch, MemoCtx -> List IRBranch
+  lcopy-branches (bs) (mc) =
+   if address-of bs < mc.mc-floor then bs
+   else for b in bs -> if address-of b < mc.mc-floor then b
+    else IRBranch { pattern = lcopy-pat (b.pattern) mc, body = lcopy-expr (b.body) mc, guard = lcopy-expr (b.guard) mc, span = lcopy-span (b.span) mc, alt-group = b.alt-group }
+
+  lcopy-pats : List IRPat, MemoCtx -> List IRPat
+  lcopy-pats (ps) (mc) =
+   if address-of ps < mc.mc-floor then ps
+   else for p in ps -> lcopy-pat p mc
+
+  lcopy-pat : IRPat, MemoCtx -> IRPat
+  lcopy-pat (p) (mc) =
+   if address-of p < mc.mc-floor then p
+   else when p
+    is IrVarPat (n) (t) (s) -> IrVarPat (lcopy-text n mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrLitPat (v) (t) (s) -> IrLitPat (lcopy-text v mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrCtorPat (n) (subs) (t) (s) -> IrCtorPat (lcopy-text n mc) (lcopy-pats subs mc) (lcopy-type t mc) (lcopy-span s mc)
+    is IrWildPat (s) -> IrWildPat (lcopy-span s mc)
+    is IrVecPat (subs) (t) (s) -> IrVecPat (lcopy-pats subs mc) (lcopy-type t mc) (lcopy-span s mc)
+
+  lcopy-stmts : List IRActStmt, MemoCtx -> List IRActStmt
+  lcopy-stmts (ss) (mc) =
+   if address-of ss < mc.mc-floor then ss
+   else for st in ss -> if address-of st < mc.mc-floor then st
+    else when st
+     is IrDoBind (n) (t) (v) (sp) -> IrDoBind (lcopy-text n mc) (lcopy-type t mc) (lcopy-expr v mc) (lcopy-span sp mc)
+     is IrDoExec (v) (sp) -> IrDoExec (lcopy-expr v mc) (lcopy-span sp mc)
+
+  lcopy-clauses : List IRHandleClause, MemoCtx -> List IRHandleClause
+  lcopy-clauses (cs) (mc) =
+   if address-of cs < mc.mc-floor then cs
+   else for c in cs -> if address-of c < mc.mc-floor then c
+    else IRHandleClause { op-name = lcopy-text (c.op-name) mc, params = mcopy-texts (c.params) mc, resume-name = lcopy-text (c.resume-name) mc, body = lcopy-expr (c.body) mc, span = lcopy-span (c.span) mc }
+
+  lcopy-fields : List IRFieldVal, MemoCtx -> List IRFieldVal
+  lcopy-fields (fs) (mc) =
+   if address-of fs < mc.mc-floor then fs
+   else for f in fs -> if address-of f < mc.mc-floor then f
+    else IRFieldVal { name = lcopy-text (f.name) mc, value = lcopy-expr (f.value) mc, span = lcopy-span (f.span) mc }
+
+  lcopy-op : IRBinaryOp -> IRBinaryOp
+  lcopy-op (op) =
+   when op
+    is IrAddInt -> IrAddInt
+    is IrSubInt -> IrSubInt
+    is IrMulInt -> IrMulInt
+    is IrDivInt -> IrDivInt
+    is IrPowInt -> IrPowInt
+    is IrRemInt -> IrRemInt
+    is IrAddNum -> IrAddNum
+    is IrSubNum -> IrSubNum
+    is IrMulNum -> IrMulNum
+    is IrDivNum -> IrDivNum
+    is IrAddRealApprox -> IrAddRealApprox
+    is IrSubRealApprox -> IrSubRealApprox
+    is IrMulRealApprox -> IrMulRealApprox
+    is IrDivRealApprox -> IrDivRealApprox
+    is IrAddRealTrapping -> IrAddRealTrapping
+    is IrSubRealTrapping -> IrSubRealTrapping
+    is IrMulRealTrapping -> IrMulRealTrapping
+    is IrDivRealTrapping -> IrDivRealTrapping
+    is IrAddRealSaturating -> IrAddRealSaturating
+    is IrSubRealSaturating -> IrSubRealSaturating
+    is IrMulRealSaturating -> IrMulRealSaturating
+    is IrDivRealSaturating -> IrDivRealSaturating
+    is IrEq -> IrEq
+    is IrNotEq -> IrNotEq
+    is IrLt -> IrLt
+    is IrGt -> IrGt
+    is IrLtEq -> IrLtEq
+    is IrGtEq -> IrGtEq
+    is IrAnd -> IrAnd
+    is IrOr -> IrOr
+    is IrAppendText -> IrAppendText
+    is IrAppendList -> IrAppendList
+    is IrConsList -> IrConsList
+    is IrApproxEq -> IrApproxEq
+    is IrApproxEqExact -> IrApproxEqExact
+    is IrAddVec -> IrAddVec
+    is IrSubVec -> IrSubVec
+    is IrMulVec -> IrMulVec
+    is IrDivVec -> IrDivVec
+    is IrLtVec -> IrLtVec
+    is IrGtVec -> IrGtVec
+    is IrLtEqVec -> IrLtEqVec
+    is IrGtEqVec -> IrGtEqVec
 
 Section: Constant Folding
 
@@ -49932,24 +50295,36 @@ Section: Folding
   fold-some : IRExpr -> FoldRes
   fold-some (e) = FoldRes { folded = True, expr = e }
 
- Integer arithmetic and comparison over two integer literals. The
- compiler runs on the same 64-bit two's-complement integers the emitted
- code uses, so the folded value is the value the program would compute,
- wrap for wrap. Division and remainder are absent by intent.
-
   simp-fold-int : IRBinaryOp, Integer, Integer, CodexType, SourceSpan -> FoldRes
   simp-fold-int (op) (a) (b) (ty) (sp) =
    when op
-    is IrAddInt -> fold-some (deck-record (IrIntLit (a + b) sp))
-    is IrSubInt -> fold-some (deck-record (IrIntLit (a - b) sp))
-    is IrMulInt -> fold-some (deck-record (IrIntLit (a * b) sp))
+    is IrAddInt -> if int-ty-wraps ty == False & add-fold-fits a b then fold-some (deck-record (IrIntLit (a + b) sp)) else simp-fold-keep op a b ty sp
+    is IrSubInt -> if int-ty-wraps ty == False & sub-fold-fits a b then fold-some (deck-record (IrIntLit (a - b) sp)) else simp-fold-keep op a b ty sp
+    is IrMulInt -> if int-ty-wraps ty == False & mul-fold-fits a b then fold-some (deck-record (IrIntLit (a * b) sp)) else simp-fold-keep op a b ty sp
     is IrEq -> fold-some (deck-record (IrBoolLit (a == b) sp))
     is IrNotEq -> fold-some (deck-record (IrBoolLit (a /= b) sp))
     is IrLt -> fold-some (deck-record (IrBoolLit (a < b) sp))
     is IrGt -> fold-some (deck-record (IrBoolLit (a > b) sp))
     is IrLtEq -> fold-some (deck-record (IrBoolLit (a <= b) sp))
     is IrGtEq -> fold-some (deck-record (IrBoolLit (a >= b) sp))
-    is otherwise -> fold-none (deck-record (IrBinary op (deck-record (IrIntLit a sp)) (deck-record (IrIntLit b sp)) ty sp))
+    is otherwise -> simp-fold-keep op a b ty sp
+
+  simp-fold-keep : IRBinaryOp, Integer, Integer, CodexType, SourceSpan -> FoldRes
+  simp-fold-keep (op) (a) (b) (ty) (sp) = fold-none (deck-record (IrBinary op (deck-record (IrIntLit a sp)) (deck-record (IrIntLit b sp)) ty sp))
+
+  add-fold-fits : Integer, Integer -> Boolean
+  add-fold-fits (a) (b) =
+   if b >= 0 then a <= i64-max - b else a >= i64-min - b
+
+  sub-fold-fits : Integer, Integer -> Boolean
+  sub-fold-fits (a) (b) =
+   if b >= 0 then a >= i64-min + b else a <= i64-max + b
+
+  mul-fold-fits : Integer, Integer -> Boolean
+  mul-fold-fits (a) (b) =
+   if a == 0 | b == 0 then True
+   else if a == i64-min | b == i64-min then False
+   else (if a < 0 then 0 - a else a) <= i64-max / (if b < 0 then 0 - b else b)
 
   simp-fold-bool : IRBinaryOp, Boolean, Boolean, CodexType, SourceSpan -> FoldRes
   simp-fold-bool (op) (a) (b) (ty) (sp) =
@@ -50066,8 +50441,14 @@ Section: Purity and Deadness
   simp-op-trapfree : IRBinaryOp -> Boolean
   simp-op-trapfree (op) =
    when op
-    is IrAddInt | IrSubInt | IrMulInt | IrEq | IrNotEq | IrLt | IrGt | IrLtEq | IrGtEq | IrAnd | IrOr | IrAppendText | IrAppendList | IrConsList -> True
+    is IrEq | IrNotEq | IrLt | IrGt | IrLtEq | IrGtEq | IrAnd | IrOr | IrAppendText | IrAppendList | IrConsList -> True
     is otherwise -> False
+
+  simp-op-trapfree-typed : IRBinaryOp, CodexType -> Boolean
+  simp-op-trapfree-typed (op) (t) =
+   when op
+    is IrAddInt | IrSubInt | IrMulInt -> int-ty-wraps t
+    is otherwise -> simp-op-trapfree op
 
   simp-pure-trapfree : IRExpr, Integer -> Boolean
   simp-pure-trapfree (e) (depth) =
@@ -50077,7 +50458,7 @@ Section: Purity and Deadness
     is IrName (nm) (t) (s) -> True
     is IrNegate (x) (t) (s) -> simp-pure-trapfree x (depth + 1)
     is IrBinary (op) (l) (r) (t) (s) ->
-     if simp-op-trapfree op then (if simp-pure-trapfree l (depth + 1) then simp-pure-trapfree r (depth + 1) else False) else False
+     if simp-op-trapfree-typed op t then (if simp-pure-trapfree l (depth + 1) then simp-pure-trapfree r (depth + 1) else False) else False
     is IrIf (c) (th) (el) (t) (s) ->
      if simp-pure-trapfree c (depth + 1) then (if simp-pure-trapfree th (depth + 1) then simp-pure-trapfree el (depth + 1) else False) else False
     is IrLet (nm) (t) (v) (bd) (s) ->
@@ -52688,8 +53069,15 @@ Section: Type Parsing
    if parse-fuel-exhausted st then TypeOk base-type (emit-parse-fuel-error st "parse-type-args")
    else let st-fueled = consume-parse-fuel st
    in if is-done st-fueled then TypeOk base-type st-fueled
+   else if is-bare-wrapping base-type st-fueled then TypeOk (deck-record (BoundedIntType base-type i64-min i64-max (deck-record OvWrapping))) (advance st-fueled)
    else if is-type-arg-start (current-kind st-fueled) then parse-type-arg-next base-type st-fueled
    else TypeOk base-type st-fueled
+
+  is-bare-wrapping : TypeExpr, ParseState -> Boolean
+  is-bare-wrapping (base) (st) =
+   when base
+    is NamedType (tok) -> token-text tok == "Integer" & is-ident (current-kind st) & token-text (current st) == "wrapping"
+    is otherwise -> False
 
   parse-type-arg-next : TypeExpr, ParseState -> ParseTypeResult
   parse-type-arg-next (base-type) (st) =
@@ -53849,12 +54237,10 @@ Section: Chapter Pagination
     in scan-class-instance-defs (skip-newlines methods-st) cacc (__linked-list-push iacc id)
    else scan-class-instance-defs (advance st) cacc iacc
 
-  parse-instance-type-head : ParseState -> (Token, ParseState)
+  parse-instance-type-head : ParseState -> (TypeExpr, ParseState)
   parse-instance-type-head (st) =
-   if is-left-paren (current-kind st)
-    then let st1 = advance st
-     in (current st1, skip-to-close-paren (advance st1) 1)
-   else (current st, advance st)
+   when parse-type st
+    is TypeOk (te) (st1) -> (te, st1)
 
   skip-to-close-paren : ParseState, Integer -> ParseState
   skip-to-close-paren (st) (depth) =
@@ -56110,7 +56496,7 @@ Section: Definitions
 
   InstanceDef = record {
    class-name : Token,
-   type-name : Token,
+   type-name : TypeExpr,
    methods : List InstanceMethodDef
   }
 
@@ -56480,7 +56866,7 @@ Section: Deck Copies
   copy-sx-instancedef : Integer, InstanceDef -> InstanceDef
   copy-sx-instancedef (b) (d) = InstanceDef {
    class-name = copy-sx-token b (d.class-name),
-   type-name = copy-sx-token b (d.type-name),
+   type-name = copy-sx-typeexpr b (d.type-name),
    methods = for m in (d.methods) -> copy-sx-imethod b m
   }
 
@@ -56782,7 +57168,7 @@ Section: Literal Values
    else if c == char-code 'f' | c == char-code 'F' then 15
    else -1
 
-  hex-text-value : Text, Integer, Integer, Integer -> Integer
+  hex-text-value : Text, Integer, Integer, Integer between -9223372036854775808 and 9223372036854775807 wrapping -> Integer
   hex-text-value (t) (i) (len) (acc) =
    if i >= len then acc
    else let c = char-code-at t i
@@ -56793,7 +57179,7 @@ Section: Literal Values
   is-hex-literal-text (t) =
    text-length t > 0 & char-code-at t 0 == char-code '#'
 
-  dec-text-value : Text, Integer, Integer, Integer -> Integer
+  dec-text-value : Text, Integer, Integer, Integer between -9223372036854775808 and 9223372036854775807 wrapping -> Integer
   dec-text-value (t) (i) (len) (acc) =
    if i >= len then acc
    else let c = char-code-at t i
@@ -56959,6 +57345,7 @@ Section: The Table
    BuiltinSpec { bs-name = "peek-32", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default)), bs-emit = None },
    BuiltinSpec { bs-name = "peek-16", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default)), bs-emit = None },
    BuiltinSpec { bs-name = "peek-qword", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default)), bs-emit = None },
+   BuiltinSpec { bs-name = "poke-qword", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default))), bs-emit = None },
    BuiltinSpec { bs-name = "poke-32", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default))), bs-emit = None },
    BuiltinSpec { bs-name = "poke-16", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row (FunTy int-ty-default empty-row int-ty-default))), bs-emit = None },
    BuiltinSpec { bs-name = "read-mmio", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy int-ty-default empty-row (FunTy int-ty-default (concrete-row "Device.Mmio") int-ty-default)), bs-emit = None },
@@ -57424,7 +57811,22 @@ Section: Unit Stripping
     is UnitTy (n) (inner) -> strip-unit-ty inner
     is otherwise -> ty
 
-Section: Real Mode Classification
+Section: Overflow Mode Classification
+
+  int-ty-wraps : CodexType -> Boolean
+  int-ty-wraps (ty) =
+   when ty
+    is IntegerTy (lo) (hi) (m) -> ov-mode-wraps m
+    is UnitTy (n) (inner) -> int-ty-wraps inner
+    is otherwise -> False
+
+  ov-mode-wraps : OverflowMode -> Boolean
+  ov-mode-wraps (m) =
+   when m
+    is OvWrapping -> True
+    is otherwise -> False
+
+
 
   is-real-type : CodexType -> Boolean
   is-real-type (ty) =
@@ -57606,14 +58008,8 @@ Section: Hardware Integer Width
     else if lo >= (0 - 2147483648) & hi <= 2147483647 then HwI32
     else                                              HwI64
 
- A band is AT its hardware width when its endpoints are exactly that
- width's endpoints. Only then does a truncating narrow store wrap at the
- band, because the two moduli coincide; a narrower band truncates at the
- width and can hold a value outside the range the bounds prover reads off
- the declaration. The 64-bit widths answer False: their exact bands are
- not writable as literals (u64's hi and i64's lo both fall outside the
- signed 64-bit literal range), and a 64-bit store narrows nothing, so
- there is no truncation to coincide with.
+ u64's exact band is not writable: its hi is past the signed 64-bit
+ literal range. i64's is.
 
   bounds-are-hw-width : Integer, Integer -> Boolean
   bounds-are-hw-width (lo) (hi) =
@@ -57624,7 +58020,8 @@ Section: Hardware Integer Width
     is HwI16 -> lo == (0 - 32768) & hi == 32767
     is HwU32 -> lo == 0 & hi == 4294967295
     is HwI32 -> lo == (0 - 2147483648) & hi == 2147483647
-    is HwU64 | HwI64 -> False
+    is HwI64 -> lo == i64-min & hi == i64-max
+    is HwU64 -> False
 
   integer-ty-hw-width : CodexType -> HwIntWidth
   integer-ty-hw-width (ty) =
@@ -62228,6 +62625,22 @@ Section: Literal Range
           else if sig > 19 then True
           else int-lit-exceeds val start len "9223372036854775807" 0
 
+  int-lit-is-min-magnitude : Text -> Boolean
+  int-lit-is-min-magnitude (val) =
+   if is-hex-literal-text val then False
+   else let len = text-length val
+   in let start = int-lit-first-sig val 0 len
+   in int-lit-sig-digits val start len 0 == 19 & int-lit-exceeds val start len "9223372036854775807" 0 & int-lit-exceeds val start len "9223372036854775808" 0 == False
+
+  is-int-min-literal : AExpr -> Boolean
+  is-int-min-literal (e) =
+   when e
+    is ALitExpr (val) (kind) (s) ->
+     (when kind
+      is IntLit -> int-lit-is-min-magnitude val
+      is otherwise -> False)
+    is otherwise -> False
+
   check-int-lit-range : UnificationState, Text, LiteralKind, SourceSpan -> UnificationState
   check-int-lit-range (st) (val) (kind) (span) =
    when kind
@@ -62451,7 +62864,8 @@ Section: Infer Binary
     is IntegerTy (l-lo) (l-hi) (l-mode) ->
      when rt
       is IntegerTy (r-lo) (r-hi) (r-mode) ->
-       if r-lo >= l-lo & r-hi <= l-hi then rt else lt
+       if r-lo == l-lo & r-hi == l-hi then lt
+       else if r-lo >= l-lo & r-hi <= l-hi then rt else lt
       is otherwise -> lt
     is otherwise -> lt
 
@@ -62897,7 +63311,7 @@ Section: Infer Application
     is ALitExpr (val) (kind) (s) -> lit-text-to-integer val
     is AUnaryExpr (inner) (s) ->
      when inner
-      is ALitExpr (v2) (k2) (s2) -> 0 - (lit-text-to-integer v2)
+      is ALitExpr (v2) (k2) (s2) -> -(lit-text-to-integer v2)
       is otherwise -> 0
     is otherwise -> 0
 
@@ -63708,7 +64122,12 @@ Section: Infer Expression (dispatch)
     is ANameExpr (name) (s) -> infer-name st env (name.value) s
     is ABinaryExpr (left) (op) (right) (s) -> infer-binary st env left op right s depth
     is AUnaryExpr (operand) (s) ->
-     let r = infer-expr-at st env operand (depth + 1)
+     if is-int-min-literal operand then CheckResult {
+      inferred-type = int-ty-default,
+      effect-row = empty-row,
+      state = st
+     }
+     else let r = infer-expr-at st env operand (depth + 1)
      in let op-ty = deep-resolve (r.state) (r.inferred-type)
      in if is-real-type op-ty then CheckResult {
       inferred-type = op-ty,
@@ -63884,9 +64303,104 @@ Section: Infer Expression (dispatch)
   check-mutation-in-ctor-fields (st) (fields) (i) (len) =
    if i >= len then st
    else let f = list-at fields i
-     in let st2 = if aexpr-mentions-record-set (f.value) then __record-set st "bag" (bag-add (st.bag) (make-warning cdx-mutation-in-constructor ("Field '" & f.name.value & "' contains __record-set, which mutates in place. Other fields reading the same record will see the mutated value. Bind the __record-set result to a let before the constructor, or use revised.") (f.span)))
+     in let st2 = if aexpr-mentions-record-set (f.value) & ctor-field-mutation-hazard fields i len (f.value)
+       then __record-set st "bag" (bag-add (st.bag) (make-warning cdx-mutation-in-constructor ("Field '" & f.name.value & "' contains __record-set, which mutates in place. Other fields reading the same record will see the mutated value. Bind the __record-set result to a let before the constructor, or use revised.") (f.span)))
        else st
      in check-mutation-in-ctor-fields st2 fields (i + 1) len
+
+ The hazard is a sibling that READS the mutated record and is evaluated
+ AFTER the write; a sibling reading it earlier has already taken its value.
+ When the mutated record's base name cannot be determined the answer is
+ True, so an unrecognised shape warns exactly as it did before.
+
+  ctor-field-mutation-hazard : List AFieldExpr, Integer, Integer, AExpr -> Boolean
+  ctor-field-mutation-hazard (fields) (i) (len) (value) =
+   if record-set-count value /= 1 then True
+   else let target = record-set-target value
+   in if text-length target == 0 then True
+   else later-field-reads-name fields (i + 1) len target
+
+ More than one `__record-set` in one field value means more than one
+ mutated record, and picking the first would be a false NEGATIVE, which is
+ the direction that ships a defect. Those warn.
+
+  record-set-count : AExpr -> Integer
+  record-set-count (e) =
+   when e
+    is AApplyExpr (f) (a) (s) ->
+     (if is-record-set-head f then 1 else 0) + record-set-count f + record-set-count a
+    is ABinaryExpr (l) (op) (r) (s) -> record-set-count l + record-set-count r
+    is AIfExpr (c) (t) (el) (s) -> record-set-count c + record-set-count t + record-set-count el
+    is ALetExpr (binds) (body) (s) -> record-set-count body + binds-record-set-count binds 0 (list-length binds)
+    is AMatchExpr (scrut) (arms) (s) -> record-set-count scrut
+    is AFieldAccess (obj) (fl) (s) -> record-set-count obj
+    is otherwise -> 0
+
+  binds-record-set-count : List ALetBind, Integer, Integer -> Integer
+  binds-record-set-count (binds) (i) (len) =
+   if i >= len then 0
+   else record-set-count ((list-at binds i).value) + binds-record-set-count binds (i + 1) len
+
+  is-record-set-head : AExpr -> Boolean
+  is-record-set-head (e) =
+   when e
+    is ANameExpr (n) (s) -> n.value == "__record-set"
+    is otherwise -> False
+
+  later-field-reads-name : List AFieldExpr, Integer, Integer, Text -> Boolean
+  later-field-reads-name (fields) (i) (len) (target) =
+   if i >= len then False
+   else if aexpr-mentions-name ((list-at fields i).value) target then True
+   else later-field-reads-name fields (i + 1) len target
+
+ The `__record-set` is often NESTED in an argument rather than sitting at
+ the head of the field's own apply spine -- `fc-evict-reg (__record-set st
+ ...) reg` and `Just (deck-record (__record-set td ...))` are both in the
+ compiler -- so this searches the whole expression, not the spine.
+
+  record-set-target : AExpr -> Text
+  record-set-target (e) =
+   when e
+    is AApplyExpr (f) (a) (s) ->
+     if is-record-set-head f then aexpr-plain-name a
+     else let from-f = record-set-target f
+     in if text-length from-f > 0 then from-f else record-set-target a
+    is ABinaryExpr (l) (op) (r) (s) ->
+     let from-l = record-set-target l
+     in if text-length from-l > 0 then from-l else record-set-target r
+    is AIfExpr (c) (t) (el) (s) ->
+     let from-c = record-set-target c
+     in if text-length from-c > 0 then from-c
+     else let from-t = record-set-target t
+     in if text-length from-t > 0 then from-t else record-set-target el
+    is ALetExpr (binds) (body) (s) -> record-set-target body
+    is AMatchExpr (scrut) (arms) (s) -> record-set-target scrut
+    is AFieldAccess (obj) (fl) (s) -> record-set-target obj
+    is otherwise -> ""
+
+  aexpr-plain-name : AExpr -> Text
+  aexpr-plain-name (e) =
+   when e
+    is ANameExpr (n) (s) -> n.value
+    is otherwise -> ""
+
+  aexpr-mentions-name : AExpr, Text -> Boolean
+  aexpr-mentions-name (e) (target) =
+   when e
+    is ANameExpr (n) (s) -> n.value == target
+    is AApplyExpr (f) (a) (s) -> aexpr-mentions-name f target | aexpr-mentions-name a target
+    is ABinaryExpr (l) (op) (r) (s) -> aexpr-mentions-name l target | aexpr-mentions-name r target
+    is AIfExpr (c) (t) (el) (s) -> aexpr-mentions-name c target | aexpr-mentions-name t target | aexpr-mentions-name el target
+    is ALetExpr (binds) (body) (s) -> aexpr-mentions-name body target | binds-mention-name binds 0 (list-length binds) target
+    is AMatchExpr (scrut) (arms) (s) -> aexpr-mentions-name scrut target
+    is AFieldAccess (obj) (fl) (s) -> aexpr-mentions-name obj target
+    is otherwise -> False
+
+  binds-mention-name : List ALetBind, Integer, Integer, Text -> Boolean
+  binds-mention-name (binds) (i) (len) (target) =
+   if i >= len then False
+   else if aexpr-mentions-name ((list-at binds i).value) target then True
+   else binds-mention-name binds (i + 1) len target
 
   aexpr-mentions-record-set : AExpr -> Boolean
   aexpr-mentions-record-set (e) =
@@ -65123,7 +65637,7 @@ Section: Deep Type Copy
    if i == len then acc
    else text-content-key-loop t (i + 1) len (cons-mix acc (char-code-at t i))
 
-  tcons-probe : Integer, MemoCtx -> Integer
+  tcons-probe : Integer between -9223372036854775808 and 9223372036854775807 wrapping, MemoCtx -> Integer
   tcons-probe (k) (mc) =
    if mc.mc-tcons == 0 then 0
    else cons-probe-at k (mc.mc-tcons) (mc.mc-tcons-slots) (bit-shru (k * 2177342782468422677) (mc.mc-tcons-shift)) 64
@@ -65146,7 +65660,7 @@ Section: Deep Type Copy
   memo-shift-for (p) (s) =
    if p <= 1 then s else memo-shift-for (p / 2) (s - 1)
 
-  memo-probe : Integer, MemoCtx -> Integer
+  memo-probe : Integer between -9223372036854775808 and 9223372036854775807 wrapping, MemoCtx -> Integer
   memo-probe (a) (mc) =
    let h = a * 2177342782468422677
    in memo-probe-at a (mc.mc-table) (mc.mc-slots) (bit-shru h (mc.mc-shift)) 64
@@ -65181,13 +65695,13 @@ Section: Deep Type Copy
  is keyed by ordinal, never by box address (a fresh mode box per
  copy would make every IntegerTy key unique).
 
-  cons-mix : Integer, Integer -> Integer
+  cons-mix : Integer between -9223372036854775808 and 9223372036854775807 wrapping, Integer -> Integer
   cons-mix (h) (v) = h * 1099511628211 + v
 
   cons-norm : Integer -> Integer
   cons-norm (k) = if k == 0 then 1 else k
 
-  cons-probe : Integer, MemoCtx -> Integer
+  cons-probe : Integer between -9223372036854775808 and 9223372036854775807 wrapping, MemoCtx -> Integer
   cons-probe (k) (mc) =
    cons-probe-at k (mc.mc-cons) (mc.mc-cons-slots) (bit-shru (k * 2177342782468422677) (mc.mc-cons-shift)) 64
 
