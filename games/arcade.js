@@ -2448,12 +2448,15 @@ function cardHtml(c, attr) {
   // a card that has to survive being covered: in a ten-column tableau only
   // the top few millimetres of a buried card is showing.
   const index = `<i>${esc(rank)}<em>${suit}</em></i>`;
-  const pips = CARD_PIPS[rank];
+  // The ace takes the LETTER path with the courts rather than its one big pip:
+  // the middle of a card carries the rank, and the suit is in the corner index
+  // (Damian, 2026-09-02). So 2 to 10 are pips and A, J, Q, K are letters.
+  const pips = rank === 'A' ? undefined : CARD_PIPS[rank];
   const body = pips
-    ? `<span class="pips${rank === 'A' ? ' a1' : ''}">` + pips.map(([x, y]) =>
+    ? '<span class="pips">' + pips.map(([x, y]) =>
       `<span class="pip${y > 50 ? ' inv' : ''}" style="left:${x}%;top:${y}%">${suit}</span>`)
       .join('') + '</span>'
-    : `<span class="court">${esc(rank)}<b>${suit}</b></span>`;
+    : `<span class="court">${esc(rank)}</span>`;
   return `<span class="${cls}"${attr}${style}>${index}${body}</span>`;
 }
 
