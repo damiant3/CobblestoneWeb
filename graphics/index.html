@@ -25,6 +25,9 @@
   .card:hover { transform:translateY(-3px); border-color:#2c4a8c; }
   .card a.thumblink { text-decoration:none; color:inherit; display:block; }
   .thumb { aspect-ratio:4/3; background:#000 center/cover no-repeat; border-bottom:1px solid var(--line); }
+  .thumb-split { display:flex; }
+  .thumb-split span { flex:1; background:#000 center/cover no-repeat; }
+  .thumb-split span + span { border-left:1px solid var(--line); }
   .body { padding:14px 16px 16px; }
   .body h2 { margin:0 0 4px; font-size:18px; }
   .body p { margin:0 0 10px; color:var(--dim); font-size:13.5px; }
@@ -37,7 +40,7 @@
 <div class="wrap">
   <a class="back" href="../landing.html">&#8592; Cobblestone</a>
   <h1>Codex Graphics</h1>
-  <p class="tag">Four demos whose pixels are computed by Codex, running in this tab.</p>
+  <p class="tag">Three demos whose pixels are computed by Codex, running in this tab.</p>
 
   <div class="lead">
     None of the drawing here is hand-written for the browser. Each demo is Codex
@@ -67,32 +70,24 @@
 
     <div class="card">
       <a class="thumblink" href="../globe/web/index.html">
-        <div class="thumb" style="background-image:url('shots/globe.jpg')"></div>
+        <div class="thumb thumb-split">
+          <span style="background-image:url('shots/globe.jpg')"></span>
+          <span style="background-image:url('shots/blackhole.jpg')"></span>
+        </div>
       </a>
       <div class="body">
-        <h2>The Earth</h2>
-        <p>A ray-traced globe with real satellite imagery, atmospheric scattering
-        at the rim and a day-night terminator that tracks the sun. One GPU thread
-        per pixel intersects the sphere, finds the latitude and longitude it hit,
-        and shades it. Drag to spin it, wheel to zoom.</p>
+        <h2>The Earth, and a black hole</h2>
+        <p>Two scenes on one page. The Earth is ray-traced from real satellite
+        imagery, with atmospheric scattering at the rim and a day-night
+        terminator that tracks the sun: one GPU thread per pixel intersects the
+        sphere, finds the latitude and longitude it hit, and shades it. Press
+        Black hole and the same page marches light through curved space instead,
+        so the disk behind it is bent up over the shadow and under it at once,
+        and the bright ring is light that went most of the way around. That
+        raymarcher is a self-recursive Codex function the plug lowers to a WGSL
+        loop. Drag to rotate either one, wheel to zoom.</p>
         <div class="pipe">Codex &rarr; wgsl plug &rarr; WGSL &rarr; your GPU</div>
         <div class="acts"><a class="run" href="../globe/web/index.html">Open the globe &rarr;</a></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <a class="thumblink" href="../globe/web/index.html">
-        <div class="thumb" style="background-image:url('shots/blackhole.jpg')"></div>
-      </a>
-      <div class="body">
-        <h2>A black hole, lensed</h2>
-        <p>The globe page's second scene. Light is marched step by step through
-        the curved space around a black hole, so the accretion disk behind it is
-        bent up over the shadow and under it at the same time, and the photon
-        ring is the light that went most of the way around. The raymarcher is a
-        self-recursive Codex function the plug lowers to a WGSL loop.</p>
-        <div class="pipe">Codex &rarr; wgsl plug &rarr; WGSL &rarr; your GPU</div>
-        <div class="acts"><a class="run" href="../globe/web/index.html">Open it and press Black hole &rarr;</a></div>
       </div>
     </div>
 
