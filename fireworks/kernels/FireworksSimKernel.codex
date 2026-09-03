@@ -19,7 +19,8 @@ Chapter: FireworksSimKernel
 
 Section: Kinds
 
- 1 spark (peony), 2 shell, 3 willow, 4 glitter, 5 smoke. 0 is a free slot.
+ 1 spark (peony), 2 shell, 3 willow, 4 glitter, 5 smoke, 6 ascent trail.
+ 0 is a free slot.
 
   fw-k-dead : Integer = 0
   fw-k-spark : Integer = 1
@@ -27,6 +28,7 @@ Section: Kinds
   fw-k-willow : Integer = 3
   fw-k-glitter : Integer = 4
   fw-k-smoke : Integer = 5
+  fw-k-trail : Integer = 6
 
 Section: Random
 
@@ -70,6 +72,7 @@ Section: Air
     else if kind == fw-k-willow then 0.984
     else if kind == fw-k-glitter then 0.988
     else if kind == fw-k-smoke then 0.960
+    else if kind == fw-k-trail then 0.938
     else 0.990
 
   fw-grav : Integer -> Real
@@ -77,6 +80,7 @@ Section: Air
     if kind == fw-k-smoke then 0.0 - 0.012
     else if kind == fw-k-willow then 0.038
     else if kind == fw-k-glitter then 0.050
+    else if kind == fw-k-trail then 0.026
     else 0.045
 
   fw-wind-take : Integer -> Real
@@ -157,6 +161,22 @@ Section: Colour
 
 Section: Brightness and Size
 
+ DECAY HAS TO START AT ONCE AND THEN TAKE ITS TIME, and a power curve cannot
+ do both. Any fade^k starts FLAT: its slope at full life is zero for k above
+ one, so a star holds its opening brightness, and every value over 1.0 clips
+ to the same white through the tone map besides, which widens that plateau
+ further. Then the curve falls off a cliff near the end and a whole burst,
+ whose stars were dealt lifetimes within a few frames of each other, goes out
+ together. That is the "sits there forever and then disappears in chunks".
+
+ So brightness is a decaying EXPONENTIAL in elapsed life rather than a power
+ of remaining life, approximated here with the rational 1/(1 + a*e + b*e*e)
+ because there is no exp in the device math. It leaves full brightness on the
+ first frame, is down to a third by a quarter of the way through, and still
+ has a visible tail at the end, so nothing pops out. The peak sits under 1.0
+ on purpose: at 2.6 the first third of every life clipped white and no decay
+ in it could be seen at all.
+
  Glitter crackles: a fast hash of the particle and the frame gates it
  almost off and then flares it well past one, which is what makes a
  crackling shell read as crackling rather than as a dimmer peony. The
@@ -172,14 +192,24 @@ Section: Brightness and Size
       0.72 + 0.28 * fw-rand (fg * 13.1 + fw-floor (t * 0.34) * 0.417)
     else 1.0
 
+ decay-at is 1/(1 + a*e + b*e*e) where e is elapsed life, 0 at birth and 1 at
+ death. `a` sets how fast it leaves full brightness and `b` how hard the tail
+ is pulled down at the end.
+
+  fw-decay : Real, Real, Real -> Real
+  fw-decay (fade) (a) (b) =
+    let e = 1.0 - fade
+    in 1.0 / (1.0 + a * e + b * e * e)
+
   fw-bright : Real, Real, Real, Integer -> Real
   fw-bright (fade) (fg) (t) (kind) =
     if kind == fw-k-dead then 0.0
     else if kind == fw-k-shell then 0.95 + 0.30 * fw-rand (fg + fw-floor (t * 0.5) * 0.11)
     else if kind == fw-k-smoke then 0.030 * fade
+    else if kind == fw-k-trail then 0.80 * fw-decay fade 7.0 26.0
     else
-      let base = fade * fade * (0.16 + 0.85 * fade)
-      in let birth = if fade > 0.955 then 1.7 else 0.0
+      let base = 0.92 * fw-decay fade 3.4 9.0
+      in let birth = if fade > 0.985 then 0.9 else 0.0
       in (base + birth) * fw-twinkle fg t kind
 
   fw-size : Real, Integer -> Real
@@ -187,6 +217,7 @@ Section: Brightness and Size
     if kind == fw-k-dead then 0.0
     else if kind == fw-k-shell then 2.6
     else if kind == fw-k-smoke then 9.0 + 30.0 * (1.0 - fade)
+    else if kind == fw-k-trail then 0.55 + 1.30 * fade
     else if kind == fw-k-willow then 1.15 + 1.55 * fade
     else if kind == fw-k-glitter then 0.95 + 1.30 * fade
     else 1.45 + 2.30 * fade

@@ -31638,9 +31638,7 @@ Section: I/O Boundary Helpers
 
    in let st9 = emit-list-push st8
 
-   in let st9c = emit-list-snoc-copy st9
-
-   in let st9d = emit-deck-list-push st9c
+   in let st9d = emit-deck-list-push st9
 
    in let st10 = emit-list-cons st9d
 
@@ -39584,11 +39582,6 @@ Section: __list_snoc
   emit-list-push-path3-alloc (st) (path3-pos) =
     emit-list-push-path3-alloc-body (patch-jcc-at st path3-pos (st.code-len))
 
- The body is split from the patch so `__list_snoc_copy` can enter the
- copying path directly. It is the same instructions in the same order; the
- only thing the split removes is the jump fixup, which a helper with its
- own entry point has nothing to fix up.
-
   emit-list-push-path3-alloc-body : CodegenState -> CodegenState
   emit-list-push-path3-alloc-body (st0) =
     let st1 = st-append-code st0 (push-r reg-rbx)
@@ -39655,30 +39648,6 @@ Section: __list_snoc
    in let st1 = emit-list-push-path3-alloc st0 (p2.p1)
    in let st2 = emit-list-push-path3-copy st1
    in emit-list-push-path3-finish st2
-
- COMPILER-42. `__list_snoc` writes into the caller's block whenever there
- is spare capacity (path 1) or the block sits at the frontier (path 2), so
- a name still holding the old list sees it grow. Measured at head against
- seed FC01D8B7: two separate pushes onto one empty literal answer
- e-len 2, p-len 2, q-len 2 where a persistent snoc answers 0, 1, 1.
-
- `__list_snoc_copy` is the same operation with those two paths removed. It
- allocates and copies unconditionally, which is what a persistent append
- has to do when the compiler cannot prove the caller is finished with the
- list. It reuses path 3's own instructions rather than restating them, so
- the two helpers cannot drift apart in the arithmetic that matters (the
- capacity doubling, the element copy, the length store).
-
- The caller loads the length into rcx itself, which is the one thing path
- 1 did for the shared path before jumping here.
-
-  emit-list-snoc-copy : CodegenState -> CodegenState
-  emit-list-snoc-copy (st) =
-    let st0 = record-func-offset st "__list_snoc_copy"
-   in let st1 = st-append-code st0 (mov-load reg-rcx reg-rdi 0)
-   in let st2 = emit-list-push-path3-alloc-body st1
-   in let st3 = emit-list-push-path3-copy st2
-   in emit-list-push-path3-finish st3
 
 Section: __deck_list_snoc
 
@@ -49562,21 +49531,14 @@ Page 2 of 2
 Chapter: IR--Occurrence
   cites Codex chapter Build Settings (max-recursion-depth)
 
- Sections 1 to 4 of this unit are an ANALYSIS: they read IRExpr and
- return a result, and rewrite nothing. The last section is the one
- REWRITE this chapter carries, `own-rewrite-chapter`, and it is not in
- `default-ir-pipeline`: it runs only when a caller names it
- (`passes=+own-rewrite`), because the arm64 and riscv plugs do not know
- `list-push-copy` and refuse an unrecognised builtin loudly (L-ACCEPTED).
-
- NOT IN THE DEFAULT PIPELINE IS NOT THE SAME AS NOT IN THE BINARY, and an
- earlier draft of this paragraph claimed the second. `run-ir-pass` names
- both `own-report-chapter` and `own-rewrite-chapter`, and it is reachable
- from `opening`, so nothing here is tree-shaken and the seed carries it:
- measured, adding this section took the compiler from 3,187,753 to
- 3,202,350 bytes. What "off by default" buys is that no compile CHANGES
- until a caller asks, which is why the emitted IR of a program is
- byte-identical with the pass in the pipeline and without it.
+ This unit is an ANALYSIS. It reads IRExpr and returns a result; it
+ rewrites nothing and it is not wired into the pipeline that produces
+ binaries. It is dead code in the shipping compiler -- parsed and
+ type-checked with the rest of the tree, but unreachable from
+ `opening`, so codegen tree-shakes it and the self-compile is
+ byte-identical to the seed. It links into WS-D3 when the simplifier
+ that consumes it lands, exactly as the interval kernel waited for its
+ consumer.
 
  The count is computed in ONE pass, not per-name. Counting one name at
  a time over a tree is quadratic in the number of binders; instead each
@@ -49891,522 +49853,6 @@ Section: Definition Analysis
    if i >= len then bag
    else occ-info-bag-loop (bag-add bag (make-info cdx-occ-report (list-at lines i) synthetic-span)) lines (i + 1) len
 
-Section: Linear Ownership Count
-
- COMPILER-42 needs a different question from the one the analysis above
- answers, and the difference is the JOIN.
-
- The map walk sums at a conditional, because the inliner it feeds must
- never duplicate a bound computation down both arms. That is sound there
- and wrong here: the two arms of an `if` are ALTERNATIVES, and only one of
- them runs. `hex-to-bytes` ends `if i >= len then acc else recur .. (list-push acc ..)`,
- so under a summing join its accumulator reads Many and would be refused
- the in-place path. Refusing it is precisely what the acceptance bar
- forbids, since that loop is linear today.
-
- So this walk takes the MAX across alternatives and the SUM across
- sequence, and answers one question about one name: how many times can
- this name be used on a single path through this expression. Saturating at
- two, because the rule cares only about none, one, and more than one.
-
- Nothing here changes the walk above. That walk has 53 call sites and one
- shipping consumer, and threading a join flag through it would put the
- inliner's analysis at risk for a question the inliner does not ask
- (L-INSTRUMENT: a test that reads a function to observe A is broken by
- that function correctly learning to do B).
-
- OVER-COUNTING IS THE SAFE DIRECTION and this walk uses that licence
- deliberately, which is why it carries no shadowing logic. A name rebound
- by an inner `let`, a match pattern or a lambda parameter is counted as
- though it were the outer name, so the answer can only be too HIGH. Too
- high means "not owned" means the copying path, which is always correct
- and merely slower. Too low would license an in-place write into a list
- the caller still holds, which is the defect being repaired. A body that
- exhausts the recursion budget answers the cap for the same reason.
-
- A lambda body and a fork body count as the cap whenever the name appears
- at all: both can run more than once, or after the enclosing expression
- has moved on, and a single textual occurrence there is not a single
- dynamic use.
-
- STORING THE LIST INTO A HEAP OBJECT IS THE CAP TOO, and this is clause
- (b) rather than clause (a). A record construction or a field store hands
- the list to something that outlives this call, so counting the dynamic
- uses on the path answers the wrong question: there may be exactly one,
- and the list is still reachable afterwards through the object. The
- negative control is what forced this. `compile-parse` stores
- `prior-metrics` into a record field on one path and pushes it on
- another, so clause (a) alone read it `linear` and would have granted the
- in-place path to a list the caller had just published.
-
- What is NOT implemented here is the interprocedural half: a use that is
- passed to another definition counts as an ordinary use, so this walk is
- more conservative than the design's ownership-transfer rule and will call
- some owned accumulators shared. Conservative means copying, which is
- correct and slower, and the fixpoint over call families is a later
- increment rather than a silent gap.
-
-  own-cap : Integer = 2
-
-  own-max : Integer, Integer -> Integer
-  own-max (a) (b) = if a >= b then a else b
-
-  own-add : Integer, Integer -> Integer
-  own-add (a) (b) = if a + b >= own-cap then own-cap else a + b
-
-  own-capped : Integer -> Integer
-  own-capped (n) = if n > 0 then own-cap else 0
-
-  own-uses : IRExpr, Text, Integer -> Integer
-  own-uses (e) (want) (depth) =
-   if depth >= max-recursion-depth then own-cap
-   else when e
-    is IrIntLit (v) (s) | IrNumLit (v) (s) | IrTextLit (v) (s) | IrBoolLit (v) (s) | IrCharLit (v) (s) -> 0
-    is IrName (n) (t) (s) -> if n == want then 1 else 0
-    is IrNegate (x) (t) (s) -> own-uses x want (depth + 1)
-    is IrBinary (op) (l) (r) (t) (s) -> own-add (own-uses l want (depth + 1)) (own-uses r want (depth + 1))
-    is IrIf (c) (th) (el) (t) (s) ->
-     own-add (own-uses c want (depth + 1)) (own-max (own-uses th want (depth + 1)) (own-uses el want (depth + 1)))
-    is IrLet (n) (t) (v) (b) (s) -> own-add (own-uses v want (depth + 1)) (own-uses b want (depth + 1))
-    is IrApply (f) (a) (t) (s) -> own-add (own-uses f want (depth + 1)) (own-uses a want (depth + 1))
-    is IrLambda (ps) (b) (t) (s) -> own-capped (own-uses b want (depth + 1))
-    is IrList (es) (t) (s) -> own-uses-seq es want (depth + 1) 0 (list-length es) 0
-    is IrMatch (sc) (bs) (t) (s) ->
-     own-add (own-uses sc want (depth + 1)) (own-uses-branches bs want (depth + 1) 0 (list-length bs) 0)
-    is IrAct (ss) (t) (s) -> own-uses-stmts ss want (depth + 1) 0 (list-length ss) 0
-    is IrHandle (eff) (h) (cs) (t) (s) ->
-     own-add (own-uses h want (depth + 1)) (own-uses-clauses cs want (depth + 1) 0 (list-length cs) 0)
-    is IrWithTimeout (secs) (effs) (scopes) (body) (t) (s) -> own-uses body want (depth + 1)
-    is IrRecord (n) (fs) (t) (s) -> own-capped (own-uses-fields fs want (depth + 1) 0 (list-length fs) 0)
-    is IrFieldAccess (r) (f) (t) (s) -> own-uses r want (depth + 1)
-    is IrFork (b) (t) (s) -> own-capped (own-uses b want (depth + 1))
-    is IrAwait (tk) (t) (s) -> own-uses tk want (depth + 1)
-    is IrTry (mx) (body) (fb) (fail) (t) (s) ->
-     let ub = own-uses-stmts body want (depth + 1) 0 (list-length body) 0
-     in let uf = own-uses-stmts fb want (depth + 1) 0 (list-length fb) 0
-     in let ux = own-uses-stmts fail want (depth + 1) 0 (list-length fail) 0
-     in own-add ub (own-max uf ux)
-    is IrFieldStore (r) (f) (v) (t) (s) -> own-add (own-uses r want (depth + 1)) (own-capped (own-uses v want (depth + 1)))
-    is IrError (m) (t) (s) -> 0
-
-  own-uses-seq : List IRExpr, Text, Integer, Integer, Integer, Integer -> Integer
-  own-uses-seq (es) (want) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else own-uses-seq es want depth (i + 1) len (own-add acc (own-uses (list-at es i) want depth))
-
-  own-uses-fields : List IRFieldVal, Text, Integer, Integer, Integer, Integer -> Integer
-  own-uses-fields (fs) (want) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else own-uses-fields fs want depth (i + 1) len (own-add acc (own-uses ((list-at fs i).value) want depth))
-
-  own-uses-stmts : List IRActStmt, Text, Integer, Integer, Integer, Integer -> Integer
-  own-uses-stmts (ss) (want) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else let s = list-at ss i
-   in let one = when s
-     is IrDoExec (v) (sp) -> own-uses v want depth
-     is IrDoBind (n) (t) (v) (sp) -> own-uses v want depth
-   in own-uses-stmts ss want depth (i + 1) len (own-add acc one)
-
- Branches and handle clauses are alternatives, so they take the max across
- arms rather than the sum, the same reading as the two arms of an `if`. A
- guard runs on the way in and is summed into its own arm.
-
-  own-uses-branches : List IRBranch, Text, Integer, Integer, Integer, Integer -> Integer
-  own-uses-branches (bs) (want) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else let b = list-at bs i
-   in let arm = own-add (own-uses (b.guard) want depth) (own-uses (b.body) want depth)
-   in own-uses-branches bs want depth (i + 1) len (own-max acc arm)
-
-  own-uses-clauses : List IRHandleClause, Text, Integer, Integer, Integer, Integer -> Integer
-  own-uses-clauses (cs) (want) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else own-uses-clauses cs want depth (i + 1) len (own-max acc (own-uses ((list-at cs i).body) want depth))
-
- The decision the emitter consumes. A list-typed parameter is LINEARLY
- OWNED at its push when it can be used at most once on any path through
- the body: the one use is the push itself, so nothing observes the list
- afterwards and writing in place is unobservable. This is clause (a) of
- the design's ownership test, and it is the clause the source-level
- census could not answer, because that census counted occurrences without
- their order.
-
-  own-param-linear : IRDef, Text -> Boolean
-  own-param-linear (d) (name) = own-uses (d.body) name 0 <= 1
-
- The report exists so the decision can be READ before anything consumes
- it. An inference wired straight to codegen is observable only through the
- bytes it changes, and a change that quietly answers "not owned"
- everywhere emits correct code and reports the same green as one that
- works (L-CAPABILITY-LOST). This is what the design's four controls are
- checked against.
-
-  own-is-list-ty : CodexType -> Boolean
-  own-is-list-ty (t) = when t
-   is ListTy (elem) -> True
-   is otherwise -> False
-
-  own-report-chapter : IRChapter -> List Text
-  own-report-chapter (ch) = own-report-defs (ch.defs) 0 (list-length (ch.defs)) []
-
-  own-report-defs : List IRDef, Integer, Integer, List Text -> List Text
-  own-report-defs (defs) (i) (len) (acc) =
-   if i >= len then acc
-   else let d = list-at defs i
-   in own-report-defs defs (i + 1) len (own-report-params d (d.params) 0 (list-length (d.params)) acc)
-
-  own-report-params : IRDef, List IRParam, Integer, Integer, List Text -> List Text
-  own-report-params (d) (ps) (i) (len) (acc) =
-   if i >= len then acc
-   else let p = list-at ps i
-   in let keep = own-is-list-ty (p.type-val)
-   in let n = own-uses (d.body) (p.name) 0
-   in let verdict = if n <= 1 then "linear" else "shared"
-   in let line = "OWN " & (d.name) & "." & (p.name) & ": " & verdict & " (" & show n & ") owned=" & show (own-param-owned d (p.name))
-   in own-report-params d ps (i + 1) len (if keep then list-push acc line else acc)
-
-Section: Ownership Rewrite
-
- The two directions of being wrong here are not symmetric, and the walk
- is built around that. Leaving a site alone keeps today's aliasing write,
- which is the defect; rewriting a site that did not need it costs a copy.
- So an unproven site COPIES, and only a site the rule proves owned keeps
- the in-place path. A missed constructor arm therefore under-fixes rather
- than miscompiles, and no arm may DROP a subtree.
-
- Every IRExpr arm is spelled out and there is deliberately no
- `is otherwise`, so a constructor added later fails to compile here
- instead of being silently skipped (L-ACCEPTED: an interface that ignores
- what it does not recognise makes a setting that does nothing look exactly
- like one that works). The five literal arms and the leaves return
- themselves because they hold no subexpression, which is a different claim
- from declining to look.
-
- `list-snoc` is rewritten as well as `list-push`: both carry
- `bs-emit ... "__list_snoc"` (`Types/Builtins.codex:84-85`), so both reach
- the aliasing helper and fixing one spelling alone would leave the other
- live.
-
- A chapter that defines its own `list-push` beats the builtin, which is the
- rule `emit-compound` and `fold-apply` already implement, so a defined name
- is declined here the same way.
-
-  own-push-name : Text -> Boolean
-  own-push-name (n) = n == "list-push" | n == "list-snoc"
-
-  own-has-param : List IRParam, Text, Integer, Integer -> Boolean
-  own-has-param (ps) (n) (i) (len) =
-   if i >= len then False
-   else if ((list-at ps i).name) == n then True
-   else own-has-param ps n (i + 1) len
-
-  own-in-list : List Text, Text, Integer, Integer -> Boolean
-  own-in-list (xs) (n) (i) (len) =
-   if i >= len then False
-   else if (list-at xs i) == n then True
-   else own-in-list xs n (i + 1) len
-
- A let-bound name is owned in the let's body when the bound value is FRESH and
- the body uses the name at most once. Freshness is what makes it sound, and the
- argument is inductive rather than structural: the result of a push site this
- pass has already decided owns its block either way, because a site it KEPT was
- proven owned and a site it REWROTE allocates. A list literal is fresh for the
- ordinary reason. Anything else -- a bare name, a field read, a call -- may
- alias something the caller still holds and is refused.
-
- The same inductive argument answers a push applied DIRECTLY to another push's
- result, `list-push (list-push a x) y`, with no `let` between them: the inner
- result is owned for exactly the reason above, so the outer site keeps its
- in-place path. That shape is why `cap-names-from` still copied once after the
- let rule alone landed.
-
- The freshness test runs BEFORE the use count, and that ordering is a cost
- decision rather than a style one: `own-uses` walks the whole body, so testing
- it at every `let` would be quadratic in the length of a let chain, and this
- compiler has chains thousands long. Gating on the cheap structural test first
- bounds the walks to the number of list-building lets.
-
- Shadowing is not handled here and does not need to be: COMPILER-38 (main
- 20995) gives every binder a unique IR name within a definition, so a name in
- this environment cannot be rebound underneath it. A name used inside a lambda
- or a fork body cannot enter the environment at all, because `own-uses` answers
- the cap for those and the count test fails first.
-
-  own-fresh : IRExpr, SkipListText -> Boolean
-  own-fresh (v) (dn) =
-   when v
-    is IrList (es) (t) (s) -> True
-    is IrApply (f) (a) (t) (s) ->
-     when f
-      is IrApply (g) (lst) (ft) (fs) ->
-       when g
-        is IrName (n) (nt) (ns) ->
-         if skip-list-text-has dn n then False
-         else own-push-name n | n == "list-push-copy"
-        is otherwise -> False
-      is otherwise -> False
-    is otherwise -> False
-
-  own-site-owned : IRDef, IRExpr, SkipListText, List Text -> Boolean
-  own-site-owned (d) (lst) (dn) (ow) =
-   if own-fresh lst dn then True
-   else when lst
-    is IrName (n) (t) (s) ->
-     if own-in-list ow n 0 (list-length ow) then True
-     else if own-has-param (d.params) n 0 (list-length (d.params)) then own-param-owned d n else False
-    is otherwise -> False
-
-  own-rewrite-chapter : IRChapter -> IRChapter
-  own-rewrite-chapter (ch) =
-   let defined = deck-record (skip-list-text-from-list (for d in (ch.defs) -> d.name))
-   in __record-set ch "defs" (for d in (ch.defs) -> deck-record (__record-set d "body" (own-rw d (d.body) defined [] 0)))
-
-  own-rw : IRDef, IRExpr, SkipListText, List Text, Integer -> IRExpr
-  own-rw (d) (e) (dn) (ow) (depth) =
-   if depth >= max-recursion-depth then e
-   else when e
-    is IrIntLit (v) (s) -> e
-    is IrNumLit (v) (s) -> e
-    is IrTextLit (v) (s) -> e
-    is IrBoolLit (v) (s) -> e
-    is IrCharLit (v) (s) -> e
-    is IrName (n) (t) (s) -> e
-    is IrError (m) (t) (s) -> e
-    is IrNegate (x) (t) (s) -> deck-record (IrNegate (own-rw d x dn ow (depth + 1)) t s)
-    is IrBinary (op) (l) (r) (t) (s) ->
-     let rl = own-rw d l dn ow (depth + 1)
-     in let rr = own-rw d r dn ow (depth + 1)
-     in deck-record (IrBinary op rl rr t s)
-    is IrIf (c) (th) (el) (t) (s) ->
-     let rc = own-rw d c dn ow (depth + 1)
-     in let rt = own-rw d th dn ow (depth + 1)
-     in let re = own-rw d el dn ow (depth + 1)
-     in deck-record (IrIf rc rt re t s)
-    is IrLet (n) (t) (v) (b) (s) ->
-     let rv = own-rw d v dn ow (depth + 1)
-     in let ow2 = if own-fresh v dn then (if own-uses b n 0 <= 1 then list-push ow n else ow) else ow
-     in let rb = own-rw d b dn ow2 (depth + 1)
-     in deck-record (IrLet n t rv rb s)
-    is IrApply (f) (a) (t) (s) ->
-     let rf = own-rw d f dn ow (depth + 1)
-     in let ra = own-rw d a dn ow (depth + 1)
-     in own-rw-apply d rf ra t s dn ow
-    is IrLambda (ps) (b) (t) (s) -> deck-record (IrLambda ps (own-rw d b dn ow (depth + 1)) t s)
-    is IrList (es) (t) (s) -> deck-record (IrList (for x in es -> own-rw d x dn ow (depth + 1)) t s)
-    is IrMatch (sc) (bs) (t) (s) ->
-     let rsc = own-rw d sc dn ow (depth + 1)
-     in let rbs = own-rw-branches d bs dn ow (depth + 1)
-     in deck-record (IrMatch rsc rbs t s)
-    is IrAct (ss) (t) (s) -> deck-record (IrAct (own-rw-stmts d ss dn ow (depth + 1)) t s)
-    is IrHandle (eff) (h) (cs) (t) (s) ->
-     let rh = own-rw d h dn ow (depth + 1)
-     in let rcs = own-rw-clauses d cs dn ow (depth + 1)
-     in deck-record (IrHandle eff rh rcs t s)
-    is IrWithTimeout (secs) (effs) (scopes) (body) (t) (s) ->
-     deck-record (IrWithTimeout secs effs scopes (own-rw d body dn ow (depth + 1)) t s)
-    is IrRecord (n) (fs) (t) (s) -> deck-record (IrRecord n (own-rw-fields d fs dn ow (depth + 1)) t s)
-    is IrFieldAccess (r) (f) (t) (s) -> deck-record (IrFieldAccess (own-rw d r dn ow (depth + 1)) f t s)
-    is IrFork (b) (t) (s) -> deck-record (IrFork (own-rw d b dn ow (depth + 1)) t s)
-    is IrAwait (tk) (t) (s) -> deck-record (IrAwait (own-rw d tk dn ow (depth + 1)) t s)
-    is IrTry (mx) (body) (fb) (fail) (t) (s) ->
-     let rb = own-rw-stmts d body dn ow (depth + 1)
-     in let rf = own-rw-stmts d fb dn ow (depth + 1)
-     in let rx = own-rw-stmts d fail dn ow (depth + 1)
-     in deck-record (IrTry mx rb rf rx t s)
-    is IrFieldStore (r) (f) (v) (t) (s) ->
-     let rr = own-rw d r dn ow (depth + 1)
-     in let rv = own-rw d v dn ow (depth + 1)
-     in deck-record (IrFieldStore rr f rv t s)
-
-  own-rw-apply : IRDef, IRExpr, IRExpr, CodexType, SourceSpan, SkipListText, List Text -> IRExpr
-  own-rw-apply (d) (f) (a) (t) (s) (dn) (ow) =
-   when f
-    is IrApply (inner-f) (lst) (fty) (fsp) ->
-     when inner-f
-      is IrName (n) (nty) (nsp) ->
-       if own-push-name n then own-rw-push d f a t s dn ow n lst nty nsp fty fsp
-       else deck-record (IrApply f a t s)
-      is otherwise -> deck-record (IrApply f a t s)
-    is otherwise -> deck-record (IrApply f a t s)
-
-  own-rw-push : IRDef, IRExpr, IRExpr, CodexType, SourceSpan, SkipListText, List Text, Text, IRExpr, CodexType, SourceSpan, CodexType, SourceSpan -> IRExpr
-  own-rw-push (d) (f) (a) (t) (s) (dn) (ow) (n) (lst) (nty) (nsp) (fty) (fsp) =
-   if skip-list-text-has dn n then deck-record (IrApply f a t s)
-   else if own-site-owned d lst dn ow then deck-record (IrApply f a t s)
-   else let copy-name = deck-record (IrName "list-push-copy" nty nsp)
-   in let partial = deck-record (IrApply copy-name lst fty fsp)
-   in deck-record (IrApply partial a t s)
-
-  own-rw-branches : IRDef, List IRBranch, SkipListText, List Text, Integer -> List IRBranch
-  own-rw-branches (d) (bs) (dn) (ow) (depth) =
-   for b in bs -> deck-record (IRBranch { pattern = b.pattern, body = own-rw d (b.body) dn ow depth, guard = own-rw d (b.guard) dn ow depth, span = b.span, alt-group = b.alt-group })
-
-  own-rw-clauses : IRDef, List IRHandleClause, SkipListText, List Text, Integer -> List IRHandleClause
-  own-rw-clauses (d) (cs) (dn) (ow) (depth) =
-   for c in cs -> deck-record (__record-set c "body" (own-rw d (c.body) dn ow depth))
-
-  own-rw-fields : IRDef, List IRFieldVal, SkipListText, List Text, Integer -> List IRFieldVal
-  own-rw-fields (d) (fs) (dn) (ow) (depth) =
-   for fv in fs -> deck-record (__record-set fv "value" (own-rw d (fv.value) dn ow depth))
-
-  own-rw-stmts : IRDef, List IRActStmt, SkipListText, List Text, Integer -> List IRActStmt
-  own-rw-stmts (d) (ss) (dn) (ow) (depth) =
-   for st in ss -> when st
-    is IrDoBind (n) (t) (v) (sp) -> deck-record (IrDoBind n t (own-rw d v dn ow depth) sp)
-    is IrDoExec (v) (sp) -> deck-record (IrDoExec (own-rw d v dn ow depth) sp)
-
-Section: Clause (a), In Evaluation Order
-
- `own-param-linear` asks how many times a name is used and cannot ask WHEN, so
- it refuses the accumulator shape that reads its list several times and then
- pushes. `sha256-schedule-loop` is the measured case: it reads `w` four times
- through `list-at` and pushes once, all on one path, with no use of `w` after
- the push. The occurrence count says four and refuses; clause (a) of the
- ownership test asks only whether a use FOLLOWS the call, and the answer is no.
-
- This walk answers that question directly, as a four-state scan in evaluation
- order. The states are about the name under test:
-
-   none  no use of it, and no push of it, seen yet
-   used  it has been read, no push of it yet
-   push  it has been pushed, and nothing has touched it since
-   bad   something touched it AFTER a push, or it escaped
-
- `own-seq` composes two things that both run, in order, and is where the rule
- lives: once the left side is `push`, any use on the right at all is `bad`. A
- second push counts as a use of the first result, so two pushes of one name are
- refused, which is correct because the first result is then either discarded or
- aliased. `own-alt` composes ALTERNATIVES -- the arms of an `if`, the branches
- of a match -- where a read in the arm that was not taken does not follow the
- push in the arm that was. That distinction is the whole reason this cannot be
- done by counting: `if t == 64 then w else .. list-push w ..` reads `w` in one
- arm and pushes it in the other, and no count can tell that apart from a read
- that follows a push.
-
- Clause (b), escape, is folded into the same walk rather than given its own:
- a use inside a lambda body, a fork body, a record field or a field store is
- `bad` outright, because the value outlives the call whatever the ordering
- says. Handler clauses are treated the same way, since a clause can resume.
-
- The scan is conservative in the direction that copies. An unwalked subtree
- (depth cap) is `bad`, a name that merely appears is `used` and never reaches
- `push`, and only a real push of the name under test produces `push`.
-
-  own-st-none : Integer = 0
-  own-st-used : Integer = 1
-  own-st-push : Integer = 2
-  own-st-bad : Integer = 3
-
-  own-seq : Integer, Integer -> Integer
-  own-seq (a) (b) =
-   if a == own-st-bad then own-st-bad
-   else if b == own-st-bad then own-st-bad
-   else if a == own-st-push then (if b == own-st-none then own-st-push else own-st-bad)
-   else if b == own-st-none then a
-   else b
-
-  own-alt : Integer, Integer -> Integer
-  own-alt (x) (y) =
-   if x == own-st-bad then own-st-bad
-   else if y == own-st-bad then own-st-bad
-   else if x == own-st-push then own-st-push
-   else if y == own-st-push then own-st-push
-   else if x == own-st-used then own-st-used
-   else y
-
-  own-uses-in : IRExpr, Text -> Boolean
-  own-uses-in (e) (n) = own-uses e n 0 > 0
-
-  own-clauses-use : List IRHandleClause, Text, Integer, Integer -> Boolean
-  own-clauses-use (cs) (p) (i) (len) =
-   if i >= len then False
-   else if own-uses-in ((list-at cs i).body) p then True
-   else own-clauses-use cs p (i + 1) len
-
-  own-fields-use : List IRFieldVal, Text, Integer, Integer -> Boolean
-  own-fields-use (fs) (p) (i) (len) =
-   if i >= len then False
-   else if own-uses-in ((list-at fs i).value) p then True
-   else own-fields-use fs p (i + 1) len
-
-  own-scan : IRExpr, Text, Integer -> Integer
-  own-scan (e) (p) (depth) =
-   if depth >= max-recursion-depth then own-st-bad
-   else when e
-    is IrIntLit (v) (s) -> own-st-none
-    is IrNumLit (v) (s) -> own-st-none
-    is IrTextLit (v) (s) -> own-st-none
-    is IrBoolLit (v) (s) -> own-st-none
-    is IrCharLit (v) (s) -> own-st-none
-    is IrError (m) (t) (s) -> own-st-none
-    is IrName (n) (t) (s) -> if n == p then own-st-used else own-st-none
-    is IrNegate (x) (t) (s) -> own-scan x p (depth + 1)
-    is IrBinary (op) (l) (r) (t) (s) -> own-seq (own-scan l p (depth + 1)) (own-scan r p (depth + 1))
-    is IrIf (c) (th) (el) (t) (s) ->
-     own-seq (own-scan c p (depth + 1)) (own-alt (own-scan th p (depth + 1)) (own-scan el p (depth + 1)))
-    is IrLet (n) (t) (v) (b) (s) -> own-seq (own-scan v p (depth + 1)) (own-scan b p (depth + 1))
-    is IrApply (f) (a) (t) (s) -> own-scan-apply f a p (depth + 1)
-    is IrLambda (ps) (b) (t) (s) -> if own-uses-in b p then own-st-bad else own-st-none
-    is IrFork (b) (t) (s) -> if own-uses-in b p then own-st-bad else own-st-none
-    is IrList (es) (t) (s) -> own-scan-seq es p (depth + 1) 0 (list-length es) own-st-none
-    is IrMatch (sc) (bs) (t) (s) ->
-     own-seq (own-scan sc p (depth + 1)) (own-scan-branches bs p (depth + 1) 0 (list-length bs) own-st-none)
-    is IrAct (ss) (t) (s) -> own-scan-stmts ss p (depth + 1) 0 (list-length ss) own-st-none
-    is IrHandle (eff) (h) (cs) (t) (s) ->
-     if own-clauses-use cs p 0 (list-length cs) then own-st-bad else own-scan h p (depth + 1)
-    is IrWithTimeout (secs) (effs) (scopes) (body) (t) (s) -> own-scan body p (depth + 1)
-    is IrRecord (n) (fs) (t) (s) ->
-     if own-fields-use fs p 0 (list-length fs) then own-st-bad else own-st-none
-    is IrFieldAccess (r) (f) (t) (s) -> own-scan r p (depth + 1)
-    is IrAwait (tk) (t) (s) -> own-scan tk p (depth + 1)
-    is IrTry (mx) (body) (fb) (fail) (t) (s) ->
-     let sb = own-scan-stmts body p (depth + 1) 0 (list-length body) own-st-none
-     in let sf = own-scan-stmts fb p (depth + 1) 0 (list-length fb) own-st-none
-     in let sx = own-scan-stmts fail p (depth + 1) 0 (list-length fail) own-st-none
-     in own-seq sb (own-alt sf sx)
-    is IrFieldStore (r) (f) (v) (t) (s) ->
-     if own-uses-in v p then own-st-bad else own-scan r p (depth + 1)
-
-  own-scan-apply : IRExpr, IRExpr, Text, Integer -> Integer
-  own-scan-apply (f) (a) (p) (depth) =
-   when f
-    is IrApply (g) (lst) (fty) (fsp) ->
-     when g
-      is IrName (n) (nt) (ns) ->
-       if own-push-name n then own-scan-push lst a p depth
-       else own-seq (own-scan f p (depth + 1)) (own-scan a p (depth + 1))
-      is otherwise -> own-seq (own-scan f p (depth + 1)) (own-scan a p (depth + 1))
-    is otherwise -> own-seq (own-scan f p (depth + 1)) (own-scan a p (depth + 1))
-
-  own-scan-push : IRExpr, IRExpr, Text, Integer -> Integer
-  own-scan-push (lst) (a) (p) (depth) =
-   when lst
-    is IrName (ln) (lt) (ls) ->
-     if ln == p then own-seq (own-scan a p (depth + 1)) own-st-push
-     else own-seq (own-scan lst p (depth + 1)) (own-scan a p (depth + 1))
-    is otherwise -> own-seq (own-scan lst p (depth + 1)) (own-scan a p (depth + 1))
-
-  own-scan-seq : List IRExpr, Text, Integer, Integer, Integer, Integer -> Integer
-  own-scan-seq (es) (p) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else own-scan-seq es p depth (i + 1) len (own-seq acc (own-scan (list-at es i) p depth))
-
-  own-scan-stmts : List IRActStmt, Text, Integer, Integer, Integer, Integer -> Integer
-  own-scan-stmts (ss) (p) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else own-scan-stmts ss p depth (i + 1) len (own-seq acc (own-scan (ir-act-stmt-expr (list-at ss i)) p depth))
-
-  own-scan-branches : List IRBranch, Text, Integer, Integer, Integer, Integer -> Integer
-  own-scan-branches (bs) (p) (depth) (i) (len) (acc) =
-   if i >= len then acc
-   else let b = list-at bs i
-   in let sb = own-seq (own-scan (b.guard) p depth) (own-scan (b.body) p depth)
-   in own-scan-branches bs p depth (i + 1) len (own-alt acc sb)
-
-  own-param-owned : IRDef, Text -> Boolean
-  own-param-owned (d) (name) = own-scan (d.body) name 0 == own-st-push
-
 Page 1
 
 
@@ -50490,8 +49936,6 @@ Section: Pass Registry
    else if name == "inline-cost-based" then IRPassResult { chapter = inline-cost-based-in-chapter ch, violations = [], infos = [] }
    else if name == "ir-check" then IRPassResult { chapter = ch, violations = ir-check ch, infos = [] }
    else if name == "occ-report" then IRPassResult { chapter = ch, violations = [], infos = occ-report-chapter ch }
-   else if name == "own-report" then IRPassResult { chapter = ch, violations = [], infos = own-report-chapter ch }
-   else if name == "own-rewrite" then IRPassResult { chapter = own-rewrite-chapter ch, violations = [], infos = [] }
    else if name == "simplify" then let o = simplify-run ch in IRPassResult { chapter = o.chapter, violations = [], infos = o.infos }
    else if name == "lir-dump" then IRPassResult { chapter = ch, violations = [], infos = [] }
    else IRPassResult { chapter = ch, violations = [], infos = [] }
@@ -57796,6 +57240,22 @@ Chapter: Types--Builtins
 
 Section: The Table
 
+ `list-push` and `list-snoc` MUTATE their list argument in place when the
+ block has room, and return the possibly-moved pointer. That is the contract,
+ not a defect, and it is why this compiler self-compiles inside its 2 GB
+ memory budget: it took more than 4 GB before appends grew in place, and every
+ attempt to give them value semantics has put it back. Measured: capacity
+ equal to length killed `apps/brotli-hostile` and `apps/deflate-hostile`, and
+ a build that copied at unproven call sites could not compile a three-line
+ source at all.
+
+ **A caller that needs the old list to survive an append copies it AT THE
+ HOLDER**, where exactly one caller pays. Do not add a copying spelling, do not
+ make the append persistent, and do not write a pass that decides between them.
+ RULED by Damian 2026-09-03, and this note exists because the absent contract
+ is what made the behaviour read as a bug and pulled agents into rebuilding it
+ twice.
+
   BuiltinSpec = record {
    bs-name : Text,
    bs-alloc : Text,
@@ -57844,7 +57304,6 @@ Section: The Table
    BuiltinSpec { bs-name = "text-compare", bs-alloc = "none", bs-varies = False, bs-type = Just (FunTy TextTy empty-row (FunTy TextTy empty-row int-ty-default)), bs-emit = Just (\s a -> emit-helper-call-2 s a "__text_compare") },
    BuiltinSpec { bs-name = "list-snoc", bs-alloc = "input", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (ListTy (TypeVar 0)) empty-row (FunTy (TypeVar 0) empty-row (ListTy (TypeVar 0))))), bs-emit = Just (\s a -> emit-helper-call-2 s a "__list_snoc") },
    BuiltinSpec { bs-name = "list-push", bs-alloc = "input", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (ListTy (TypeVar 0)) empty-row (FunTy (TypeVar 0) empty-row (ListTy (TypeVar 0))))), bs-emit = Just (\s a -> emit-helper-call-2 s a "__list_snoc") },
-   BuiltinSpec { bs-name = "list-push-copy", bs-alloc = "input", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (ListTy (TypeVar 0)) empty-row (FunTy (TypeVar 0) empty-row (ListTy (TypeVar 0))))), bs-emit = Just (\s a -> emit-helper-call-2 s a "__list_snoc_copy") },
    BuiltinSpec { bs-name = "list-at", bs-alloc = "none", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (ListTy (TypeVar 0)) empty-row (FunTy int-ty-default empty-row (TypeVar 0)))), bs-emit = Just (\s a -> emit-list-at-builtin s a) },
    BuiltinSpec { bs-name = "tag-equal", bs-alloc = "none", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (TypeVar 0) empty-row (FunTy (TypeVar 0) empty-row BooleanTy))), bs-emit = Just (\s a -> emit-tag-equal-builtin s a) },
    BuiltinSpec { bs-name = "__list-tail", bs-alloc = "fixed", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (ListTy (TypeVar 0)) empty-row (ListTy (TypeVar 0)))), bs-emit = Just (\s a -> emit-helper-call-1 s a "__list_tail") },

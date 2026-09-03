@@ -40,7 +40,7 @@
 <div class="wrap">
   <a class="back" href="../landing.html">&#8592; Cobblestone</a>
   <h1>Codex Graphics</h1>
-  <p class="tag">Four demos whose pixels are computed by Codex, running in this tab.</p>
+  <p class="tag">Five demos whose pixels are computed by Codex, running in this tab.</p>
 
   <div class="lead">
     None of the drawing here is hand-written for the browser. Each demo is Codex
@@ -125,10 +125,26 @@
       </div>
     </div>
 
+    <div class="card">
+      <a class="thumblink" href="../safari/index.html">
+        <div class="thumb" style="background-image:url('shots/safari.jpg')"></div>
+      </a>
+      <div class="body">
+        <h2>The safari</h2>
+        <p>A drive through the savanna, ported to Codex by Steve Howell from a
+        classic screensaver. The road, the animals and every polygon of every
+        frame are decided by the module running in your browser; the page only
+        paints the draw commands it is handed. His own grading suite runs the
+        port against the original game frame by frame.</p>
+        <div class="pipe">Codex &rarr; wasm plug &rarr; WebAssembly &rarr; canvas</div>
+        <div class="acts"><a class="run" href="../safari/index.html">Open the safari &rarr;</a></div>
+      </div>
+    </div>
+
   </div>
 
   <footer>
     The fireworks, the globe and the black hole need WebGPU, which today means a
-    recent Chrome or Edge. The aquarium runs anywhere WebAssembly does.
+    recent Chrome or Edge. The aquarium and the safari run anywhere WebAssembly does.
   </footer>
 </div>
