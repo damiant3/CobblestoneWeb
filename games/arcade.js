@@ -29,8 +29,7 @@ const rows = r => ({ kind: 'rows', rows: r.filter(Boolean) });
 // position by default; a row or column cell has no natural index, so a
 // clickable one has to say what it stands for (a mancala pit, a spider
 // column) or it is decoration.
-const cell = (text, cls, i, style) =>
-  ({ text: text === 0 ? '0' : (text || ''), cls: cls || '', i, style });
+const cell = (text, cls, i) => ({ text: text === 0 ? '0' : (text || ''), cls: cls || '', i });
 const seq = n => [...Array(n).keys()];
 
 // A hand as one row of card chips.
@@ -38,155 +37,6 @@ const hand = (n, at) => seq(n).map(at).map(c => cardCell(c));
 
 export const cardCell = (c, extra) =>
   ({ text: card(c), cls: 'card' + (red(c) ? ' red' : '') + (extra ? ' ' + extra : '') });
-
-// --- Spider's two numbers -------------------------------------------------
-// A spider click has to name a CARD, not just a column, or a sub-stack can
-// never be picked. Cards report `SP_CARD + column * 1000 + index`; a bare
-// 0 to 9 is still the column itself, which is what the column's own padding
-// and an empty column report.
-const SP_CARD = 10000;
-export const spCardCode = (c, i) => SP_CARD + c * 1000 + i;
-const spCol = code => (code >= SP_CARD ? Math.floor((code - SP_CARD) / 1000) : code);
-const spIdx = code => (code >= SP_CARD ? (code - SP_CARD) % 1000 : -1);
-
-// The tail of a column that can be lifted as one piece: the longest run of
-// descending same-suit cards ending at the last card.
-//
-// `sp_seqlen` measures FORWARD from an index to the end of the run starting
-// there, so reading it at the LAST index answers 1 for every column in every
-// position. The page computed its pick-up point as `n - sp_seqlen(n - 1)`,
-// which is therefore always `n - 1`: only ever the single top card, whatever
-// was sitting under it. That is one call away from correct and it made the
-// game unplayable, because Spider is almost entirely the moving of runs.
-// The run start is the lowest index whose own run reaches the end.
-const spRunStart = (e, h, c, n) => {
-  let s = n - 1;
-  while (s > 0 && e.sp_seqlen(h, c, s - 1) === n - (s - 1)) s--;
-  return s;
-};
-
-// Whether what is being carried can land on column `c`, asked the same way
-// the drop itself asks it: an exact pick-up means that card and no other, a
-// column pick-up means the largest tail the destination will take.
-const spFits = (e, h, sl, c) => {
-  if (sl.exact) return e.sp_can(h, sl.col, sl.start, c) === 1;
-  const n = e.sp_coln(h, sl.col);
-  for (let s = sl.start; s < n; s++) if (e.sp_can(h, sl.col, s, c) === 1) return true;
-  return false;
-};
-
-// --- Klondike's click targets --------------------------------------------
-// Klondike has more places to click than a column index can name: seven
-// columns, the cards inside them, a stock, a waste and four foundations. So
-// the page names them all in one number, and `kdWhere` turns that back into
-// the pair the engine wants -- `from` (0 to 6 a column, 7 the waste, 8 to 11
-// a foundation) and `to` (0 to 6 a column, 7 to 10 a foundation). The two
-// are deliberately NOT the same numbering, which is a trap the engine's own
-// `kd-can-move` carries a note about.
-const KD_STOCK = 90, KD_WASTE = 91, KD_FOUND = 92, KD_CARD = 10000;
-const kdCardCode = (c, i) => KD_CARD + c * 1000 + i;
-
-// The largest tail of a column that can be lifted as one piece: face up,
-// descending, alternating colour, and reaching the end.
-const kdRunStart = (e, h, c, n) => {
-  const d = e.kd_down(h, c);
-  let s = n - 1;
-  while (s > d && e.kd_runlen(h, c, s - 1) === n - (s - 1)) s--;
-  return s;
-};
-
-// One draw after a turn of the stock, the cards that moved carry `dealt`.
-let kdDealt = false;
-
-// War's only click target: your own deck.
-const WR_DECK = 0;
-
-// Liar's Dice: the face you are bidding on, and the quantity you say. A bid
-// is qty and face together, so the face is held while you choose the number
-// and the number click is what commits it.
-const LD_FACE = 600, LD_QTY = 610;
-let ldFace = 1;
-// What the last call turned out to be, so the board can say whether the
-// dice were really there. Cleared at a new game and at each new bid.
-let ldSaid = null;
-
-// Crazy Eights: a card in your hand, and the four suits an eight can call.
-// An eight is held here between the two clicks it takes, and cleared at a
-// new game so a fresh deal never opens mid-question.
-const CE_CARD = 500, CE_SUIT = 560;
-let ceEight = -1;
-
-// Mastermind: four pegs being set, and the six colours to set them from.
-// A code is four base-six digits packed low-first, which is what the
-// engine's own `mm-digit` reads back.
-const MM_SLOT = 400, MM_COLOUR = 410;
-let mmPegs = [0, 0, 0, 0], mmAt = 0, mmLog = [];
-
-// Battleship's players are ONE-BASED in the module: every one of its
-// accessors tests `player == 1` and falls through to player two, so 0 is
-// not "player one", it is the else branch. You are player one.
-const BS_YOU = 1, BS_THEM = 2;
-
-// Life's three stamps, in the engine's own `lf-wasm-place` kind order.
-// 0 in `lfStamp` means a click toggles one cell; 1 to 3 mean it stamps that
-// pattern with the click at its top-left. Reset is not needed at a new
-// game: what you are holding is a tool, not a position.
-const LF_KIND = ['glider', 'blinker', 'block'];
-let lfStamp = 0;
-
-// Set is picked three cards at a time, which the driver's single-square
-// `sel` cannot carry. Reset at a new game.
-let sgPick = [];
-
-// Go Fish asks two questions per turn, a rank and a player, so its clicks
-// come from two ranges. Ranks are the engine's own 0 to 12 (`gf-rank` is
-// `card mod 13`, the same ace-high order the page's RANK table uses).
-const GF_RANK = 300, GF_WHO = 320;
-// What the last answer was, so the board can say "go fish" instead of only
-// moving a count. Cleared at a new game.
-let gfSaid = null;
-
-// Sudoku's digit picker sits above the grid, so its clicks have to be told
-// apart from the 81 squares: a code at or above SD_DIGIT is a digit.
-const SD_DIGIT = 100;
-// Which digit is in hand, and which squares were GIVEN. The givens are the
-// puzzle's own non-zero cells read once at the deal, because the engine
-// holds one grid and does not mark which of it was given -- and a player
-// who can overwrite a given is not solving the puzzle they were handed.
-let sdDigit = 1, sdGiven = new Set();
-
-// Mahjong's 36 tile types drawn as tiles rather than as the type NUMBER the
-// page printed before. Unicode's Mahjong Tiles block runs from U+1F000 and
-// covers all 36 the engine deals (144 tiles, four of each).
-const MJ_FACE = t => (t >= 0 && t < 36 ? String.fromCodePoint(0x1F000 + t) : '');
-
-// Yahtzee's click targets and its scorecard, in the engine's own category
-// order (Yahtzee.codex `yh-score-category`: 0 to 5 the upper section, then
-// three of a kind, four of a kind, full house, the two straights, Yahtzee
-// and chance). Reading the names off this list rather than off a second
-// table is the point -- five games in this arcade have shipped a wrong
-// label because a meaning was taken from a name instead of the wrapper.
-const YH_DIE = 200, YH_CAT = 210;
-const YH_CATS = ['1s', '2s', '3s', '4s', '5s', '6s',
-  '3-kind', '4-kind', 'house', 'sm run', 'lg run', 'YAHTZEE', 'chance'];
-const DIE_FACE = [null, '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-// Which dice are held, as five bits, and how many of the turn's three rolls
-// have been spent. Both are facts about the turn in progress rather than
-// about the game, so they live here and reset at a new game.
-let yhKeep = 0, yhRolls = 1;
-
-// Rock, paper, scissors, in the engine's own move order (RPS.codex
-// `rps-beats`: 0 rock, 1 paper, 2 scissors).
-const RPS_GLYPH = ['✊', '✋', '✌'];
-const RPS_NAME = ['rock', 'paper', 'scissors'];
-// The last round played by hand, so the page can say what just happened
-// rather than only moving a tally. Cleared at a new game.
-let rpLast = null;
-
-// One draw after a deal the ten new cards carry `dealt` and land. It is a
-// one-shot: the view clears it as it reads it, because a class left on
-// would replay the deal on every repaint after it.
-let spDealt = false;
 
 // A hand read out of a "do you hold this card" test, which is how the
 // trick-taking engines expose one. Sorted by suit then rank so it reads
@@ -200,33 +50,9 @@ const held = (n, has) => {
 
 const PLAYERS = ['P1', 'P2', 'P3', 'P4'];
 
-// Pinochle does not use the 52-card encoding the rest of this file assumes,
-// so `card` renders its ids as the wrong rank in the wrong suit. Its own is
-// suit * 12 + copy * 6 + rank over six ranks, and its suit order (Pinochle
-// .codex: 0 clubs, 1 diamonds, 2 hearts, 3 spades) is the reverse of SUIT.
-const PIN_SUIT = ['♣', '♦', '♥', '♠'];
-const PIN_RANK = ['9', 'J', 'Q', 'K', '10', 'A'];
-const pinCard = c => c < 0 ? '--'
-  : `${PIN_RANK[c % 6]}${PIN_SUIT[Math.floor(c / 12)]}`;
-const pinCell = (c, extra) => ({
-  text: pinCard(c),
-  cls: 'card' + ([1, 2].includes(Math.floor(c / 12)) && c >= 0 ? ' red' : '')
-    + (extra ? ' ' + extra : ''),
-});
-// Seats at a bridge table, in the order Bridge.codex numbers them.
-const BR_SEAT = ['North', 'South', 'East', 'West'];
-
-// Poker.codex stages: two betting rounds around one draw.
-const STAGE = ['first bets', 'the draw', 'last bets', 'shown down'];
-
 // Poker.codex ranks hands 0 to 8, low to high.
 const HANDS = ['high card', 'a pair', 'two pair', 'trips', 'a straight',
   'a flush', 'a full house', 'quads', 'a straight flush'];
-
-// PokerVariants.codex, the order pvw-variant and pvt-new both map.
-const PV_NAMES = ['five card draw', 'five card stud', 'seven card stud',
-  'baseball', 'hi chicago', 'low chicago', 'follow the queen',
-  'jacks or better'];
 
 // RoyalUr.codex, ur-is-rosette: step 4, 8 or 14.
 const UR_ROSETTE = [4, 8, 14];
@@ -722,40 +548,13 @@ export const GAMES = [
   },
   {
     id: 'life', name: "Conway's Life", cat: 'Puzzle', icon: '\u{1F9EC}',
-    desc: '20x20 toroidal, B3/S23. You do not play against it, you draw the position it starts from: click cells, stamp a glider, then let it run.',
+    desc: '20x20 toroidal B3/S23. Nobody plays; it just goes.',
     boot: (e, s) => e.lf_new(s),
     step: (e, h) => e.lf_step(h),
-    // Life has no end. It also has no opponent, so `solo` is what makes the
-    // board clickable at all.
     done: () => false,
-    solo: true,
-    status: (e, h) => `${e.lf_alive(h)} alive`
-      + (lfStamp ? ` · stamping a ${LF_KIND[lfStamp - 1]}` : ' · click a cell to turn it on'),
+    status: (e, h) => `${e.lf_alive(h)} alive`,
     view: (e, h) => grid(20, seq(400).map(i =>
       cell('', e.lf_cell(h, Math.floor(i / 20), i % 20) ? 'life on' : 'life off'))),
-    // A click is one cell, or the top-left corner of a pattern when one is
-    // held. The engine's own three stamps are what the seeded grid is built
-    // from, so a player gets the same vocabulary it has.
-    move: (e, h, i) => {
-      if (i < 0 || i >= 400) return null;
-      const r = Math.floor(i / 20), c = i % 20;
-      if (lfStamp) return { handle: e.lf_place(h, lfStamp - 1, r, c) };
-      return { handle: e.lf_toggle(h, r, c) };
-    },
-    actions: [
-      { label: 'Clear', run: (e) => ({ handle: e.lf_blank() }), enabled: () => true },
-      ...LF_KIND.map((name, k) => ({
-        label: `Stamp ${name}`,
-        // A stamp is a mode, not a move: it changes what the NEXT click
-        // does. It answers the same handle so the board is redrawn and the
-        // status line can say what is in hand.
-        run: (e, h) => { lfStamp = lfStamp === k + 1 ? 0 : k + 1; return { handle: h }; },
-        enabled: () => true,
-      })),
-      { label: 'Draw cells', run: (e, h) => { lfStamp = 0; return { handle: h }; },
-        enabled: () => lfStamp !== 0 },
-    ],
-    actionsInStage: true,
     steps: 300,
   },
   {
@@ -779,253 +578,60 @@ export const GAMES = [
   },
   {
     id: 'sudoku', name: 'Sudoku', cat: 'Puzzle', icon: '\u{1F9E9}',
-    desc: 'A real puzzle: the grid is solved and then holes are punched in it, so every blank has a digit that belongs there. Pick a digit, then a square.',
-    // The option is ATTEMPTS at punching a hole, not holes. `sudoku-remove-cells`
-    // picks a random index each pass and spends the pass whether or not that
-    // cell still held a digit, so asking for 45 gives about 34 blanks and the
-    // exact number moves with the seed. Labelling it "45 blanks" would state a
-    // number the player can count and find wrong, so it is named for the
-    // difficulty it produces and the status line reports the blanks it really
-    // dealt.
-    options: [{
-      name: 'holes', label: 'Puzzle',
-      values: [36, 50, 64], labels: ['gentle', 'middling', 'hard'], def: 50,
-    }],
-    // `sd_new` fills only the three diagonal boxes, so it is a start and not
-    // a puzzle. Solving it and THEN punching holes is what makes a grid
-    // whose blanks are all fillable: the solver's answer is a real solution
-    // by construction, and removing cells cannot invalidate it.
-    boot: (e, s, o) => {
-      const solved = e.sd_solve(e.sd_new(s));
-      const puzzle = e.sd_remove(solved, s, (o && o.holes) || 50);
-      sdGiven = new Set(seq(81).filter(i => e.sd_cell(puzzle, i) !== 0));
-      sdDigit = 1;
-      return puzzle;
-    },
-    // Watch mode still solves it in one step, which is the backtracking
-    // solver doing what it always did.
-    step: (e, h) => (e.sd_blanks(h) === 0 ? null : e.sd_solve(h)),
-    done: (e, h) => e.sd_blanks(h) === 0,
-    won: (e, h) => e.sd_blanks(h) === 0,
-    status: (e, h) => {
-      const left = e.sd_blanks(h);
-      if (left === 0) return `Solved · ${e.sd_givens(h)} of 81 were given`;
-      return `${left} blank${left === 1 ? '' : 's'} left · ${sdGiven.size} given`
-        + ` · placing ${sdDigit}`;
-    },
-    view: (e, h) => {
-      const cells = seq(81).map(i => {
-        const v = e.sd_cell(h, i), r = Math.floor(i / 9), c = i % 9;
-        const box = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 ? ' shade' : '';
-        const given = sdGiven.has(i);
-        // A blank where the chosen digit would not go is shown as closed, so
-        // the board answers "where can this go" before you click.
-        const fits = !v && e.sd_fits(h, i, sdDigit) === 1;
-        return cell(v || '', 'sud' + box + (given ? ' given' : v ? ' mine' : '')
-          + (fits ? ' hint' : ''));
-      });
-      return {
-        kind: 'sudoku',
-        digit: sdDigit,
-        digits: seq(9).map(d => ({ n: d + 1, i: SD_DIGIT + d + 1, on: sdDigit === d + 1 })),
-        cells,
-      };
-    },
-    solo: true,
-    // Two kinds of click: a digit to hold, or a square to write it into.
-    // Clicking a square that already holds YOUR digit clears it, which is
-    // the only way back out of a mistake.
-    move: (e, h, i) => {
-      if (i >= SD_DIGIT) { sdDigit = i - SD_DIGIT; return { sel: null }; }
-      if (i < 0 || i >= 81 || sdGiven.has(i)) return null;
-      if (e.sd_cell(h, i) !== 0) return { handle: e.sd_place(h, i, 0) };
-      if (e.sd_fits(h, i, sdDigit) !== 1) return null;
-      return { handle: e.sd_place(h, i, sdDigit) };
-    },
+    desc: 'A generated grid and a backtracking solver. One step solves it.',
+    boot: (e, s) => e.sd_new(s),
+    step: (e, h) => e.sd_first_empty ? e.sd_solve(h) : e.sd_solve(h),
+    done: (e, h) => e.sd_empty(h) < 0,
+    status: (e, h) => `${e.sd_givens(h)} givens · ${e.sd_iters(h)} iterations`
+      + (e.sd_empty(h) < 0 ? ' · solved' : ' · unsolved'),
+    view: (e, h) => grid(9, seq(81).map(i => {
+      const v = e.sd_cell(h, i), r = Math.floor(i / 9), c = i % 9;
+      const box = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 ? ' shade' : '';
+      return cell(v || '', 'sud' + box);
+    })),
     steps: 2,
   },
   {
     id: 'mastermind', name: 'Mastermind', cat: 'Puzzle', icon: '\u{1F510}',
-    desc: 'Four pegs from six colours, ten guesses. Black means right colour in the right place, white means right colour in the wrong one, and which is which is never said.',
-    boot: (e, s) => { mmPegs = [0, 0, 0, 0]; mmAt = 0; mmLog = []; return e.mm_new(s); },
+    desc: 'Four pegs. The solver keeps only codes consistent with every score so far.',
+    boot: (e, s) => e.mm_new(s),
     step: (e, h) => e.mm_step(h),
     done: (e, h) => e.mm_done(h) === 1,
-    won: (e, h) => e.mm_solved(h) === 1,
-    status: (e, h) => {
-      if (e.mm_solved(h) === 1) {
-        return `Cracked in ${e.mm_guesses(h)}: ${pegs(e, e.mm_secret(h))}`;
-      }
-      if (e.mm_guesses(h) >= 10) return `Ten guesses gone. It was ${pegs(e, e.mm_secret(h))}`;
-      return `${10 - e.mm_guesses(h)} guesses left · ${e.mm_pool(h)} codes still fit`;
-    },
-    // The board is the HISTORY, because Mastermind is played by reading
-    // your own past guesses against their scores. The module keeps only the
-    // last one, so the page keeps the list; it is the page's own record of
-    // clicks and nothing the engine needs to know.
+    status: (e, h) => `${e.mm_guesses(h)} guesses · ${e.mm_pool(h)} codes still possible`
+      + (e.mm_solved(h) === 1 ? ` · cracked ${pegs(e, e.mm_secret(h))}` : ''),
     view: (e, h) => rows([
-      ['Your guess', seq(4).map(i => cell('', 'peg c' + mmPegs[i]
-        + (mmAt === i ? ' picked' : ''), MM_SLOT + i))],
-      ['Colour', seq(6).map(k => cell('', 'peg c' + k, MM_COLOUR + k))],
-      ...mmLog.map((g, n) => [`Guess ${n + 1}`,
-        seq(4).map(i => cell('', 'peg c' + e.mm_digit(g.code, i)))
-          .concat([cell(`${g.black} black`, 'chip'), cell(`${g.white} white`, 'chip')])]),
-      e.mm_done(h) === 1 && ['Secret',
-        seq(4).map(i => cell('', 'peg c' + e.mm_digit(e.mm_secret(h), i)))],
+      ['Last guess', seq(4).map(i => cell(e.mm_digit(e.mm_guess(h), i), 'peg c' + e.mm_digit(e.mm_guess(h), i)))],
+      ['Score', [cell(e.mm_blacks(h) + ' black', 'chip'), cell(e.mm_whites(h) + ' white', 'chip')]],
+      e.mm_solved(h) === 1 && ['Secret', seq(4).map(i => cell(e.mm_digit(e.mm_secret(h), i), 'peg c' + e.mm_digit(e.mm_secret(h), i)))],
     ]),
-    solo: true,
-    // Pick a slot, pick a colour for it. Guessing is an action rather than a
-    // click, because the four pegs are set before anything is committed.
-    move: (e, h, i) => {
-      if (i >= MM_SLOT && i < MM_SLOT + 4) { mmAt = i - MM_SLOT; return { sel: null }; }
-      if (i >= MM_COLOUR && i < MM_COLOUR + 6) {
-        mmPegs[mmAt] = i - MM_COLOUR;
-        // Walking to the next peg makes four colour clicks a whole guess.
-        mmAt = (mmAt + 1) % 4;
-        return { sel: null };
-      }
-      return null;
-    },
-    actions: [
-      {
-        label: 'Guess',
-        run: (e, h) => {
-          const code = mmPegs[0] + mmPegs[1] * 6 + mmPegs[2] * 36 + mmPegs[3] * 216;
-          const next = e.mm_guessat(h, code);
-          // The score belongs to the guess that earned it, so it is read
-          // from the state AFTER the guess lands, not before.
-          mmLog = mmLog.concat([{
-            code, black: e.mm_blacks(next), white: e.mm_whites(next),
-          }]);
-          return { handle: next };
-        },
-        enabled: (e, h) => e.mm_canguess(h) === 1,
-      },
-    ],
-    actionsInStage: true,
-    steps: 12,
   },
   {
     id: 'mahjong', name: 'Mahjong Solitaire', cat: 'Other', icon: '\u{1F004}',
-    desc: 'Match free tiles two at a time. A tile is free when nothing sits on it and one side is clear, which is the whole difficulty: the pair you want is usually buried.',
+    desc: 'Shanghai layout. Match free tiles until nothing free matches.',
     boot: (e, s) => e.mj_new(s),
     step: (e, h) => e.mj_step(h),
     done: (e, h) => e.mj_done(h) === 1,
-    won: (e, h) => e.mj_remaining(h) === 0,
     status: (e, h) => `${e.mj_matched(h)} pairs matched · ${e.mj_remaining(h)} tiles left`
-      + (e.mj_remaining(h) === 0 ? ' · the board is clear'
-        : e.mj_stuck(h) === 1 ? ' · stuck, nothing free matches' : ''),
-    view: (e, h, s, sel, roll, seed, hint) => {
-      const hm = hint === undefined ? null : hint;
-      const picked = sel === null || sel === undefined ? null : sel;
-      return grid(18, seq(144).map(i => {
-        const t = e.mj_tile(h, i);
-        // A REMOVED TILE READS 0, NOT -1. `mj-wasm-tile` answers -1 only for
-        // an index off the board, and `tile-present` is `> 0`, so the test
-        // was never true and every gone tile rendered the text "-1" through
-        // `mj_type`'s own out-of-range answer.
-        if (t <= 0) return cell('', 'tile gone');
-        const free = e.mj_free(h, i) === 1;
-        return cell(MJ_FACE(e.mj_type(t)),
-          'tile' + (free ? ' free' : '')
-          + (picked === i ? ' picked' : '')
-          + (picked !== null && picked !== i && e.mj_cantake(h, picked, i) === 1 ? ' hint' : '')
-          + (hm && (hm.a === i || hm.b === i) ? ' hint' : ''));
-      }));
-    },
-    solo: true,
-    // Two clicks: a free tile, then its match. Picking a tile that is not
-    // free is refused rather than held, because holding it would let a
-    // player build a selection that can never be spent.
-    move: (e, h, i, st) => {
-      if (e.mj_tile(h, i) <= 0) return null;
-      const sel = st.sel;
-      if (sel === null || sel === undefined) {
-        return e.mj_free(h, i) === 1 ? { sel: i } : null;
-      }
-      if (i === sel) return { sel: null };
-      if (e.mj_cantake(h, sel, i) === 1) return { handle: e.mj_take(h, sel, i) };
-      return e.mj_free(h, i) === 1 ? { sel: i } : { sel: null };
-    },
-    hint: (e, h) => {
-      const c = e.mj_pair(h);
-      if (c < 0) return null;
-      return { a: e.mj_paira(c), b: e.mj_pairb(c) };
-    },
+      + (e.mj_stuck(h) === 1 ? ' · stuck' : ''),
+    view: (e, h) => grid(18, seq(144).map(i => {
+      const t = e.mj_tile(h, i);
+      return t < 0 ? cell('', 'tile gone')
+        : cell(e.mj_type(t), 'tile' + (e.mj_free(h, i) === 1 ? ' free' : ''));
+    })),
   },
   {
     id: 'setgame', name: 'The Set Game', cat: 'Other', icon: '\u{1F0DF}',
-    desc: 'Eighty-one cards, four attributes. A set is three cards where every attribute is all-same or all-different. Find one before the machine does.',
-    boot: (e, s) => { sgPick = []; return e.sg_new(s); },
-    // The engine COUNTED the sets on the table and could not say where one
-    // was, so this descriptor had `step: null` and never played at all.
-    step: (e, h) => (e.sg_find(h) < 0 && e.sg_candeal(h) === 0 ? null : e.sg_step(h)),
+    desc: 'Eighty-one cards, four attributes. A set is three cards where every attribute is all-same or all-different.',
+    boot: (e, s) => e.sg_new(s),
+    step: null,
     runs: (e, s) => `${e.sg_run(s)} sets found working through the deck`,
-    // The game is over when no set is on the table AND there is nothing left
-    // to deal, which is the real end of Set rather than a fixed card count.
-    done: (e, h) => e.sg_find(h) < 0 && e.sg_candeal(h) === 0,
-    won: (e, h) => e.sg_find(h) < 0 && e.sg_deckn(h) === 0,
-    status: (e, h) => {
-      const sets = e.sg_sets(h);
-      return `${e.sg_found(h)} sets taken · ${e.sg_tabn(h)} on the table`
-        + ` · ${e.sg_deckn(h)} in the deck`
-        + (sets ? ` · ${sets} set${sets === 1 ? '' : 's'} here`
-          : e.sg_candeal(h) === 1 ? ' · no set here, deal three more'
-            : ' · no set, and the deck is out');
-    },
-    view: (e, h, s, sel, roll, seed, hint) => {
-      const hm = hint === undefined ? null : hint;
-      const picked = sgPick;
-      return rows([['Tableau', seq(e.sg_tabn(h)).map(i => {
-        const c = e.sg_tab(h, i);
-        return cell(`${e.sg_number(c) + 1}${['●', '▲', '■'][e.sg_shape(c)]}`,
-          'setcard s' + e.sg_color(c) + ' f' + e.sg_shading(c)
-          + (picked.includes(i) ? ' picked' : '')
-          + (hm && hm.includes(i) ? ' hint' : ''), i);
-      })]]);
-    },
-    solo: true,
-    // A set is THREE cards, so the selection is a LIST, and the driver's
-    // `sel` cannot hold it: the page's two-click machinery treats `sel` as
-    // one square and re-clicks it as an index to put a piece back down, so
-    // an array there is passed straight back in as a click and the picks
-    // corrupt. Three-card selection lives here instead, like Yahtzee's held
-    // dice, and `sel` stays null.
-    //
-    // Clicking a picked card takes it back out, and the third click either
-    // makes the set or is refused, which is the only way to learn the rule.
-    move: (e, h, i) => {
-      const n = e.sg_tabn(h);
-      if (i < 0 || i >= n) return null;
-      if (sgPick.includes(i)) { sgPick = sgPick.filter(x => x !== i); return { sel: null }; }
-      if (sgPick.length < 2) { sgPick = sgPick.concat([i]); return { sel: null }; }
-      const a = sgPick[0], b = sgPick[1];
-      if (e.sg_cantake(h, a, b, i) === 1) {
-        sgPick = [];
-        return { handle: e.sg_take(h, a, b, i) };
-      }
-      // Three cards that are not a set: keep the newest and drop the older
-      // pair, so a wrong guess costs one click rather than three.
-      sgPick = [i];
-      return { sel: null };
-    },
-    hint: (e, h) => {
-      const m = e.sg_find(h);
-      if (m < 0) return null;
-      return [e.sg_fi(m), e.sg_fj(m), e.sg_fk(m)];
-    },
-    // Three cards make a move here, which the page's one-square selection
-    // cannot express and a two-click harness cannot drive.
-    picks: 3,
-    actions: [
-      {
-        label: 'Deal three more',
-        run: (e, h) => ({ handle: e.sg_deal(h) }),
-        // Only when the table really is stuck. Offered while a set is
-        // sitting there, this would let a player deal past the game.
-        enabled: (e, h) => e.sg_candeal(h) === 1,
-      },
-    ],
-    steps: 60,
+    done: () => true,
+    status: (e, h) => `${e.sg_tabn(h)} on the table · ${e.sg_deckn(h)} in the deck · ${e.sg_sets(h)} sets present`,
+    view: (e, h) => rows([['Tableau', seq(e.sg_tabn(h)).map(i => {
+      const c = e.sg_tab(h, i);
+      return cell(`${e.sg_number(c) + 1}${['●', '▲', '■'][e.sg_shape(c)]}`,
+        'setcard s' + e.sg_color(c) + ' f' + e.sg_shading(c));
+    })]]),
   },
 
   {
@@ -1075,16 +681,9 @@ export const GAMES = [
   },
   {
     id: 'war', name: 'War', cat: 'Card', icon: '\u{1F4A5}',
-    desc: 'No choices at all: the cards decide everything. What you do is turn them, and the only question is how long the deck takes to fall one way.',
+    desc: 'No choices at all, which is what makes it a good test: the deal and the bookkeeping are the only things to get wrong.',
     boot: (e, s) => e.wr_new(s),
     step: (e, h) => e.wr_round(h),
-    // War has NO decisions in it, so there is nothing to make legal or
-    // illegal and no wrapper to write: turning the card IS the whole of a
-    // player's part, and the engine's own round already does it. Being
-    // able to turn it yourself rather than watch it turn is the entire
-    // difference between this game being playable and not.
-    solo: true,
-    move: (e, h, i) => (i === WR_DECK ? { handle: e.wr_round(h) } : null),
     done: (e, h) => e.wr_p1n(h) === 0 || e.wr_p2n(h) === 0,
     status: (e, h) => `${e.wr_p1n(h)} cards against ${e.wr_p2n(h)}`
       + (e.wr_p1n(h) === 0 ? ' · player 2 takes the deck'
@@ -1099,9 +698,7 @@ export const GAMES = [
       const r1 = c1 < 0 ? -1 : e.wr_rank(c1), r2 = c2 < 0 ? -1 : e.wr_rank(c2);
       return {
         kind: 'war',
-        // Your own deck is the click target, which is the physical act:
-        // you turn your card and the other side turns with you.
-        left: { name: 'You', n: e.wr_p1n(h), card: c1, wins: r1 > r2, i: WR_DECK },
+        left: { name: 'You', n: e.wr_p1n(h), card: c1, wins: r1 > r2 },
         right: { name: 'Player 2', n: e.wr_p2n(h), card: c2, wins: r2 > r1 },
         war: c1 >= 0 && c2 >= 0 && r1 === r2,
       };
@@ -1112,579 +709,114 @@ export const GAMES = [
   {
     id: 'poker', name: 'Poker', cat: 'Card', icon: '\u{1F0A1}',
     desc: 'Five-card draw, nine hand ranks, and a wheel that counts as a straight.',
-    boot: (e, s) => e.pkt_new(s),
-    step: (e, h) => e.pkt_step(h),
-    done: (e, h) => e.pkt_done(h) === 1,
-    human: 0,
-    turn: (e, h) => e.pkt_cur(h),
-    // Poker.codex: 0 is you, 1 is the opponent, -1 a split pot.
-    status: (e, h) => {
-      const chips = `you ${e.pkt_chips(h, 0)} · them ${e.pkt_chips(h, 1)}`;
-      if (e.pkt_done(h) === 1) {
-        const w = e.pkt_winner(h);
-        const how = e.pkt_folded(h) === 1 ? 'they folded'
-          : e.pkt_folded(h) === 0 ? 'you folded'
-            : `${HANDS[e.pkt_rank(h, 0)]} against ${HANDS[e.pkt_rank(h, 1)]}`;
-        return `${w === 0 ? 'the pot is yours' : w === 1 ? 'the pot is theirs' : 'split'}`
-          + ` · ${how} · ${chips}`;
-      }
-      const owed = e.pkt_tocall(h, 0);
-      const said = named(e.pkt_last(h),
-        { 0: 'they folded', 1: 'they checked', 2: 'they called', 3: 'they raised', 4: 'they drew' }, '');
-      return `${STAGE[e.pkt_stage(h)]} · pot ${e.pkt_pot(h)} · ${chips}`
-        + (owed > 0 ? ` · ${owed} to you to stay in` : '')
-        + (said ? ` · ${said}` : '')
-        + ` · ${e.pkt_cur(h) === 0 ? 'your move' : 'they are thinking'}`;
-    },
-    // Their five are face down until the hand is over. A page that could
-    // read them all along would be a page you could not lose at, and the
-    // module refuses rather than the page choosing not to look.
-    view: (e, h) => {
-      const drawing = e.pkt_candraw(h) === 1;
+    boot: (e, s) => e.pk_play(s, 10),
+    step: null,
+    done: () => true,
+    // Poker.codex: winner 1 is P1, 2 is P2, anything else a tie.
+    status: (e, h) => `P1 ${e.pk_p1(h)} · P2 ${e.pk_p2(h)} over ${e.pk_played(h)} hands · `
+      + named(e.pk_winner(h), { 1: 'player 1 ahead', 2: 'player 2 ahead' }, 'a tied session'),
+    // The session result carries no cards, but the module will deal and
+    // rank a hand on demand, so the page shows a real deal from the same
+    // seed and the engine's own verdict on it. It is a hand from this
+    // deck, not a replay of a hand the session played, and it says so.
+    view: (e, h, s, sel, roll, seed) => {
+      const deck = e.pk_deck(seed || 1);
+      const five = i => seq(5).map(k => e.pk_card(deck, i * 5 + k));
+      const line = i => {
+        const c = five(i);
+        return [...c.map(x => cardCell(x)),
+        cell(HANDS[e.pk_rank(e.pk_hand(...c))] || '?', 'chip gold')];
+      };
       return rows([
-        ['The pot', [cell(e.pkt_pot(h), 'chip big gold'),
-          ...(e.pkt_bet(h, 0) ? [cell(`you in ${e.pkt_bet(h, 0)}`, 'chip')] : []),
-          ...(e.pkt_bet(h, 1) ? [cell(`them in ${e.pkt_bet(h, 1)}`, 'chip')] : [])]],
-        ['Your hand' + (drawing ? ' (click what you want rid of)' : ''),
-          seq(5).map(i => ({
-            ...cardCell(e.pkt_card(h, 0, i),
-              e.pkt_marked(h, i) === 1 ? 'picked'
-                : e.pkt_canmark(h, i) === 1 ? 'movable' : ''),
-            i,
-          }))],
-        ['Them', seq(5).map(i => cardCell(e.pkt_card(h, 1, i)))],
-        ['Yours reads', [cell(HANDS[e.pkt_rank(h, 0)] || '?', 'chip gold')]],
+        ['Dealt from this seed', line(0)],
+        ['And against it', line(1)],
+        ['Session', [cell(e.pk_p1(h) + ' - ' + e.pk_p2(h), 'chip big')]],
       ]);
     },
-    // A click marks a card for the draw and never unmarks one: the button
-    // clears them. Anywhere but the draw a click is refused, because
-    // betting is what the buttons are for.
-    move: (e, h, i) => {
-      if (e.pkt_canmark(h, i) !== 1) return null;
-      return { handle: e.pkt_mark(h, i) };
-    },
-    actions: [
-      {
-        label: 'Check or call',
-        run: (e, h) => ({ handle: e.pkt_call(h) }),
-        enabled: (e, h) => e.pkt_cancall(h) === 1,
-      },
-      {
-        label: 'Raise',
-        run: (e, h) => ({ handle: e.pkt_raise(h) }),
-        enabled: (e, h) => e.pkt_canraise(h) === 1,
-      },
-      {
-        label: 'Fold',
-        run: (e, h) => ({ handle: e.pkt_fold(h) }),
-        enabled: (e, h) => e.pkt_canfold(h) === 1,
-      },
-      {
-        label: 'Draw',
-        run: (e, h) => ({ handle: e.pkt_draw(h) }),
-        enabled: (e, h) => e.pkt_candraw(h) === 1,
-      },
-      {
-        label: 'Start the marks again',
-        run: (e, h) => ({ handle: e.pkt_clear(h) }),
-        enabled: (e, h) => e.pkt_candraw(h) === 1 && e.pkt_marks(h) > 0,
-      },
-    ],
-    actionsInStage: true,
   },
   {
     id: 'pokervariants', name: 'Poker Variants', cat: 'Card', icon: '\u{1F0AA}',
     desc: 'Stud, Baseball, Hi/Low Chicago and more, each with its own wild cards.',
-    // All eight variants are one table: what changes between them is how
-    // many cards are dealt and how the two hands are ranked. The seed
-    // picks which variant you sit down to.
-    boot: (e, s) => e.pvt_new(s % 8, s),
-    step: (e, h) => e.pvt_step(h),
-    done: (e, h) => e.pvt_done(h) === 1,
-    human: 0,
-    turn: (e, h) => e.pvt_cur(h),
-    status: (e, h) => {
-      const v = PV_NAMES[e.pvt_variant(h)] || 'poker';
-      const chips = `you ${e.pvt_chips(h, 0)} · them ${e.pvt_chips(h, 1)}`;
-      if (e.pvt_done(h) === 1) {
-        const w = e.pvt_winner(h);
-        const how = e.pvt_folded(h) === 1 ? 'they folded'
-          : e.pvt_folded(h) === 0 ? 'you folded'
-            : `${HANDS[e.pvt_rank(h, 0)]} against ${HANDS[e.pvt_rank(h, 1)]}`;
-        const spade = e.pvt_spade(h);
-        return `${v} · ${w === 0 ? 'the pot is yours' : w === 1 ? 'the pot is theirs' : 'split'}`
-          + ` · ${how}${spade ? ` · the spade in the hole went to P${spade}` : ''} · ${chips}`;
-      }
-      const owed = e.pvt_tocall(h, 0);
-      const said = named(e.pvt_last(h),
-        { 0: 'they folded', 1: 'they checked', 2: 'they called', 3: 'they raised', 4: 'they drew' }, '');
-      const shut = e.pvt_cur(h) === 0 && owed === 0 && e.pvt_canopen(h) === 0;
-      return `${v} · pot ${e.pvt_pot(h)} · ${chips}`
-        + (owed > 0 ? ` · ${owed} to you to stay in` : '')
-        + (shut ? ' · you cannot open without jacks or better' : '')
-        + (said ? ` · ${said}` : '')
-        + ` · ${e.pvt_cur(h) === 0 ? 'your move' : 'they are thinking'}`;
-    },
-    // A hand is five cards or seven, so the row is built from what the
-    // table says it dealt rather than from a five nobody checked.
-    view: (e, h) => {
-      const n = e.pvt_size(h);
-      const drawing = e.pvt_candraw(h) === 1;
-      const wildOf = c => e.pvt_wildat(h, c) === 1 ? ' gold' : '';
+    // pv_run is (variant, seed, players), not (seed, variant, players).
+    boot: (e, s) => e.pv_run(s % 7, s, 4),
+    step: null,
+    done: () => true,
+    status: (e, h) => `${e.pv_players(h)} players · ${e.pv_played(h)} hands · `
+      + `P1 ${e.pv_p1(h)} P2 ${e.pv_p2(h)} · winner P${e.pv_winner(h)}`
+      + (e.pv_special(h) ? ' · wild cards in play' : ''),
+    // pv_best5c takes seven cards and answers the best five. The seven are
+    // the page's, spread across the deck from the seed; the five are the
+    // engine's choice and so is the ranking beside them.
+    view: (e, h, s, sel, roll, seed) => {
+      const seven = seq(7).map(k => ((seed || 1) * 7 + k * 11) % 52);
+      const best = e.pv_best5c(...seven);
+      const rank = e.pv_rank(e.pv_best5(...seven));
       return rows([
-        ['The pot', [cell(e.pvt_pot(h), 'chip big gold'),
-          ...(e.pvt_bet(h, 0) ? [cell(`you in ${e.pvt_bet(h, 0)}`, 'chip')] : []),
-          ...(e.pvt_bet(h, 1) ? [cell(`them in ${e.pvt_bet(h, 1)}`, 'chip')] : [])]],
-        ['Your hand' + (drawing ? ' (click what you want rid of)' : ''),
-          seq(n).map(i => ({
-            ...cardCell(e.pvt_card(h, 0, i),
-              (e.pvt_marked(h, i) === 1 ? 'picked'
-                : e.pvt_canmark(h, i) === 1 ? 'movable' : '')
-              + wildOf(e.pvt_card(h, 0, i))),
-            i,
-          }))],
-        ['Them', seq(n).map(i => cardCell(e.pvt_shown(h, 1, i)))],
-        ['Yours reads', [cell(HANDS[e.pvt_rank(h, 0)] || '?', 'chip gold')]],
+        ['Seven dealt', seven.map(c => cardCell(c))],
+        ['The engine keeps', [...seq(5).map(k => cardCell(e.pv_cardat(best, k))),
+        cell(HANDS[rank] || '?', 'chip gold')]],
+        ['Session', [cell('P' + e.pv_winner(h), 'chip big')]],
       ]);
     },
-    // A click marks a card for the draw and never unmarks one: the button
-    // clears them. Seven-card variants have no draw, so every click there
-    // is refused and the buttons are the whole of the game.
-    move: (e, h, i) => {
-      if (e.pvt_canmark(h, i) !== 1) return null;
-      return { handle: e.pvt_mark(h, i) };
-    },
-    actions: [
-      {
-        label: 'Check or call',
-        run: (e, h) => ({ handle: e.pvt_call(h) }),
-        enabled: (e, h) => e.pvt_cancall(h) === 1,
-      },
-      {
-        label: 'Raise',
-        run: (e, h) => ({ handle: e.pvt_raise(h) }),
-        enabled: (e, h) => e.pvt_canraise(h) === 1,
-      },
-      {
-        label: 'Fold',
-        run: (e, h) => ({ handle: e.pvt_fold(h) }),
-        enabled: (e, h) => e.pvt_canfold(h) === 1,
-      },
-      {
-        label: 'Draw',
-        run: (e, h) => ({ handle: e.pvt_draw(h) }),
-        enabled: (e, h) => e.pvt_candraw(h) === 1,
-      },
-      {
-        label: 'Start the marks again',
-        run: (e, h) => ({ handle: e.pvt_clear(h) }),
-        enabled: (e, h) => e.pvt_candraw(h) === 1,
-      },
-    ],
-    actionsInStage: true,
   },
   {
     id: 'pinochle', name: 'Pinochle', cat: 'Card', icon: '\u{1F0DB}',
     desc: 'Forty-eight cards, two of every one of them, which is exactly the trap in scoring the melds.',
     boot: (e, s) => e.pn_new(s),
-    step: (e, h) => e.pn_step(h),
-    done: (e, h) => e.pn_done(h) === 1,
-    // You sit at seat 0 and you lead the first trick, so the game opens on
-    // your move without anything having to be played for you first.
-    human: 0,
-    turn: (e, h) => e.pn_cur(h),
+    step: null,
+    done: () => true,
     // Pinochle.codex: 0 is Team0, 1 is Team1, anything else a tie.
     runs: (e, s) => named(e.pn_winner(e.pn_run(s)),
       { 0: 'team zero takes it', 1: 'team one takes it' }, 'tied'),
-    status: (e, h) => {
-      const you = e.pn_pts(h, 0), them = e.pn_pts(h, 1);
-      if (e.pn_done(h) === 1) {
-        // The melds are gone with the cards by now, so the finished line
-        // reports the tricks alone and says so.
-        return `trick points ${you} to ${them} · `
-          + (you > them ? 'you and your partner take them'
-            : you < them ? 'the other pair take them' : 'level');
-      }
-      return `trump ${PIN_SUIT[e.pn_trump(h)]} · your meld ${e.pn_meld(h, 0)}`
-        + ` · trick points ${you} to ${them}`
-        + ` · ${e.pn_tricks(h)} of 12 played`
-        + ` · ${e.pn_cur(h) === 0 ? 'your lead or your card'
-          : `${PLAYERS[e.pn_cur(h)]} to play`}`;
-    },
-    // Your partner sits opposite at seat 2. Their cards are theirs, so the
-    // count is all that shows, the same way the opponents' do.
-    view: (e, h) => rows([
-      ['On the table', seq(4).map(p =>
-        pinCell(e.pn_trick(h, p), e.pn_leader(h) === p ? 'picked' : ''))],
-      ['Your hand' + (e.pn_cur(h) === 0 ? ' (to play)' : ''),
-        seq(e.pn_count(h, 0)).map(i => ({
-          ...pinCell(e.pn_card(h, 0, i), e.pn_legal(h, i) === 1 ? 'movable' : ''),
-          i,
-        }))],
-      ...[1, 2, 3].map(p => [
-        `${p === 2 ? 'Partner' : PLAYERS[p]}${p === e.pn_cur(h) ? ' to play' : ''}`,
-        [cell(`${e.pn_count(h, p)} cards`, 'chip')],
-      ]),
-    ]),
-    // A click is an index into YOUR hand and not a card id, because a
-    // pinochle deck holds two of every card and an id names both of them.
-    move: (e, h, i) => {
-      if (i < 0 || i >= e.pn_count(h, 0)) return null;
-      if (e.pn_legal(h, i) !== 1) return null;
-      return { handle: e.pn_play(h, i) };
-    },
+    status: (e, h) => `trump ${SUIT[e.pn_trump(h)]} · melds `
+      + seq(4).map(p => e.pn_meld(h, p)).join(' / '),
+    view: (e, h) => rows(seq(4).map(p =>
+      [`Hand ${p + 1}`, hand(12, i => e.pn_card(h, p, i))])),
   },
   {
     id: 'bridge', name: 'Bridge', cat: 'Card', icon: '♠',
     desc: 'Four hands, high-card-point bidding, and a contract scored at the end.',
     boot: (e, s) => e.br_new(s),
-    step: (e, h) => e.br_step(h),
-    done: (e, h) => e.br_done(h) === 1,
-    // You are South. The opening lead belongs to the declarer's left, which
-    // is South only when East-West bought the contract, so `br_new` plays
-    // the seats ahead of you before it answers and the game still opens on
-    // your move.
-    human: 1,
-    turn: (e, h) => e.br_cur(h),
-    status: (e, h) => {
-      const decl = e.br_declarer(h) === 0 ? 'North-South' : 'East-West';
-      const need = e.br_contract(h) + 6;
-      const got = e.br_made(h);
-      const head = `${e.br_contract(h)}${SUIT[e.br_trump(h)] || 'NT'} by ${decl}`
-        + ` · needs ${need}`;
-      if (e.br_done(h) === 1) {
-        return `${head} · made ${got} · ${got >= need ? 'contract home' : `down ${need - got}`}`
-          + ` · ${e.br_score(h)}`;
-      }
-      return `${head} · NS ${e.br_nstricks(h)} EW ${e.br_ewtricks(h)}`
-        + ` · ${e.br_tricks(h)} of 13 played`
-        + ` · ${e.br_cur(h) === 1 ? 'yours to play' : `${BR_SEAT[e.br_cur(h)]} to play`}`;
-    },
-    // Every hand but yours is a count. North is your partner and the engine
-    // plays it: there is no dummy here, which is the one thing a bridge
-    // player will notice missing.
-    view: (e, h) => rows([
-      ['On the table', seq(4).map(p =>
-        cardCell(e.br_trick(h, p), e.br_leader(h) === p ? 'picked' : ''))],
-      ['South, you' + (e.br_cur(h) === 1 ? ' (to play)' : '')
-        + ` (${e.br_hcp(h, 1)} hcp)`,
-        seq(e.br_count(h, 1)).map(i => ({
-          ...cardCell(e.br_card(h, 1, i), e.br_legal(h, i) === 1 ? 'movable' : ''),
-          i,
-        }))],
-      ...[0, 2, 3].map(p => [
-        `${BR_SEAT[p]}${p === 0 ? ', your partner' : ''}`
-        + `${p === e.br_cur(h) ? ' to play' : ''}`,
-        [cell(`${e.br_count(h, p)} cards`, 'chip')],
-      ]),
-    ]),
-    move: (e, h, i) => {
-      if (i < 0 || i >= e.br_count(h, 1)) return null;
-      if (e.br_legal(h, i) !== 1) return null;
-      return { handle: e.br_play(h, i) };
-    },
+    step: null,
+    done: () => true,
+    status: (e, h) => `contract ${e.br_contract(h)}${SUIT[e.br_trump(h)] || 'NT'} by ${PLAYERS[e.br_declarer(h)]}`
+      + ` · ${e.br_nstricks(h)} tricks · ${e.br_made(h) === 1 ? 'made' : 'down'} · ${e.br_score(h)}`,
+    view: (e, h) => rows(seq(4).map(p =>
+      [`${PLAYERS[p]} (${e.br_hcp(h, p)} hcp)`, hand(e.br_count(h, p), i => e.br_card(h, p, i))])),
   },
   {
     id: 'crazyeights', name: 'Crazy Eights', cat: 'Card', icon: '\u{1F0A8}',
-    desc: 'Match the suit or the rank. Eights are wild and YOU name the suit, which is the whole reason to hold one back.',
-    boot: (e, s) => { ceEight = -1; return e.ce_new(s, 3); },
+    desc: 'Match suit or rank. Eights are wild and name the suit.',
+    boot: (e, s) => e.ce_new(s, 3),
     step: (e, h) => e.ce_step(h),
     done: (e, h) => e.ce_done(h) === 1,
-    human: 0,
-    turn: (e, h) => e.ce_cur(h),
-    status: (e, h) => {
-      if (e.ce_done(h) === 1) {
-        const w = e.ce_winner(h);
-        return `${w === 0 ? 'You go out' : `${named(w, PLAYERS, 'nobody')} goes out`}`
-          + ` · you were left with ${e.ce_size(h, 0)}`;
-      }
-      const pen = e.ce_penalty(h);
-      return `pile ${card(e.ce_pile(h))}`
-        + (e.ce_declared(h) >= 0 ? ` (called ${SUIT[e.ce_declared(h)]})` : '')
-        + ` · ${e.ce_cur(h) === 0 ? 'your turn' : `${named(e.ce_cur(h), PLAYERS, '?')} to play`}`
-        + (pen > 0 ? ` · ${pen} to draw before you can play` : '')
-        + (ceEight >= 0 ? ` · name a suit for the ${card(ceEight)}` : '');
-    },
+    status: (e, h) => `pile ${card(e.ce_pile(h))}`
+      + (e.ce_declared(h) >= 0 ? ` (called ${SUIT[e.ce_declared(h)]})` : '')
+      + ` · ${named(e.ce_cur(h), PLAYERS, '?')} to play`
+      + (e.ce_done(h) === 1
+        ? ` · ${named(e.ce_winner(h), PLAYERS, 'nobody')} goes out` : ''),
     // ce_has answers whether a player holds a given card, so the hand can
     // be read out of the module a card at a time rather than reduced to a
     // number. A count is not a hand.
-    view: (e, h) => {
-      const yours = seq(52).filter(c => e.ce_has(h, 0, c) === 1);
-      return rows([
-        ['Pile', [cardCell(e.ce_pile(h))]],
-        // Naming a suit is a second question, asked only while an eight is
-        // waiting to be laid, so the row is not there the rest of the time.
-        ceEight >= 0 && ['Name a suit', seq(4).map(s =>
-          cell(SUIT[s], 'chip big' + (s === 1 || s === 2 ? ' red' : ''), CE_SUIT + s))],
-        ['Your hand' + (e.ce_cur(h) === 0 ? ' (to play)' : ''),
-          yours.map(c => cardCell(c,
-            (e.ce_canplay(h, c) === 1 ? 'movable' : '') + (ceEight === c ? ' picked' : '')))
-            .map((cc, k) => ({ ...cc, i: CE_CARD + yours[k] }))],
-        ...seq(e.ce_players(h)).filter(p => p !== 0).map(p => [
-          `${PLAYERS[p]}${p === e.ce_cur(h) ? ' to play' : ''}`,
-          // Another player's hand is theirs. The count is public.
-          [cell(`${e.ce_size(h, p)} cards`, 'chip')],
-        ]),
-      ]);
-    },
-    // An eight is two clicks: the card, then the suit it calls. Everything
-    // else is one.
-    move: (e, h, i) => {
-      if (i >= CE_SUIT && i < CE_SUIT + 4) {
-        if (ceEight < 0) return null;
-        const c = ceEight;
-        ceEight = -1;
-        return { handle: e.ce_play(h, c, i - CE_SUIT) };
-      }
-      if (i < CE_CARD || i >= CE_CARD + 52) return null;
-      const c = i - CE_CARD;
-      if (e.ce_canplay(h, c) !== 1) return null;
-      // Rank 6 is the eight, in the engine's own `ce-rank` (card mod 13,
-      // where 0 is the two). Hold it back until a suit is named.
-      if (e.ce_rank(c) === 6) { ceEight = c; return { sel: null }; }
-      return { handle: e.ce_play(h, c, -1) };
-    },
-    actions: [
-      {
-        label: 'Draw a card',
-        run: (e, h) => ({ handle: e.ce_draw(h) }),
-        // Only when nothing in your hand will go. Offered otherwise it is a
-        // way of skipping a turn you were able to take.
-        enabled: (e, h) => e.ce_cur(h) === 0 && e.ce_stuck(h) === 1,
-      },
-      {
-        label: 'Take the penalty',
-        run: (e, h) => ({ handle: e.ce_takepen(h) }),
-        enabled: (e, h) => e.ce_cur(h) === 0 && e.ce_canpen(h) === 1,
-      },
-    ],
-    actionsInStage: true,
+    view: (e, h) => rows([
+      ['Pile', [cardCell(e.ce_pile(h))]],
+      ...seq(e.ce_players(h)).map(p => [
+        PLAYERS[p] + (p === e.ce_cur(h) ? ' to play' : ''),
+        held(52, c => e.ce_has(h, p, c) === 1),
+      ]),
+    ]),
   },
   {
     id: 'gofish', name: 'Go Fish', cat: 'Card', icon: '\u{1F41F}',
     desc: 'Ask for a rank you hold; complete four of a kind to book it.',
-    boot: (e, s) => { gfSaid = null; return e.gf_new(s, 3); },
+    boot: (e, s) => e.gf_new(s, 3),
     step: (e, h) => e.gf_step(h),
     done: (e, h) => e.gf_done(h) === 1,
-    // You are player 0. The engine passes the turn after every question,
-    // hit or miss, so a turn is exactly one ask.
-    human: 0,
-    turn: (e, h) => e.gf_cur(h),
-    status: (e, h) => {
-      if (e.gf_done(h) === 1) {
-        const books = seq(e.gf_players(h)).map(p => e.gf_books(h, p));
-        const best = Math.max(...books);
-        const who = books.indexOf(best);
-        return `${e.gf_total(h)} books made · ${PLAYERS[who]} takes it with ${best}`;
-      }
-      return `${PLAYERS[e.gf_cur(h)]} to ask · ${e.gf_pile(h)} left in the pond`
-        + ` · ${e.gf_total(h)} books made`
-        + (gfSaid ? ` · ${gfSaid}` : '');
-    },
-    view: (e, h, s, sel) => {
-      const me = 0;
-      // The ranks you actually hold, which are the only ones you may ask
-      // for. Asking for a rank you do not hold is the rule this game is
-      // most often played wrong, so the board simply does not offer it.
-      const mine = seq(13).filter(r => e.gf_rcount(h, me, r) > 0);
-      const asking = sel === null || sel === undefined ? null : sel;
-      return rows([
-        ['Ask for', mine.map(r => cell(`${RANK[r === 12 ? 12 : r]} x${e.gf_rcount(h, me, r)}`,
-          'chip big' + (asking === r ? ' picked' : ''), GF_RANK + r))],
-        asking === null ? null
-          : ['Ask whom', seq(e.gf_players(h)).filter(p => p !== me).map(p =>
-            cell(PLAYERS[p], 'chip big', GF_WHO + p))],
-        ...seq(e.gf_players(h)).map(p => [
-          `${PLAYERS[p]}${p === me ? ' (you)' : ''} · ${e.gf_books(h, p)} books`,
-          p === me ? held(52, c => e.gf_has(h, p, c) === 1)
-            // Another player's hand is not yours to see. The count is.
-            : [cell(`${e.gf_size(h, p)} cards`, 'chip')],
-        ]),
-      ]);
-    },
-    // Two clicks: the rank, then who to ask. A rank you do not hold is not
-    // offered, so the only refusal left is asking yourself.
-    move: (e, h, i, st) => {
-      if (i >= GF_RANK && i < GF_RANK + 13) {
-        return e.gf_canask(h, i - GF_RANK) === 1 ? { sel: i - GF_RANK } : null;
-      }
-      if (i >= GF_WHO && i < GF_WHO + 8) {
-        const rank = st.sel;
-        if (rank === null || rank === undefined) return null;
-        const who = i - GF_WHO;
-        if (who === 0) return null;
-        const before = e.gf_rcount(h, 0, rank);
-        const next = e.gf_ask(h, rank, who);
-        const after = e.gf_rcount(next, 0, rank);
-        gfSaid = after > before
-          ? `${PLAYERS[who]} handed over ${after - before} ${RANK[rank]}`
-          : `${PLAYERS[who]} said go fish`;
-        return { handle: next };
-      }
-      return null;
-    },
-  },
-  {
-    id: 'klondike', name: 'Klondike', cat: 'Card', icon: '\u{1F0A1}',
-    desc: 'The solitaire everybody means by solitaire. Seven columns, most of it face down, four foundations to build from the ace up. Turn one card and it usually goes out; turn three and it usually does not.',
-    // Turning one card or three is the whole difficulty setting, and it is
-    // baked into the deal rather than applied on top of it, because how many
-    // you turn decides which of the stock you can ever reach.
-    options: [{
-      name: 'draw', label: 'Turn',
-      values: [1, 3], labels: ['one', 'three'], def: 1,
-    }],
-    boot: (e, s, o) => e.kd_new(s, (o && o.draw) || 1),
-    // The engine answers a move code, or -2 for turn the stock, -3 for
-    // gather the waste back up, or -1 for nothing left worth doing.
-    step: (e, h) => {
-      const m = e.kd_ai(h);
-      if (m === -2) { kdDealt = true; return e.kd_draw(h); }
-      if (m === -3) return e.kd_recycle(h);
-      if (m < 0) return null;
-      return e.kd_move(h, e.kd_mfrom(m), e.kd_mstart(m), e.kd_mto(m));
-    },
-    done: (e, h) => e.kd_won(h) === 1,
-    won: (e, h) => e.kd_won(h) === 1,
-    status: (e, h) => {
-      if (e.kd_won(h) === 1) return `All fifty-two up in ${e.kd_moves(h)} moves`;
-      const hidden = seq(7).reduce((a, c) => a + e.kd_down(h, c), 0);
-      return `${e.kd_founded(h)} of 52 up · ${e.kd_moves(h)} moves`
-        + ` · ${e.kd_stockn(h)} in the stock`
-        + (hidden ? ` · ${hidden} still face down` : ' · nothing left face down');
-    },
-    view: (e, h, s, sel, roll, seed, hint) => {
-      const hm = hint === undefined ? null : hint;
-      const sl = sel && typeof sel === 'object' ? sel : null;
-      const fresh = kdDealt;
-      kdDealt = false;
-      // Where what you are carrying could land, asked of the engine for
-      // every destination rather than guessed, so the board shows you the
-      // legal moves for the card in your hand.
-      const takes = d => sl !== null && e.kd_can(h, sl.from, sl.start, d) === 1;
-      return {
-        kind: 'klondike',
-        stock: e.kd_stockn(h),
-        waste: e.kd_wasten(h),
-        wasteTop: e.kd_wastetop(h),
-        canRecycle: e.kd_canrecyc(h) === 1,
-        wastePicked: !!(sl && sl.from === 7),
-        founds: seq(4).map(f => ({
-          card: e.kd_foundcard(h, f),
-          takes: takes(7 + f),
-          picked: !!(sl && sl.from === 8 + f),
-        })),
-        won: e.kd_won(h) === 1,
-        cols: seq(7).map(c => {
-          const n = e.kd_coln(h, c);
-          const down = e.kd_down(h, c);
-          if (!n) {
-            return {
-              i: c, cards: [],
-              takes: takes(c),
-              hint: !!(hm && hm.to === c),
-            };
-          }
-          const runFrom = kdRunStart(e, h, c, n);
-          return {
-            i: c,
-            takes: takes(c),
-            hint: false,
-            cards: seq(n).map(i => {
-              const v = e.kd_card(h, c, i);
-              return {
-                card: v,
-                i: kdCardCode(c, i),
-                cls: (v < 0 ? 'facedown' : '')
-                  + (sl && sl.from === c && i >= sl.start ? ' picked' : '')
-                  + (v >= 0 && i >= runFrom ? ' movable' : '')
-                  + (takes(c) && i === n - 1 ? ' takes' : '')
-                  + (hm && hm.from === c && i >= hm.start ? ' hintfrom' : '')
-                  + (hm && hm.to === c && i === n - 1 ? ' hintto' : ''),
-              };
-            }),
-          };
-        }),
-        fresh,
-      };
-    },
-    solo: true,
-    // A Klondike move is a source, a start index inside it, and a
-    // destination, and the source may be a column, the waste or a
-    // foundation. Clicking the stock is not a selection at all: it turns a
-    // card, which is the one click in this game that is always available and
-    // always means the same thing.
-    move: (e, h, code, st) => {
-      const sl = st.sel && typeof st.sel === 'object' ? st.sel : null;
-      if (code === KD_STOCK) {
-        if (e.kd_candraw(h) === 1) { kdDealt = true; return { handle: e.kd_draw(h) }; }
-        if (e.kd_canrecyc(h) === 1) return { handle: e.kd_recycle(h) };
-        return null;
-      }
-      // What this click names as a place to put cards, and as a place to
-      // take them from.
-      const to = code >= KD_CARD ? Math.floor((code - KD_CARD) / 1000)
-        : code >= KD_FOUND ? 7 + (code - KD_FOUND)
-          : code === KD_WASTE ? -1 : code;
-      const lift = () => {
-        if (code === KD_WASTE) {
-          return e.kd_wasten(h) > 0 ? { sel: { from: 7, start: 0, exact: true } } : null;
-        }
-        if (code >= KD_FOUND && code < KD_FOUND + 4) {
-          const f = code - KD_FOUND;
-          return e.kd_found(h, f) >= 0 ? { sel: { from: 8 + f, start: 0, exact: true } } : null;
-        }
-        const c = code >= KD_CARD ? Math.floor((code - KD_CARD) / 1000) : code;
-        const idx = code >= KD_CARD ? (code - KD_CARD) % 1000 : -1;
-        const n = e.kd_coln(h, c);
-        if (!n) return null;
-        const from = kdRunStart(e, h, c, n);
-        const start = idx < 0 ? from : idx;
-        if (start < from || start >= n) return null;
-        if (e.kd_card(h, c, start) < 0) return null;
-        return { sel: { from: c, start, exact: idx >= 0 } };
-      };
-      if (!sl) return lift();
-      // Clicking inside the column you are already holding shortens what you
-      // carry, the same way Spider splits a run.
-      if (sl.from < 7 && to === sl.from) {
-        const idx = code >= KD_CARD ? (code - KD_CARD) % 1000 : -1;
-        const n = e.kd_coln(h, sl.from);
-        const from = kdRunStart(e, h, sl.from, n);
-        if (idx >= from && idx < n && idx !== sl.start) {
-          return { sel: { from: sl.from, start: idx, exact: true } };
-        }
-        return { sel: null };
-      }
-      if (to >= 0 && e.kd_can(h, sl.from, sl.start, to) === 1) {
-        return { handle: e.kd_move(h, sl.from, sl.start, to) };
-      }
-      // A destination that will not take it becomes the new source where it
-      // can be lifted, so a misjudged move costs one click rather than two.
-      return lift() || { sel: null };
-    },
-    hint: (e, h) => {
-      const m = e.kd_ai(h);
-      if (m < 0) return null;
-      return { from: e.kd_mfrom(m), start: e.kd_mstart(m), to: e.kd_mto(m) };
-    },
-    actions: [
-      {
-        label: 'Turn the stock',
-        run: (e, h) => { kdDealt = true; return { handle: e.kd_draw(h) }; },
-        enabled: (e, h) => e.kd_candraw(h) === 1,
-      },
-      {
-        label: 'Gather the waste',
-        run: (e, h) => ({ handle: e.kd_recycle(h) }),
-        enabled: (e, h) => e.kd_canrecyc(h) === 1,
-      },
-    ],
-    runs: (e, s) => {
-      const r = e.kd_run(s, 1);
-      return `${e.kd_rfound(r)} of 52 up in ${e.kd_rmoves(r)} moves`;
-    },
-    steps: 600,
+    status: (e, h) => `${e.gf_pile(h)} left in the pond · ${e.gf_total(h)} books made`,
+    view: (e, h) => rows(seq(e.gf_players(h)).map(p => [
+      `${PLAYERS[p]} · ${e.gf_books(h, p)} books`,
+      held(52, c => e.gf_has(h, p, c) === 1),
+    ])),
   },
   {
     id: 'spider', name: 'Spider Solitaire', cat: 'Card', icon: '\u{1F578}',
@@ -1699,11 +831,7 @@ export const GAMES = [
     boot: (e, s, o) => e.sp_new(s, (o && o.suits) || 2),
     step: (e, h) => {
       const m = e.sp_sugg(h);
-      if (m < 0) {
-        if (e.sp_stockn(h) <= 0) return null;
-        spDealt = true;
-        return e.sp_deal(h);
-      }
+      if (m < 0) return e.sp_stockn(h) > 0 ? e.sp_deal(h) : null;
       return e.sp_move(h, e.sp_mfrom(m), e.sp_mstart(m), e.sp_mto(m));
     },
     done: (e, h) => e.sp_suits(h) === 8,
@@ -1721,9 +849,6 @@ export const GAMES = [
       // and being played for are different things, and only one of them is
       // still your game.
       const hm = hint === undefined ? null : hint;
-      const sl = sel && typeof sel === 'object' ? sel : null;
-      const fresh = spDealt;
-      spDealt = false;
       return {
         kind: 'columns',
         stock: e.sp_stockn(h),
@@ -1731,98 +856,42 @@ export const GAMES = [
         won: e.sp_suits(h) === 8,
         cols: seq(10).map(c => {
           const n = e.sp_coln(h, c);
+          // The cards a move could pick up are the tail of the column that
+          // forms a descending same-suit run, which is what sp_seqlen says.
+          const runFrom = n > 0 ? n - e.sp_seqlen(h, c, n - 1) : n;
           if (!n) {
             return [cell('', 'card empty'
               + (hm && hm.to === c ? ' hintto' : '')
-              + (sl && sl.col !== c ? ' drop' : ''), c)];
+              + (sel !== null && sel !== undefined && sel !== c ? ' drop' : ''), c)];
           }
-          // The cards a move could pick up are the tail of the column that
-          // forms a descending same-suit run.
-          const runFrom = spRunStart(e, h, c, n);
-          // Where what you are carrying would actually land, asked of the
-          // engine rather than guessed, so a legal destination shows itself
-          // before you commit to the click.
-          const takes = sl && sl.col !== c && spFits(e, h, sl, c);
           return seq(n).map(i => {
             const v = e.sp_card(h, c, i);
             return cell(v < 0 ? '' : card(v),
               'card' + (red(v) ? ' red' : '') + (v < 0 ? ' facedown' : '')
-              + (sl && sl.col === c && i >= sl.start ? ' picked' : '')
+              + (c === sel ? ' picked' : '')
               + (i >= runFrom ? ' movable' : '')
-              + (takes && i === n - 1 ? ' takes' : '')
-              + (fresh && i === n - 1 ? ' dealt' : '')
               + (hm && hm.from === c && i >= hm.start ? ' hintfrom' : '')
-              + (hm && hm.to === c && i === n - 1 ? ' hintto' : ''),
-              spCardCode(c, i),
-              // The dealt card flies in from the stock, which sits at the
-              // left of the tray, so the further right the column the
-              // further it travels. Staggered so the row deals across
-              // rather than arriving in one block.
-              fresh && i === n - 1
-                ? `--dx:${-(c * 62 + 30)}px;animation-delay:${c * 32}ms` : null);
+              + (hm && hm.to === c && i === n - 1 ? ' hintto' : ''), c);
           });
         }),
       };
     },
     solo: true,
     // A spider move is a source column, a start index inside it, and a
-    // destination column, so a selection has to carry the start as well as
-    // the column: `{ col, start }`. Naming only the column is what stopped
-    // a run being split, because there is then nowhere to say WHICH card of
-    // it you meant to pick up from.
-    //
-    // Splitting is legal Spider and it is not always useless: the whole
-    // point of lifting three of a five-run is to leave a card exposed that
-    // something else needs, or to fit what a destination will actually
-    // take.
-    move: (e, h, code, st) => {
-      const c = spCol(code), idx = spIdx(code);
-      const sl = st.sel && typeof st.sel === 'object' ? st.sel : null;
-      // Pick a column up from the card that was clicked, or -- when the
-      // click landed on the column rather than on a card -- from the top of
-      // its longest run, which is the common case and what one click used
-      // to do.
-      // `exact` records whether you named a CARD or a column. Naming a card
-      // means that card and no other, which is what splitting a run is.
-      // Naming the column means the largest tail that the destination will
-      // actually take, which is what one click has always done here and is
-      // almost always what you want: demanding the whole run instead stalls
-      // the game the moment a five-run meets a destination with room for
-      // three.
-      const lift = () => {
-        const n = e.sp_coln(h, c);
-        if (!n) return null;
-        const from = spRunStart(e, h, c, n);
-        const start = idx < 0 ? from : idx;
-        return start >= from && start < n
-          ? { sel: { col: c, start, exact: idx >= 0 } } : null;
-      };
-      if (!sl) return lift();
-      if (c === sl.col) {
-        // A second click inside the column you are holding SHORTENS what
-        // you are carrying instead of dropping it: click the card you want
-        // to move from. Clicking the card you already hold, or anything
-        // that cannot be lifted, puts the stack back down.
-        const n = e.sp_coln(h, c);
-        const from = spRunStart(e, h, c, n);
-        if (idx >= from && idx < n && idx !== sl.start) {
-          return { sel: { col: c, start: idx, exact: true } };
-        }
-        return { sel: null };
+    // destination column. You pick two columns; the start is the top of the
+    // source's longest legal sequence, which is what the engine's own
+    // suggester uses too.
+    move: (e, h, c, st) => {
+      if (st.sel === null || st.sel === undefined) {
+        return e.sp_coln(h, c) > 0 ? { sel: c } : null;
       }
-      if (sl.exact) {
-        if (e.sp_can(h, sl.col, sl.start, c) === 1) {
-          return { handle: e.sp_move(h, sl.col, sl.start, c) };
-        }
-      } else {
-        const fn = e.sp_coln(h, sl.col);
-        for (let s = sl.start; s < fn; s++) {
-          if (e.sp_can(h, sl.col, s, c) === 1) return { handle: e.sp_move(h, sl.col, s, c) };
-        }
+      if (c === st.sel) return { sel: null };
+      const from = st.sel;
+      const n = e.sp_coln(h, from);
+      for (let start = n - e.sp_seqlen(h, from, n - 1); start < n; start++) {
+        if (e.sp_can(h, from, start, c) === 1) return { handle: e.sp_move(h, from, start, c) };
       }
-      // A destination that refuses becomes the new source where it can be
-      // lifted, so a misjudged move costs one click rather than two.
-      return lift() || { sel: null };
+      return e.sp_coln(h, c) > 0 ? { sel: c } : { sel: null };
     },
     // The engine's own suggester, decoded into the three numbers a move is
     // made of, so the page can point at it.
@@ -1833,7 +902,7 @@ export const GAMES = [
     },
     actions: [
       {
-        label: 'Deal a row', run: (e, h) => { spDealt = true; return { handle: e.sp_deal(h) }; },
+        label: 'Deal a row', run: (e, h) => ({ handle: e.sp_deal(h) }),
         // Spider deals onto EVERY column, so it may not deal while one
         // stands empty. Showing the button as available and then quietly
         // doing nothing is worse than showing it disabled.
@@ -1846,123 +915,34 @@ export const GAMES = [
   },
   {
     id: 'liarsdice', name: "Liar's Dice", cat: 'Dice', icon: '\u{1F3B2}',
-    desc: 'Bid on dice you cannot see. Every bid has to be bigger than the last, so the count climbs until somebody stops believing it.',
-    boot: (e, s) => { ldFace = 1; ldSaid = null; return e.ld_new(s, 4); },
+    desc: 'Bid on dice you cannot see, and call the bluff when the count stops being plausible.',
+    boot: (e, s) => e.ld_new(s, 4),
     step: (e, h) => e.ld_step(h),
     done: (e, h) => e.ld_done(h) === 1,
-    human: 0,
-    turn: (e, h) => e.ld_turn(h),
-    won: (e, h) => e.ld_winner(h) === 0,
-    status: (e, h) => {
-      if (e.ld_done(h) === 1) {
-        const w = e.ld_winner(h);
-        return w === 0 ? 'You are the last one holding dice' : `${named(w, PLAYERS, 'nobody')} takes it`;
-      }
-      return (e.ld_bid(h) > 0 ? `the bid is ${e.ld_qty(h)} x ${e.ld_face(h)}` : 'no bid yet')
-        + ` · ${e.ld_total(h)} dice on the table`
-        + ` · ${e.ld_turn(h) === 0 ? 'your turn' : `${named(e.ld_turn(h), PLAYERS, '?')} to bid`}`
-        + (ldSaid ? ` · ${ldSaid}` : '');
-    },
-    // YOUR DICE ONLY. The whole game is bidding on a count you cannot see,
-    // so laying every player's dice face up, which is what this view did,
-    // was showing the one thing nobody at the table knows.
-    view: (e, h) => {
-      const total = e.ld_total(h);
-      const legal = q => e.ld_canbid(h, q, ldFace) === 1;
-      return rows([
-        ['Your dice', seq(e.ld_dice(h, 0)).map(i =>
-          cell(DIE_FACE[e.ld_die(h, 0, i)] || e.ld_die(h, 0, i), 'die big'))],
-        ['Face', seq(6).map(f => cell(DIE_FACE[f + 1], 'die big'
-          + (ldFace === f + 1 ? ' picked' : ''), LD_FACE + f + 1))],
-        // Only the quantities that would be a legal raise on the chosen
-        // face are offered, so the board cannot be asked for a bid the
-        // rules refuse.
-        ['Say', seq(total).map(k => k + 1).filter(legal).map(q =>
-          cell(q, 'chip big', LD_QTY + q))],
-        ...seq(e.ld_players(h)).filter(p => p !== 0).map(p => [
-          `${PLAYERS[p]}${e.ld_alive(h, p) === 1 ? '' : ' (out)'}`,
-          [cell(`${e.ld_dice(h, p)} dice`, 'chip')],
-        ]),
-      ]);
-    },
-    // Pick a face, then say a number: that IS the bid, so the quantity
-    // click commits it. Calling is an action, because it answers the last
-    // bid rather than making one.
-    move: (e, h, i) => {
-      if (i >= LD_FACE && i < LD_FACE + 7) { ldFace = i - LD_FACE; return { sel: null }; }
-      if (i >= LD_QTY && i < LD_QTY + 40) {
-        const q = i - LD_QTY;
-        if (e.ld_canbid(h, q, ldFace) !== 1) return null;
-        ldSaid = null;
-        return { handle: e.ld_bidat(h, q, ldFace) };
-      }
-      return null;
-    },
-    actions: [
-      {
-        label: 'Call it a lie',
-        // The real count has to be read BEFORE the call resolves: settling
-        // rerolls every die on the table, so afterwards the number that
-        // decided it no longer exists anywhere.
-        run: (e, h) => {
-          const qty = e.ld_qty(h), face = e.ld_face(h), actual = e.ld_actual(h);
-          const next = e.ld_call(h);
-          ldSaid = actual >= qty
-            ? `there really were ${actual} ${face}s, so you lose a die`
-            : `only ${actual} ${face}s, the bid was a lie`;
-          return { handle: next };
-        },
-        enabled: (e, h) => e.ld_turn(h) === 0 && e.ld_cancall(h) === 1,
-      },
-    ],
-    actionsInStage: true,
-    steps: 400,
+    status: (e, h) => (e.ld_bid(h) > 0 ? `bid ${e.ld_qty(h)} × ${e.ld_face(h)}` : 'no bid yet')
+      + ` · ${e.ld_total(h)} dice on the table · ${e.ld_alivenum(h)} players alive`
+      + (e.ld_done(h) === 1 ? ` · ${named(e.ld_winner(h), PLAYERS, 'nobody')} wins` : ''),
+    view: (e, h) => rows(seq(e.ld_players(h)).map(p =>
+      [PLAYERS[p] + (e.ld_alive(h, p) === 1 ? '' : ' (out)'),
+      seq(e.ld_dice(h, p)).map(i => cell(e.ld_die(h, p, i), 'die'))])),
   },
 
   {
     id: 'battleship', name: 'Battleship', cat: 'Strategy', icon: '\u{1F6A2}',
-    desc: 'Seventeen cells of ship hidden in a hundred. Fire a square, read what comes back, and hunt the rest of the hull from the hit.',
+    desc: '10x10, hunt and target. Both fleets are hidden until they are hit.',
     boot: (e, s) => e.bs_new(s),
     step: (e, h) => e.bs_step(h),
     done: (e, h) => e.bs_done(h) === 1,
-    won: (e, h) => e.bs_winner(h) === 1,
-    // `bs-wasm-hits`, `bs-wasm-shots` and `bs-wasm-track` all test
-    // `player == 1` and fall through to player TWO, so they are ONE-based.
-    // This page passed 0 and 1, so every counter and both grids were
-    // attributed to the wrong fleet, and only the winner line disagreed --
-    // measured 2026-09-02, five of five finished games said "player 1 wins"
-    // beside a column labelled P2 that was the one holding seventeen hits.
-    // Both fleets are driven by the same AI, so nothing else could show it.
-    status: (e, h) => {
-      const you = `you ${e.bs_hits(h, BS_YOU)} hits in ${e.bs_shots(h, BS_YOU)} shots`;
-      const them = `them ${e.bs_hits(h, BS_THEM)} in ${e.bs_shots(h, BS_THEM)}`;
-      if (e.bs_done(h) === 1) {
-        const w = e.bs_winner(h);
-        return `${you} · ${them} · `
-          + (w === 1 ? 'your fleet takes it' : w === 2 ? 'their fleet takes it' : 'neither fleet');
-      }
-      return `${you} · ${them} · 17 cells of ship to sink`;
-    },
+    status: (e, h) => `P1 ${e.bs_hits(h, 0)} hits in ${e.bs_shots(h, 0)} shots · P2 ${e.bs_hits(h, 1)} in ${e.bs_shots(h, 1)}`
+      + (e.bs_done(h) === 1 ? ` · player ${e.bs_winner(h)} wins` : ''),
     view: (e, h) => ({
-      kind: 'pair', cols: 10, labels: ['You fire at', 'They fire at'],
-      grids: [BS_YOU, BS_THEM].map(p => seq(100).map(i => {
+      kind: 'pair', cols: 10, labels: ['Player 1 fires at', 'Player 2 fires at'],
+      grids: [0, 1].map(p => seq(100).map(i => {
         const r = Math.floor(i / 10), c = i % 10;
         const t = e.bs_track(h, p, r, c);
-        // Only your own grid takes clicks; theirs is a record of what has
-        // landed on you.
-        return cell(['', '·', '●'][t] || '', 'sea t' + t,
-          p === BS_YOU && t === 0 ? i : undefined);
+        return cell(['', '·', '●'][t] || '', 'sea t' + t);
       })),
     }),
-    solo: true,
-    // One click is one salvo: you fire, then they answer, which is what the
-    // engine's own turn does for both sides at once.
-    move: (e, h, i) => {
-      if (i < 0 || i >= 100) return null;
-      const r = Math.floor(i / 10), c = i % 10;
-      if (e.bs_canfire(h, r, c) !== 1) return null;
-      return { handle: e.bs_fire(h, r, c) };
-    },
     steps: 400,
   },
   {
@@ -1970,68 +950,14 @@ export const GAMES = [
     desc: 'Twelve territories in four continents. The turn cap used to decide games nobody could see being decided.',
     boot: (e, s) => e.rk_new(s, 4),
     step: (e, h, r) => e.rk_turn(h, r()),
-    // Risk is the only game here you can be knocked OUT of while it carries
-    // on. The engine is not over until somebody owns all twelve, but your
-    // game is over the moment you own none, and a page that kept stepping
-    // would be showing a visitor a game they are no longer in.
-    done: (e, h) => e.rk_done(h) === 1 || e.rk_alive(h, 0) === 0,
-    // You are player one. A turn is two phases: put the reinforcement down
-    // a territory at a time, then take up to three attacks, or stop.
-    human: 0,
-    turn: (e, h) => e.rk_cur(h),
-    status: (e, h) => {
-      const armies = seq(e.rk_np(h)).map(p =>
-        `${PLAYERS[p]} ${e.rk_total(h, p)}`).join(' ');
-      if (e.rk_done(h) === 1) {
-        return `turn ${e.rk_turnno(h)} · ${armies}`
-          + ` · ${named(e.rk_winner(h), PLAYERS, 'nobody')} takes the world`;
-      }
-      if (e.rk_alive(h, 0) === 0) {
-        return `turn ${e.rk_turnno(h)} · ${armies}`
-          + ' · you are off the board, and the rest fight on without you';
-      }
-      const yours = e.rk_cur(h) === 0;
-      const what = e.rk_phase(h) === 0
-        ? `${e.rk_toplace(h)} to place`
-        : `${e.rk_atkleft(h)} attack${e.rk_atkleft(h) === 1 ? '' : 's'} left`;
-      return `turn ${e.rk_turnno(h)} · ${armies} · ${what}`
-        + ` · ${yours ? (e.rk_phase(h) === 0
-          ? 'click one of yours to reinforce it'
-          : 'click a territory of yours, then one to attack')
-          : `${named(e.rk_cur(h), PLAYERS, '?')} to move`}`;
-    },
-    // Ringing what is legal is the whole of the interface here: which of
-    // your territories can take an army, and which can attack from.
-    view: (e, h) => grid(4, seq(12).map(i => {
-      const mark = e.rk_canplace(h, i) === 1 ? ' movable'
-        : e.rk_canatkfrom(h, i) === 1 ? ' movable' : '';
-      return { ...cell(`${e.rk_armies(h, i)}`, 'terr o' + e.rk_owner(h, i) + mark), i };
-    })),
-    // Placing is one click. Attacking is two, and the second is offered
-    // only where the rules allow it, so a held selection cannot be
-    // spent on a territory that is not adjacent or is already yours.
-    move: (e, h, i, ctx) => {
-      if (i < 0 || i >= 12) return null;
-      if (e.rk_phase(h) === 0) {
-        if (e.rk_canplace(h, i) !== 1) return null;
-        return { handle: e.rk_place(h, i) };
-      }
-      const held = ctx && ctx.sel;
-      if (held === null || held === undefined) {
-        if (e.rk_canatkfrom(h, i) !== 1) return null;
-        return { sel: i };
-      }
-      if (e.rk_canattack(h, held, i) !== 1) return null;
-      return { handle: e.rk_attack(h, held, i, ctx.rand()) };
-    },
-    actions: [
-      {
-        label: 'Stop attacking',
-        run: (e, h) => ({ handle: e.rk_stop(h) }),
-        enabled: (e, h) => e.rk_canstop(h) === 1,
-      },
-    ],
-    actionsInStage: true,
+    done: (e, h) => e.rk_done(h) === 1,
+    status: (e, h) => `turn ${e.rk_turnno(h)} · `
+      + seq(e.rk_np(h)).map(p => `${PLAYERS[p]} ${e.rk_total(h, p)}`).join(' ')
+      + (e.rk_done(h) === 1
+        ? ` · ${named(e.rk_winner(h), PLAYERS, 'nobody')} takes the world`
+        : ` · ${named(e.rk_cur(h), PLAYERS, '?')} to move`),
+    view: (e, h) => grid(4, seq(12).map(i =>
+      cell(`${e.rk_armies(h, i)}`, 'terr o' + e.rk_owner(h, i)))),
     steps: 400,
   },
   {
@@ -2040,169 +966,47 @@ export const GAMES = [
     boot: (e, s) => e.mo_new(s, 4),
     step: (e, h, r) => e.mo_step(h, r()),
     done: (e, h) => e.mo_done(h) === 1,
-    // You are player one. There is exactly one decision in this engine
-    // (games-backlog GAME-8: no trading), so a turn is a roll and then, on
-    // an unowned square you can afford, buy or pass.
-    human: 0,
-    turn: (e, h) => e.mo_cur(h),
-    // The engine ends on bankruptcy, which is rare without trading, so most
-    // sessions stop at the page's step bound rather than at mo_cap. Saying
-    // "of 601" invented an ending.
-    status: (e, h) => {
-      const money = seq(e.mo_players(h)).map(p =>
-        `${PLAYERS[p]} $${e.mo_cash(h, p)}`).join(' ');
-      if (e.mo_done(h) === 1) {
-        return `turn ${e.mo_turn(h)} · ${money}`
-          + ` · ${named(e.mo_winner(h), PLAYERS, 'nobody')} bankrupts the rest`;
-      }
-      const offer = e.mo_offered(h);
-      return `turn ${e.mo_turn(h)} · ${money}`
-        + (e.mo_lastroll(h) ? ` · rolled ${e.mo_lastroll(h)}` : '')
-        + (offer >= 0
-          ? ` · ${e.mo_offercost(h)} to buy it, rent ${e.mo_offerrent(h)}`
-          : ` · ${named(e.mo_richest(h), PLAYERS, '?')} richest`)
-        + ` · ${e.mo_cur(h) === 0 ? (offer >= 0 ? 'buy it or pass' : 'your roll')
-          : `${PLAYERS[e.mo_cur(h)]} to move`}`;
-    },
-    // A board SPACE is not a property index and neither is a player. This
-    // read all three off the same number and so never coloured an owned
-    // square: `mo_propat` is what turns a space into a deed.
+    // The engine ends on bankruptcy, which is rare without trading
+    // (games-backlog GAME-8), so most sessions stop at the page's step
+    // bound rather than at mo_cap. Saying "of 601" invented an ending.
+    status: (e, h) => `turn ${e.mo_turn(h)} · `
+      + seq(e.mo_players(h)).map(p => `${PLAYERS[p]} $${e.mo_cash(h, p)}`).join(' ')
+      + (e.mo_done(h) === 1
+        ? ` · ${named(e.mo_winner(h), PLAYERS, 'nobody')} bankrupts the rest`
+        : ` · ${named(e.mo_richest(h), PLAYERS, '?')} richest`),
     view: (e, h) => grid(10, seq(40).map(i => {
-      const pi = e.mo_propat(i);
-      const owner = pi >= 0 && e.mo_owner(h, pi) >= 0 ? e.mo_owner(h, pi) + 1 : 0;
+      const owner = e.mo_owned(h, i) === 1 ? e.mo_owner(h, i) + 1 : 0;
       const here = seq(e.mo_players(h)).filter(p => e.mo_pos(h, p) === i);
-      const offered = e.mo_offerspace(h) === i;
-      return {
-        ...cell(here.map(p => p + 1).join('') || '', 'space o' + owner
-          + (offered ? ' movable' : '')),
-        i,
-      };
+      return cell(here.map(p => p + 1).join('') || '', 'space o' + owner);
     })),
-    // The only square a click means anything on is the one you are being
-    // offered, and clicking it buys. Passing is a button, because a click
-    // on nothing in particular is not a decision anybody meant to make.
-    move: (e, h, i) => {
-      if (e.mo_offerspace(h) !== i) return null;
-      return { handle: e.mo_take(h) };
-    },
-    actions: [
-      {
-        label: 'Roll',
-        run: (e, h, rand) => ({ handle: e.mo_roll(h, rand()) }),
-        enabled: (e, h) => e.mo_canroll(h) === 1,
-      },
-      {
-        label: 'Buy it',
-        run: (e, h) => ({ handle: e.mo_take(h) }),
-        enabled: (e, h) => e.mo_candecide(h, e.mo_cur(h)) === 1,
-      },
-      {
-        label: 'Leave it',
-        run: (e, h) => ({ handle: e.mo_leave(h) }),
-        enabled: (e, h) => e.mo_candecide(h, e.mo_cur(h)) === 1,
-      },
-    ],
-    actionsInStage: true,
     steps: 300,
   },
   {
     id: 'hexwar', name: 'Hex War', cat: 'Strategy', icon: '⚔',
     desc: 'Hex-and-counter with terrain and a combat results table.',
-    // Opening a turn is its own call, so a side played by hand can be handed
-    // a board with its movement restored before it is asked for a move.
-    // `hw_step` takes an opened turn without beginning it again, which is
-    // why opening here plays the identical game in watch mode -- hw-verify
-    // holds that as an arm rather than leaving it to be believed.
-    boot: (e, s) => e.hw_open(e.hw_new(s % 13, s)),
-    step: (e, h) => e.hw_open(e.hw_step(h)),
-    // `hw_step` takes an opened turn without beginning it a second time, so
-    // opening every turn as it arrives plays the identical game -- which is
-    // an arm in hw-verify rather than a claim, because it was FALSE on the
-    // first attempt: a turn used to restore both sides' movement, so opening
-    // one side's turn early handed the other side its movement back.
+    boot: (e, s) => e.hw_new(s % 13, s),
+    step: (e, h) => e.hw_step(h),
     done: (e, h) => e.hw_done(h) === 1,
-    // You are side one. A turn is any number of one-hex steps while a unit
-    // has movement, then at most one assault, then End turn.
-    human: 0,
-    turn: (e, h) => e.hw_active(h),
-    status: (e, h, s, sel) => {
-      const head = `turn ${e.hw_turn(h)} of ${e.hw_limit(h)} · `
-        + `VP ${e.hw_vp(h, 0)}-${e.hw_vp(h, 1)} · alive ${e.hw_alive(h, 0)}/${e.hw_alive(h, 1)}`;
-      if (e.hw_done(h) === 1) return `${head} · side ${e.hw_winner(h) + 1} holds the field`;
-      if (e.hw_active(h) !== 0) return `${head} · side ${e.hw_active(h) + 1} to move`;
-      if (sel === null || sel === undefined) {
-        return `${head} · ${e.hw_atkleft(h) ? 'click one of yours to move it, or an enemy to assault'
-          : 'no assault left · click one of yours, or end the turn'}`;
-      }
-      return `${head} · unit ${sel} has ${e.hw_movepts(h, sel)} movement`
-        + ` · click a hex next to it, an enemy to assault, or it again to drop it`;
-    },
-    // A hex index is not a unit index and neither is an owner. The board is
-    // width x height hexes and a roster is a handful of units standing on
-    // some of them, so the two are converted here rather than read off one
-    // number (games-backlog GAME-54).
-    view: (e, h, s, sel) => {
+    status: (e, h) => `turn ${e.hw_turn(h)} of ${e.hw_limit(h)} · side ${e.hw_active(h) + 1} · `
+      + `VP ${e.hw_vp(h, 0)}-${e.hw_vp(h, 1)} · alive ${e.hw_alive(h, 0)}/${e.hw_alive(h, 1)}`
+      + (e.hw_done(h) === 1 ? ` · side ${e.hw_winner(h) + 1} holds the field` : ''),
+    view: (e, h) => {
       const w = e.hw_width(h), ht = e.hw_height(h);
       const at = {};
       for (let u = 0; u < e.hw_units(h); u++) {
         if (e.hw_dead(h, u) === 1) continue;
         at[e.hw_r(h, u) * w + e.hw_q(h, u)] = u;
       }
-      const yours = e.hw_active(h) === 0 && e.hw_done(h) === 0;
-      const held = sel === null || sel === undefined ? null : sel;
       return {
         kind: 'hex', cols: w,
         cells: seq(w * ht).map(i => {
           const u = at[i];
-          if (u === undefined) {
-            const dest = yours && held !== null
-              && e.hw_canmove(h, held, i % w, Math.floor(i / w)) === 1;
-            return cell('', 'terrain t' + e.hw_terrain(h, i) + (dest ? ' hint' : ''), i);
-          }
-          const mine = e.hw_owner(h, u) === 0;
-          const mark = u === held ? ' picked'
-            : yours && mine && e.hw_hasmove(h, u) === 1 ? ' movable'
-            : yours && !mine && e.hw_canatk(h, u) === 1 ? ' hint'
-            : '';
-          return cell(e.hw_str(h, u), 'unit o' + e.hw_owner(h, u) + mark, i);
+          return u === undefined
+            ? cell('', 'terrain t' + e.hw_terrain(h, i))
+            : cell(e.hw_str(h, u), 'unit o' + e.hw_owner(h, u));
         }),
       };
     },
-    // The click reports a HEX. Picking up is a unit of yours that can still
-    // do something; putting down is an empty hex next to it, and an enemy on
-    // the board is an assault whether or not you are holding anything,
-    // because a hex is assaulted by everything of yours that can reach it.
-    move: (e, h, i, ctx) => {
-      const w = e.hw_width(h);
-      if (i < 0 || i >= w * e.hw_height(h)) return null;
-      let unit = -1;
-      for (let u = 0; u < e.hw_units(h); u++) {
-        if (e.hw_dead(h, u) === 1) continue;
-        if (e.hw_r(h, u) * w + e.hw_q(h, u) === i) { unit = u; break; }
-      }
-      const held = ctx && ctx.sel !== null && ctx.sel !== undefined ? ctx.sel : null;
-      // `sel` is answered BEFORE `handle` by the harness, so a result
-      // carrying both is read as a selection and the move is thrown away.
-      // Each branch answers exactly one of them.
-      if (unit >= 0 && e.hw_canatk(h, unit) === 1) {
-        return { handle: e.hw_attack(h, unit, ctx.rand()) };
-      }
-      if (unit >= 0 && e.hw_owner(h, unit) === 0) {
-        if (unit === held) return { sel: null };
-        return e.hw_hasmove(h, unit) === 1 ? { sel: unit } : null;
-      }
-      if (held === null) return null;
-      if (e.hw_canmove(h, held, i % w, Math.floor(i / w)) !== 1) return null;
-      return { handle: e.hw_move(h, held, i % w, Math.floor(i / w)) };
-    },
-    actions: [
-      {
-        label: 'End turn',
-        run: (e, h) => ({ handle: e.hw_endturn(h) }),
-        enabled: (e, h) => e.hw_done(h) === 0 && e.hw_active(h) === 0,
-      },
-    ],
-    actionsInStage: true,
     steps: 200,
   },
   {
@@ -2239,123 +1043,16 @@ export const GAMES = [
     ghost: (e, h, i) => e.dt_can(h, i) === 1 ? { i, cls: 'edgeghost' } : null,
   },
   {
-    id: 'yahtzee', name: 'Yahtzee', cat: 'Dice', icon: '\u{1F3B2}',
-    desc: 'Five dice, three rolls, thirteen boxes. Every box is spent once, so the game is choosing where to put a roll you did not want.',
-    boot: (e, s) => { yhRolls = 1; yhKeep = 0; return e.yh_roll(e.yh_new(s)); },
-    // Watch mode plays a whole turn at a time, which is what the engine's
-    // own `yh-do-turn` does: roll, keep, roll, keep, roll, choose.
-    step: (e, h) => (e.yh_filled(h) >= 13 ? null : e.yh_turn(h)),
-    done: (e, h) => e.yh_filled(h) >= 13,
-    won: (e, h) => e.yh_filled(h) >= 13,
-    status: (e, h) => {
-      const filled = e.yh_filled(h);
-      if (filled >= 13) return `All thirteen boxes filled · ${e.yh_total(h)} points`;
-      return `${e.yh_total(h)} points · box ${filled + 1} of 13`
-        + ` · roll ${yhRolls} of 3`
-        + (yhRolls < 3 ? ' · click dice to hold, then Roll again' : ' · pick a box');
-    },
-    view: (e, h) => {
-      const dice = seq(5).map(i => e.yh_die(h, i));
-      const held = i => (yhKeep >> i) & 1;
-      return rows([
-        ['Dice', seq(5).map(i => cell(DIE_FACE[dice[i]] || dice[i],
-          'die big' + (held(i) ? ' picked' : ''), YH_DIE + i))],
-        // Every box shows what it would score with the dice on the table,
-        // which is the whole skill of the game. A spent box shows what it
-        // actually took instead.
-        ...seq(2).map(half => [half ? 'Lower' : 'Upper',
-          YH_CATS.slice(half ? 6 : 0, half ? 13 : 6).map((name, k) => {
-            const cat = (half ? 6 : 0) + k;
-            const done = e.yh_done(h, cat) === 1;
-            return cell(`${name} ${done ? e.yh_card(h, cat) : e.yh_would(h, cat)}`,
-              'chip' + (done ? ' spent' : ' open'), done ? undefined : YH_CAT + cat);
-          })]),
-      ]);
-    },
-    solo: true,
-    // Two kinds of click: a die is held or released, a box is scored. The
-    // rolls left is the page's to count -- it is a fact about the turn in
-    // progress, and the engine's state has no room for it.
-    move: (e, h, i) => {
-      if (i >= YH_DIE && i < YH_DIE + 5) {
-        if (yhRolls >= 3) return null;
-        yhKeep ^= 1 << (i - YH_DIE);
-        return { sel: null };
-      }
-      if (i >= YH_CAT && i < YH_CAT + 13) {
-        const cat = i - YH_CAT;
-        if (e.yh_done(h, cat) === 1) return null;
-        const next = e.yh_take(h, cat);
-        // A new turn opens with a fresh roll of all five, unless that was
-        // the thirteenth box and the game is over.
-        yhKeep = 0;
-        if (e.yh_filled(next) >= 13) { yhRolls = 3; return { handle: next }; }
-        yhRolls = 1;
-        return { handle: e.yh_roll(next) };
-      }
-      return null;
-    },
-    actions: [
-      {
-        label: 'Roll again',
-        run: (e, h) => { yhRolls += 1; return { handle: e.yh_reroll(h, yhKeep) }; },
-        enabled: (e, h) => yhRolls < 3 && e.yh_filled(h) < 13,
-      },
-    ],
-    actionsInStage: true,
-    runs: (e, s) => {
-      const r = e.yh_run(s);
-      return `${e.yh_rscore(r)} points over ${e.yh_rturns(r)} turns`;
-    },
-    steps: 13,
-  },
-  {
     id: 'rps', name: 'Rock Paper Scissors', cat: 'Other', icon: '✊',
-    desc: 'Your opponent plays your own history back at you. Throw the same thing twice and find out how quickly it notices.',
-    boot: (e, s) => { rpLast = null; return e.rp_new(s); },
+    desc: 'One side plays its own history back at it, which is invisible to any score the two of them share.',
+    boot: (e, s) => e.rp_new(s),
     step: (e, h) => e.rp_round(h),
     done: (e, h) => e.rp_w1(h) + e.rp_w2(h) + e.rp_ties(h) >= 20,
-    status: (e, h) => {
-      const n = e.rp_w1(h) + e.rp_w2(h) + e.rp_ties(h);
-      const score = `you ${e.rp_w1(h)} · them ${e.rp_w2(h)} · ties ${e.rp_ties(h)}`;
-      if (n >= 20) {
-        const w = e.rp_w1(h), l = e.rp_w2(h);
-        return `${score} · ${w > l ? 'you take the twenty' : w < l ? 'it takes the twenty' : 'twenty rounds, dead level'}`;
-      }
-      return `${score} · round ${n + 1} of 20`
-        + (rpLast ? ` · you threw ${RPS_NAME[rpLast.you]}, it threw ${RPS_NAME[rpLast.them]}`
-          + ` · ${['a tie', 'you win it', 'it wins'][rpLast.result]}` : ' · throw one');
-    },
-    // Three things to click, and the last round shown beside them. Without
-    // the throws a player sees only a tally move and cannot tell what just
-    // happened to them.
+    status: (e, h) => `P1 ${e.rp_w1(h)} · P2 ${e.rp_w2(h)} · ties ${e.rp_ties(h)}`,
     view: (e, h) => rows([
-      ['Throw', seq(3).map(i => cell(RPS_GLYPH[i],
-        'chip big' + (rpLast && rpLast.you === i ? ' picked' : ''), i))],
-      ['You threw', seq(3).map(i => cell(RPS_GLYPH[i] + ' ' + e.rp_c1(h, i), 'chip'))],
-      ['It threw', seq(3).map(i => cell(RPS_GLYPH[i] + ' ' + e.rp_c2(h, i), 'chip'))],
+      ['P1 threw', seq(3).map(i => cell(['✊', '✋', '✌'][i] + ' ' + e.rp_c1(h, i), 'chip'))],
+      ['P2 threw', seq(3).map(i => cell(['✊', '✋', '✌'][i] + ' ' + e.rp_c2(h, i), 'chip'))],
     ]),
-    solo: true,
-    // The opponent's throw is not in the state, and it does not need to be:
-    // exactly one of its three counts goes up per round, so the one that
-    // moved IS what it threw. Read before and after the same move.
-    move: (e, h, i) => {
-      if (i < 0 || i > 2) return null;
-      const before = seq(3).map(m => e.rp_c2(h, m));
-      const next = e.rp_play(h, i);
-      const after = seq(3).map(m => e.rp_c2(next, m));
-      const them = seq(3).find(m => after[m] > before[m]);
-      rpLast = {
-        you: i,
-        them: them === undefined ? 0 : them,
-        // 0 tie, 1 you win, 2 it wins, from the engine's own comparison
-        // rather than from a table written here: rp_outcome answers 1 when
-        // the FIRST throw wins, and the first throw is yours.
-        result: e.rp_outcome(i, them === undefined ? 0 : them) === 0 ? 0
-          : e.rp_outcome(i, them === undefined ? 0 : them) === 1 ? 1 : 2,
-      };
-      return { handle: next };
-    },
     steps: 20,
   },
 ];
@@ -2415,46 +1112,13 @@ export const esc = s => String(s).replace(/[&<>"]/g, c =>
 // glance in a ten-column tableau, and they carry a megabyte of art that a
 // rank and a pip say better. Every card here is the same shape: index in
 // the corner, suit through the middle.
-// Where a printed deck puts the pips, as percentages of the card's inner
-// field. Two columns at 26 and 74, a middle column at 50, and the vertical
-// stops a real card uses: the pair rows at 12 and 88, the quarter rows that
-// nine and ten need, and the in-between stops that carry seven's and
-// eight's odd pip. The lower half is drawn inverted, which is what makes a
-// printed card read the same from either end.
-const CARD_PIPS = {
-  A: [[50, 50]],
-  2: [[50, 12], [50, 88]],
-  3: [[50, 12], [50, 50], [50, 88]],
-  4: [[26, 12], [74, 12], [26, 88], [74, 88]],
-  5: [[26, 12], [74, 12], [50, 50], [26, 88], [74, 88]],
-  6: [[26, 12], [74, 12], [26, 50], [74, 50], [26, 88], [74, 88]],
-  7: [[26, 12], [74, 12], [50, 31], [26, 50], [74, 50], [26, 88], [74, 88]],
-  8: [[26, 12], [74, 12], [50, 31], [26, 50], [74, 50], [50, 69], [26, 88], [74, 88]],
-  9: [[26, 12], [74, 12], [26, 37], [74, 37], [50, 50], [26, 63], [74, 63], [26, 88], [74, 88]],
-  10: [[26, 12], [74, 12], [50, 30], [26, 37], [74, 37], [26, 63], [74, 63], [50, 70],
-    [26, 88], [74, 88]],
-};
-
 function cardHtml(c, attr) {
   const cls = c.cls || '';
-  const style = c.style ? ` style="${esc(c.style)}"` : '';
-  if (cls.includes('back') || cls.includes('facedown')) {
-    return `<span class="${cls}"${attr}${style}></span>`;
-  }
+  if (cls.includes('back') || cls.includes('facedown')) return `<span class="${cls}"${attr}></span>`;
   const m = /^(10|[2-9AJQK])(.)$/.exec(c.text || '');
-  if (!m) return `<span class="${cls}"${attr}${style}>${esc(c.text)}</span>`;
-  const rank = m[1], suit = esc(m[2]);
-  // The index is the rank over its suit in the corner, which is the half of
-  // a card that has to survive being covered: in a ten-column tableau only
-  // the top few millimetres of a buried card is showing.
-  const index = `<i>${esc(rank)}<em>${suit}</em></i>`;
-  const pips = CARD_PIPS[rank];
-  const body = pips
-    ? `<span class="pips${rank === 'A' ? ' a1' : ''}">` + pips.map(([x, y]) =>
-      `<span class="pip${y > 50 ? ' inv' : ''}" style="left:${x}%;top:${y}%">${suit}</span>`)
-      .join('') + '</span>'
-    : `<span class="court">${esc(rank)}<b>${suit}</b></span>`;
-  return `<span class="${cls}"${attr}${style}>${index}${body}</span>`;
+  if (!m) return `<span class="${cls}"${attr}>${esc(c.text)}</span>`;
+  return `<span class="${cls}"${attr}><i>${esc(m[1])}</i>` +
+    `<span class="suit">${esc(m[2])}</span></span>`;
 }
 
 const gcell = (c, i) =>
@@ -2540,80 +1204,13 @@ export function renderHtml(v, clickable) {
     }).join('') + '</div>';
   }
 
-  if (v.kind === 'sudoku') {
-    // The digit you are holding, then the grid. A picker is not a board, so
-    // it is drawn above one rather than made to live inside it.
-    const picker = '<div class="sdpick">' + v.digits.map(d =>
-      `<span class="chip big${d.on ? ' picked' : ''}" data-i="${d.i}">${d.n}</span>`)
-      .join('') + '</div>';
-    return picker + gridHtml(9, v.cells, clickable);
-  }
-
-  if (v.kind === 'klondike') {
-    // The stock, the waste, four foundations, then the tableau. The top row
-    // is the game's whole state that is not a column, and it is where a
-    // player looks first.
-    const chip = (val, extra, i, style) => cardHtml({
-      text: val < 0 ? '' : card(val),
-      cls: 'card' + (val >= 0 && red(val) ? ' red' : '') + (extra ? ' ' + extra : ''),
-      style,
-    }, i === undefined ? '' : ` data-i="${i}"`);
-
-    const stock = v.stock > 0
-      ? `<div class="kstock" data-i="${KD_STOCK}"><b>${v.stock}</b><span>turn</span></div>`
-      : `<div class="kstock spent${v.canRecycle ? ' ready' : ''}" data-i="${KD_STOCK}">` +
-        `<span>${v.canRecycle ? 'gather up' : 'empty'}</span></div>`;
-
-    const waste = v.waste > 0
-      ? chip(v.wasteTop, 'kwaste' + (v.wastePicked ? ' picked' : '')
-        + (v.fresh ? ' dealt' : ''), KD_WASTE)
-      : '<div class="card empty kwaste"></div>';
-
-    // An empty foundation shows the suit it is waiting for, which is the
-    // only thing that tells a player where an ace is supposed to go.
-    const founds = v.founds.map((f, s) => f.card >= 0
-      ? chip(f.card, 'kfound' + (f.takes ? ' takes' : '') + (f.picked ? ' picked' : ''),
-        KD_FOUND + s)
-      : `<span class="card empty kfound${f.takes ? ' takes' : ''}` +
-        `${s === 1 || s === 2 ? ' red' : ''}" data-i="${KD_FOUND + s}">` +
-        `${SUIT[s]}</span>`).join('');
-
-    const top = `<div class="ktop">${stock}${waste}<span class="kgap"></span>${founds}</div>`;
-
-    const cols = `<div class="cols kcols${clickable ? ' clickable' : ''}` +
-      `${v.won ? ' won' : ''}">` +
-      v.cols.map(col => `<div class="col" data-i="${col.i}">` +
-        (col.cards.length
-          ? col.cards.map(c => chip(c.card, c.cls, c.i)).join('')
-          : `<span class="card empty${col.takes ? ' drop' : ''}` +
-            `${col.hint ? ' hintto' : ''}" data-i="${col.i}"></span>`) +
-        '</div>').join('') + '</div>';
-
-    return top + cols +
-      (v.won ? '<div class="wonbanner">all fifty-two up</div>' : '');
-  }
-
   if (v.kind === 'columns') {
-    // The stock and the eight runs. Spider has no ace foundations -- a
-    // completed king-down-to-ace run leaves the tableau on its own and
-    // never comes back -- so what the piles show is the eight that have
-    // gone, which is the game's whole score. The engine counts them
-    // without recording which suit each was, so a banked run is a king
-    // and no suit: every completed run is a king down to an ace.
-    const tray = v.stock === undefined ? '' :
-      '<div class="tray">' +
-      `<div class="stockpile${v.stock ? '' : ' out'}"><b>${v.stock}</b>` +
-      '<span>in the stock</span></div>' +
-      '<div class="runs">' + seq(8).map(i =>
-        `<div class="runslot${i < v.suits ? ' done' : ''}">${i < v.suits ? 'K' : ''}</div>`)
-        .join('') +
-      `<span class="runlab">${v.suits} of 8 runs away</span></div></div>`;
     const body = `<div class="cols${clickable ? ' clickable' : ''}${v.won ? ' won' : ''}">` +
       v.cols.map((col, ci) =>
         `<div class="col" data-i="${ci}">` +
         col.map(c => cardHtml(c, ` data-i="${c.i === undefined ? ci : c.i}"`)).join('') +
         '</div>').join('') + '</div>';
-    return tray + (v.won ? body + '<div class="wonbanner">all eight runs away</div>' : body);
+    return v.won ? body + '<div class="wonbanner">all eight runs away</div>' : body;
   }
 
   if (v.kind === 'pair') {
@@ -2682,8 +1279,7 @@ export function renderHtml(v, clickable) {
     const side = (s, which) =>
       `<div class="warside ${which}">` +
       `<div class="warcount">${s.n}</div>` +
-      `<div class="wardeck${s.n ? '' : ' empty'}"` +
-      `${s.i === undefined ? '' : ` data-i="${s.i}"`}><span>${s.name}</span></div>` +
+      `<div class="wardeck${s.n ? '' : ' empty'}"><span>${s.name}</span></div>` +
       `<div class="warcard${s.wins ? ' takes' : ''}">` +
       (s.card < 0 ? '' : cardHtml(cardCell(s.card, 'flip'), '')) + '</div></div>';
     return '<div class="warboard">' + side(v.left, 'l') +
