@@ -40,7 +40,7 @@
 <div class="wrap">
   <a class="back" href="../landing.html">&#8592; Cobblestone</a>
   <h1>Codex Graphics</h1>
-  <p class="tag">Three demos whose pixels are computed by Codex, running in this tab.</p>
+  <p class="tag">Four demos whose pixels are computed by Codex, running in this tab.</p>
 
   <div class="lead">
     None of the drawing here is hand-written for the browser. Each demo is Codex
@@ -51,6 +51,25 @@
   </div>
 
   <div class="grid">
+
+    <div class="card">
+      <a class="thumblink" href="../fireworks/web/index.html">
+        <div class="thumb" style="background-image:url('shots/fireworks.jpg')"></div>
+      </a>
+      <div class="body">
+        <h2>The fireworks</h2>
+        <p>Forty thousand sparks over a city skyline, and the thing computing
+        every one of them is a Codex chapter. Shells climb from the rooftops
+        trailing embers, burst as peonies, rings, palms and crackling shells,
+        and light the buildings and the water as they go. The kernel is the
+        physics: one GPU thread per spark, integrating gravity, air drag, a
+        wind field and a turbulence term, then cooling each ember from white
+        hot through its own colour to the red it goes out at. Space throws a
+        shell, F calls the finale.</p>
+        <div class="pipe">Codex &rarr; wgsl plug &rarr; WGSL &rarr; your GPU</div>
+        <div class="acts"><a class="run" href="../fireworks/web/index.html">Open the fireworks &rarr;</a></div>
+      </div>
+    </div>
 
     <div class="card">
       <a class="thumblink" href="../gpushow/web/index.html">
@@ -109,7 +128,7 @@
   </div>
 
   <footer>
-    The globe and the black hole need WebGPU, which today means a recent Chrome
-    or Edge. The aquarium runs anywhere WebAssembly does.
+    The fireworks, the globe and the black hole need WebGPU, which today means a
+    recent Chrome or Edge. The aquarium runs anywhere WebAssembly does.
   </footer>
 </div>
