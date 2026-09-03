@@ -243,6 +243,15 @@ running in your browser: the page only paints what the module hands it.</p>
     var base = ex.sfw_buffer_at(0) >>> 0;
     var segments = ex.sfw_segments(0);
     var step = 0, running = true;
+    // The ride advances by the CLOCK, sixty steps a second, not by one step
+    // per animation frame: a frame the browser drops then costs no road.
+    // Measured 2026-09-03 against Steve's page (which steps once per frame):
+    // ours fell about two percent behind over two minutes, one dropped
+    // frame at a time. A tab that was hidden or stalled for longer than a
+    // few steps rebases rather than sprinting to catch up.
+    var RATE = 60, CATCH_UP = 4;
+    var clockBase = performance.now(), stepsAtBase = 0;
+    function rebase() { clockBase = performance.now(); stepsAtBase = step; }
 
     // The frame header: sky and horizon as 0xRRGGBB, the sun's visibility,
     // centre and scale, and the camera roll. The commands start after it.
@@ -279,16 +288,21 @@ running in your browser: the page only paints what the module hands it.</p>
       hud.textContent = res.bad === null
         ? 'step ' + step + '   ' + res.cmds + ' commands   ' + (used / 1024).toFixed(0) + ' KiB   ' + ms + ' ms   ' + segments + ' segments'
         : 'unknown tag ' + res.bad + ' after ' + res.cmds + ' commands';
-      if (running) { ex.sfw_forward(0); step++; }
+      if (running) {
+        var due = stepsAtBase + Math.floor((performance.now() - clockBase) * RATE / 1000);
+        if (due - step > CATCH_UP) { rebase(); due = step + 1; }
+        while (step < due) { ex.sfw_forward(0); step++; }
+      }
       requestAnimationFrame(frame);
     }
 
     document.getElementById('play').onclick = function () {
       running = !running;
+      if (running) rebase();
       this.textContent = running ? 'Pause' : 'Play';
     };
-    document.getElementById('fwd').onclick = function () { for (var i = 0; i < 100; i++) ex.sfw_forward(0); step += 100; };
-    document.getElementById('back').onclick = function () { ex.sfw_reset(0); step = 0; };
+    document.getElementById('fwd').onclick = function () { for (var i = 0; i < 100; i++) ex.sfw_forward(0); step += 100; rebase(); };
+    document.getElementById('back').onclick = function () { ex.sfw_reset(0); step = 0; rebase(); };
 
     requestAnimationFrame(frame);
   }).catch(function (e) {
