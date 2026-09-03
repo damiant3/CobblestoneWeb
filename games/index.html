@@ -340,26 +340,6 @@
   .store{background:#3f2d18;color:var(--gold);font-weight:700;min-width:54px;height:52px;
     border-radius:26px}
   .die{background:#f4f2e8;color:#16161e;font-weight:700;min-width:30px;border-radius:6px}
-  /* Yahtzee: a die you are holding, and a scorecard box that is spent.
-     A held die has to read as held from across the board, because the whole
-     turn is deciding which ones to keep. */
-  .die.big{font-size:31px;height:46px;min-width:46px;line-height:1}
-  .clickable .die[data-i]{cursor:pointer}
-  .die.picked{outline:2px solid #7ee787;background:#fff;
-    box-shadow:0 0 10px rgba(126,231,135,.45)}
-  /* Sudoku: the digit in hand, the squares you were given, and the ones you
-     wrote. A given must not read like a guess, or the puzzle looks solved
-     when it is only started. */
-  .sdpick{display:flex;gap:6px;justify-content:center;padding:2px 0 12px;flex-wrap:wrap}
-  .sud.given{font-weight:800;color:var(--ink)}
-  .sud.mine{color:#7ee787}
-  .clickable .sud.hint{outline:1px solid rgba(212,160,23,.5);cursor:pointer}
-  .clickable .sud.hint:hover{outline:2px solid var(--gold)}
-  .chip.open{color:var(--gold)}
-  .clickable .chip.open{cursor:pointer}
-  .clickable .chip.open:hover{background:rgba(212,160,23,.16)}
-  /* A spent box is history, not a choice. It shows what it actually took. */
-  .chip.spent{opacity:.5;color:var(--dim)}
   .peg{border-radius:50%;min-width:26px;height:26px}
   .peg.c0{background:#c1352b}.peg.c1{background:#1f6feb}.peg.c2{background:#2f7a3a}
   .peg.c3{background:#b58b12}.peg.c4{background:#7a3fb3}.peg.c5{background:#2c8a8a}
@@ -378,33 +358,16 @@
     border:1px solid #b9b4a4;flex:0 0 auto;
     box-shadow:0 2px 5px rgba(0,0,0,.45)}
   .card.red{color:#c1352b}
-  /* The index is the rank over its suit in the corner, and it is the half
-     of the card that has to survive being covered: in a ten-column tableau
-     only the top few millimetres of a buried card is showing. */
-  .card i{position:absolute;top:2px;left:4px;font-style:normal;font-weight:800;
-    font-size:13px;line-height:1;letter-spacing:-.5px;text-align:center;z-index:2}
-  .card i em{display:block;font-style:normal;font-weight:700;font-size:10px;
-    line-height:1.1}
-  /* The rank PAINTED as that many pips, laid out where a printed deck lays
-     them, the lower half inverted. The field is inset past the corner
-     index rather than spanning the whole card. */
-  .card .pips,.card .court{position:absolute;top:4px;right:4px;bottom:4px;left:14px}
-  .card .pip{position:absolute;transform:translate(-50%,-50%);
-    font-size:11px;line-height:1}
-  .card .pip.inv{transform:translate(-50%,-50%) rotate(180deg)}
-  /* One large mark, the way an ace is printed. */
-  .card .pips.a1 .pip{font-size:26px}
-  .card .court{display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:1px;font-size:18px;font-weight:800;line-height:1}
-  .card .court b{font-size:15px;font-weight:600}
+  .card i{position:absolute;top:2px;left:5px;font-style:normal;font-weight:800;
+    font-size:15px;line-height:1;letter-spacing:-.5px}
+  .card .suit{position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center;font-size:26px;line-height:1;opacity:.9}
   .card.back,.card.facedown{background:#2a3f6b;color:transparent;border-color:#1b2947;
     background-image:repeating-linear-gradient(45deg,#2a3f6b 0 5px,#22335a 5px 10px)}
   .card.empty{background:none;border:1px dashed #6a6455;box-shadow:none}
   .card.empty.drop{border-color:rgba(212,160,23,.7);background:rgba(212,160,23,.07)}
   .card.movable{box-shadow:0 2px 5px rgba(0,0,0,.45),0 0 0 1px rgba(212,160,23,.6)}
   .card.picked{box-shadow:0 0 0 2px #7ee787,0 4px 10px rgba(0,0,0,.5);z-index:3}
-  /* Where what you are carrying would land, asked of the engine. */
-  .card.takes{box-shadow:0 0 0 2px rgba(126,231,135,.8),0 4px 10px rgba(0,0,0,.5)}
   /* A hint points; it does not play. */
   .card.hintfrom{box-shadow:0 0 0 2px #58a6ff,0 4px 10px rgba(0,0,0,.5);z-index:2}
   .card.hintto{box-shadow:0 0 0 2px #7ee787,0 0 14px rgba(126,231,135,.5);z-index:2}
@@ -416,63 +379,6 @@
   .col .card:first-child{margin-top:0}
   .col .card.facedown{margin-top:-52px}
   .col .card.facedown:first-child{margin-top:0}
-
-  /* Klondike: the stock, the waste and four foundations over the tableau.
-     The gap between the waste and the foundations is the table itself, and
-     it is what makes the two halves read as two different things. */
-  .ktop{display:flex;align-items:flex-start;gap:9px;padding:4px 4px 16px}
-  .kgap{flex:0 0 22px}
-  .kstock{width:48px;height:66px;border-radius:6px;flex:0 0 auto;cursor:pointer;
-    border:1px solid #1b2947;color:#cdd9f5;
-    background-image:repeating-linear-gradient(45deg,#2a3f6b 0 5px,#22335a 5px 10px);
-    box-shadow:0 2px 5px rgba(0,0,0,.45);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-  .kstock b{font-size:19px;line-height:1}
-  .kstock span{font-size:8px;color:#93a4c8;letter-spacing:.4px}
-  .kstock.spent{background-image:none;border:1px dashed #4a4a5a;color:#5b6070;
-    box-shadow:none}
-  .kstock.spent.ready{border-color:rgba(212,160,23,.75);color:var(--gold);
-    background:rgba(212,160,23,.07)}
-  .card.kfound{display:flex;align-items:center;justify-content:center;
-    font-size:23px;color:#6a6455}
-  .card.empty.kfound.red{color:#7d4a44}
-  /* A card turned from the stock comes across to the waste. */
-  @keyframes turned{
-    from{transform:translateX(-57px) rotateY(78deg);opacity:.15}
-    to{transform:none;opacity:1}
-  }
-  .card.kwaste.dealt{animation:turned .26s ease-out both}
-  .kcols{padding-top:0}
-
-  /* The stock, and the eight runs. Spider has no ace foundations: a
-     completed king-to-ace run leaves the tableau on its own, so these are
-     the runs that have GONE, which is the whole of the score. */
-  .tray{display:flex;align-items:center;gap:20px;padding:2px 6px 14px}
-  .stockpile{width:48px;height:66px;border-radius:6px;flex:0 0 auto;
-    border:1px solid #1b2947;color:#cdd9f5;
-    background-image:repeating-linear-gradient(45deg,#2a3f6b 0 5px,#22335a 5px 10px);
-    box-shadow:0 2px 5px rgba(0,0,0,.45);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
-  .stockpile b{font-size:19px;line-height:1}
-  .stockpile span{font-size:8px;color:#93a4c8;letter-spacing:.3px}
-  .stockpile.out{background-image:none;border:1px dashed #4a4a5a;
-    color:#5b6070;box-shadow:none}
-  .runs{display:flex;align-items:center;gap:6px}
-  .runslot{width:26px;height:36px;border-radius:4px;flex:0 0 auto;
-    border:1px dashed #6a6455}
-  .runslot.done{border:1px solid #b9b4a4;background:#f9f8f3;color:#16161e;
-    box-shadow:0 2px 5px rgba(0,0,0,.45);display:flex;align-items:center;
-    justify-content:center;font-weight:800;font-size:13px}
-  .runlab{font-size:11px;color:var(--dim);margin-left:8px}
-
-  /* A dealt row lands rather than appearing: each card flies in from the
-     stock, which sits at the left of the tray, so the further right the
-     column the further it travels. `--dx` and the delay are set per card. */
-  @keyframes dealt{
-    from{transform:translate(var(--dx,-120px),-108px) rotate(8deg);opacity:0}
-    to{transform:none;opacity:1}
-  }
-  .col .card.dealt{animation:dealt .34s cubic-bezier(.2,.72,.3,1) both;z-index:4}
 
   /* A finished run leaves the board. */
   @keyframes flyaway{
