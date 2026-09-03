@@ -622,6 +622,7 @@ async function main() {
       fuse: 260,
       col: PALETTE[(Math.random() * PALETTE.length) | 0],
       type: TYPES[(Math.random() * TYPES.length) | 0],
+      trail: [],                       // the slots of the embers this climb left
     });
   }
 
@@ -687,8 +688,31 @@ async function main() {
       push(a, Math.random() * 0.9, 200 + (Math.random() * 120) | 0, 0x404858, K_SMOKE);
     }
     emit(out);
+    if (s.slot !== undefined) device.queue.writeBuffer(stateBuf, s.slot * 8 * 4, deadRec);
+    snuffTrail(s);
     addFlash(s.x, s.y, s.col, 1.0);
     lastType = s.type;
+  }
+
+  // THE STREAM STARTS DYING THE MOMENT THE SHELL POPS (Damian, 2026-09-03). Each
+  // ember of the ascent trail carries its own clock, so the ones left just under
+  // the apex were still at full brightness when the burst opened and hung there
+  // for most of a second. At the pop, every ember of that shell's trail that
+  // still has more than SNUFF frames ahead of it is given exactly SNUFF, from
+  // full: fresh embers are near full anyway, so nothing flashes, and the whole
+  // stream fades out together over a third of a second. Embers already past
+  // that point are left to finish on their own. The host knows each ember's
+  // birth frame and lifetime, which is how it can do this without a readback.
+  const SNUFF = 20;
+  const one = new Int32Array(2);
+  function snuffTrail(s) {
+    for (const t of s.trail) {
+      const left = t.maxl - (frame - t.born);
+      if (left <= SNUFF) continue;
+      one[0] = SNUFF; one[1] = SNUFF;
+      device.queue.writeBuffer(stateBuf, (t.slot * 8 + 4) * 4, one);
+    }
+    s.trail.length = 0;
   }
 
   function stepShells() {
@@ -702,16 +726,32 @@ async function main() {
       // and there is one per shell in the air, which is what was reading as a
       // screen full of white fountains. Short and amber: it marks the climb
       // without competing with the burst it is delivering.
-      if (s.fuse % 2 === 0) emit([{ x: s.x, y: s.y,
-        vx: s.vx * 0.22 + (Math.random() - 0.5) * 0.5, vy: s.vy * 0.16 + 0.4,
-        life: 34 + (Math.random() * 26) | 0, col: 0xff8a1e, kind: K_TRAIL }]);
+      if (s.fuse % 2 === 0) {
+        const life = 34 + (Math.random() * 26) | 0;
+        s.trail.push({ slot: cursor, born: frame, maxl: life });
+        emit([{ x: s.x, y: s.y,
+          vx: s.vx * 0.22 + (Math.random() - 0.5) * 0.5, vy: s.vy * 0.16 + 0.4,
+          life, col: 0xff8a1e, kind: K_TRAIL }]);
+      }
       if (s.fuse <= 0 || s.vy >= -0.30 || s.y < 70) { burst(s); shells.splice(i, 1); }
     }
-    // The shells themselves, written into the buffer as held particles.
-    const live = shells.map(s => ({ x: s.x, y: s.y, vx: s.vx, vy: s.vy,
-      life: 400, col: 0xfff0c0, kind: K_SHELL }));
-    if (live.length) emit(live);
+    // The shells themselves, written into the buffer as held particles. EACH
+    // SHELL OWNS ONE SLOT for its whole climb, and the slot is cleared at the
+    // pop. This used to emit every live shell into a fresh slot every frame, and
+    // a held particle never ages, so every shell left a dotted white ghost of
+    // its entire flight path that stood in the sky until the 40,000-slot ring
+    // came round and overwrote it: the streams that would not decay (Damian,
+    // 2026-09-03). Written straight to the slot rather than through emit().
+    for (const s of shells) {
+      if (s.slot === undefined) { s.slot = cursor; cursor = (cursor + 1) % MAXP; }
+      shellRec[0] = Math.round(s.x * 256); shellRec[1] = Math.round(s.y * 256);
+      shellRec[2] = Math.round(s.vx * 256); shellRec[3] = Math.round(s.vy * 256);
+      shellRec[4] = 400; shellRec[5] = 400; shellRec[6] = 0xfff0c0; shellRec[7] = K_SHELL;
+      device.queue.writeBuffer(stateBuf, s.slot * 8 * 4, shellRec);
+    }
   }
+  const shellRec = new Int32Array(8);
+  const deadRec = new Int32Array(8);
 
   /* ---- input ---- */
   addEventListener('keydown', e => {
