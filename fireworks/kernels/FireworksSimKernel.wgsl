@@ -5,6 +5,7 @@ const fw_k_shell : i32 = 2;
 const fw_k_willow : i32 = 3;
 const fw_k_glitter : i32 = 4;
 const fw_k_smoke : i32 = 5;
+const fw_k_trail : i32 = 6;
 fn fw_floor(x : f32) -> f32 {
   let t = f32(f32(i32(x)));
   if ((t > x)) {
@@ -32,7 +33,11 @@ fn fw_drag(kind : i32) -> f32 {
   if ((kind == fw_k_smoke)) {
   return bitcast<f32>(1064682127u);
   } else {
+  if ((kind == fw_k_trail)) {
+  return bitcast<f32>(1064313028u);
+  } else {
   return bitcast<f32>(1065185443u);
+  }
   }
   }
   }
@@ -48,7 +53,11 @@ fn fw_grav(kind : i32) -> f32 {
   if ((kind == fw_k_glitter)) {
   return bitcast<f32>(1028443340u);
   } else {
+  if ((kind == fw_k_trail)) {
+  return bitcast<f32>(1020591603u);
+  } else {
   return bitcast<f32>(1027101163u);
+  }
   }
   }
   }
@@ -131,6 +140,10 @@ fn fw_twinkle(fg : f32, t : f32, kind : i32) -> f32 {
   }
   }
 }
+fn fw_decay(fade : f32, a : f32, b : f32) -> f32 {
+  let e = (bitcast<f32>(1065353216u) - fade);
+  return (bitcast<f32>(1065353216u) / ((bitcast<f32>(1065353216u) + (a * e)) + ((b * e) * e)));
+}
 fn fw_bright(fade : f32, fg : f32, t : f32, kind : i32) -> f32 {
   if ((kind == fw_k_dead)) {
   return bitcast<f32>(0u);
@@ -141,9 +154,13 @@ fn fw_bright(fade : f32, fg : f32, t : f32, kind : i32) -> f32 {
   if ((kind == fw_k_smoke)) {
   return (bitcast<f32>(1022739087u) * fade);
   } else {
-  let base = ((fade * fade) * (bitcast<f32>(1042536202u) + (bitcast<f32>(1062836633u) * fade)));
-  let birth = select(bitcast<f32>(0u), bitcast<f32>(1071225241u), (fade > bitcast<f32>(1064598241u)));
+  if ((kind == fw_k_trail)) {
+  return (bitcast<f32>(1061997772u) * fw_decay(fade, bitcast<f32>(1088421888u), bitcast<f32>(1104150528u)));
+  } else {
+  let base = (bitcast<f32>(1064011038u) * fw_decay(fade, bitcast<f32>(1079613849u), bitcast<f32>(1091567616u)));
+  let birth = select(bitcast<f32>(0u), bitcast<f32>(1063675494u), (fade > bitcast<f32>(1065101557u)));
   return ((base + birth) * fw_twinkle(fg, t, kind));
+  }
   }
   }
   }
@@ -158,6 +175,9 @@ fn fw_size(fade : f32, kind : i32) -> f32 {
   if ((kind == fw_k_smoke)) {
   return (bitcast<f32>(1091567616u) + (bitcast<f32>(1106247680u) * (bitcast<f32>(1065353216u) - fade)));
   } else {
+  if ((kind == fw_k_trail)) {
+  return (bitcast<f32>(1057803468u) + (bitcast<f32>(1067869798u) * fade));
+  } else {
   if ((kind == fw_k_willow)) {
   return (bitcast<f32>(1066611507u) + (bitcast<f32>(1069966950u) * fade));
   } else {
@@ -165,6 +185,7 @@ fn fw_size(fade : f32, kind : i32) -> f32 {
   return (bitcast<f32>(1064514355u) + (bitcast<f32>(1067869798u) * fade));
   } else {
   return (bitcast<f32>(1069128089u) + (bitcast<f32>(1075000115u) * fade));
+  }
   }
   }
   }

@@ -13,8 +13,11 @@
   .chrome { position:absolute; left:0; right:0; pointer-events:none;
             text-shadow:0 2px 14px rgba(0,0,0,.85); }
   #banner { top:4.5vh; text-align:center; }
-  #banner .t { font-size:clamp(20px,3.4vw,44px); letter-spacing:.34em; font-weight:600;
-               color:#ffd98a; text-transform:uppercase; }
+  #banner .t { font-size:clamp(26px,4.6vw,62px); letter-spacing:.30em; font-weight:700;
+               color:#ffd98a; text-transform:uppercase;
+               background:linear-gradient(180deg,#fff3d0,#ffc94a 55%,#e08a2a);
+               -webkit-background-clip:text; background-clip:text; color:transparent;
+               filter:drop-shadow(0 3px 22px rgba(255,170,60,.45)); }
   #banner .s { margin-top:.5em; font-size:clamp(10px,1.15vw,14px); letter-spacing:.42em;
                color:#9fb0d8; text-transform:uppercase; }
   #city { bottom:8.5vh; text-align:center; }
@@ -41,7 +44,10 @@
 <div id="stage">
   <canvas id="c"></canvas>
   <a id="back" href="../../landing.html">&#8592; Cobblestone</a>
-  <div class="chrome" id="banner"><div class="t">Fireworks</div><div class="s">Compiled, not hand-written</div></div>
+  <div class="chrome" id="banner">
+    <div class="t">USA 250</div>
+    <div class="s">1776 to 2026 &nbsp;&middot;&nbsp; compiled, not hand-written</div>
+  </div>
   <div class="chrome" id="city"><div class="n" id="cityname"></div><div class="k" id="shell"></div></div>
   <div id="hud"></div>
   <div id="keys"><kbd>Space</kbd> burst &nbsp; <kbd>F</kbd> finale &nbsp; <kbd>N</kbd> next city</div>
@@ -71,96 +77,17 @@ const fail = t => { msg.className = ''; msg.innerHTML = '<div><div class="b">' +
 
 /* ---------------------------------------------------------------- cities */
 
-const CITIES = [
-  { name: 'New York',      seed: 101, landmark: 'empire'   },
-  { name: 'Chicago',       seed: 203, landmark: 'willis'   },
-  { name: 'San Francisco', seed: 307, landmark: 'pyramid'  },
-  { name: 'Seattle',       seed: 411, landmark: 'needle'   },
-  { name: 'Washington DC', seed: 523, landmark: 'monument' },
-];
+// The order and the seeds are FireworksShow.codex's, which is what decides
+// which skyline each index builds. The names are the only part of a city this
+// page owns.
+const CITIES = ['New York', 'Chicago', 'San Francisco', 'Seattle', 'Washington DC'];
 
-function mulberry(seed) {
-  let a = seed >>> 0;
-  return () => { a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
-
-// A quad instance: x, y, w, h, then colour and a kind (0 masonry, 1 window).
-function pushQuad(a, x, y, w, h, r, g, b, kind) {
-  a.push(x, y, w, h, r, g, b, kind);
-}
-
-function landmarkQuads(a, kind, cx, hz, rnd) {
-  const M = [0.105, 0.115, 0.150];             // masonry
-  const A = [0.62, 0.16, 0.11];                // aircraft warning red
-  const put = (x, y, w, h, c) => pushQuad(a, x, y, w, h, c[0], c[1], c[2], 0);
-  if (kind === 'empire') {
-    put(cx - 60, hz - 300, 120, 300, M); put(cx - 44, hz - 372, 88, 72, M);
-    put(cx - 28, hz - 430, 56, 58, M);   put(cx - 16, hz - 470, 32, 40, M);
-    put(cx - 8,  hz - 508, 16, 38, M);   put(cx - 3, hz - 548, 6, 40, A);
-  } else if (kind === 'willis') {
-    put(cx - 80, hz - 300, 160, 300, M); put(cx - 80, hz - 372, 104, 72, M);
-    put(cx - 40, hz - 420, 80, 48, M);   put(cx - 30, hz - 470, 24, 50, M);
-    put(cx + 6,  hz - 470, 24, 50, M);
-    put(cx - 20, hz - 514, 4, 44, A);    put(cx + 14, hz - 514, 4, 44, A);
-  } else if (kind === 'pyramid') {
-    // A tapering stack reads as the Transamerica silhouette at this scale.
-    for (let i = 0; i < 16; i++) {
-      const t = i / 16, w = 62 * (1 - t) + 8, y = hz - 120 - i * 18;
-      put(cx - w / 2, y, w, 19, M);
-    }
-    put(cx - 3, hz - 428, 6, 34, A);
-    put(cx - 6, hz - 120, 12, 120, M);
-  } else if (kind === 'needle') {
-    put(cx - 7, hz - 300, 14, 300, M);
-    put(cx - 52, hz - 320, 104, 24, M);  put(cx - 40, hz - 336, 80, 16, M);
-    put(cx - 4, hz - 386, 8, 50, M);     put(cx - 2.5, hz - 412, 5, 26, A);
-  } else {
-    put(cx - 13, hz - 430, 26, 430, [0.80, 0.78, 0.71]);
-    for (let i = 0; i < 5; i++) {
-      const w = 26 * (1 - i / 5), y = hz - 430 - i * 7;
-      put(cx - w / 2, y, w, 8, [0.84, 0.82, 0.75]);
-    }
-    // The dome, five towns to the right.
-    const dx = cx + 250;
-    put(dx - 90, hz - 70, 180, 70, [0.76, 0.75, 0.70]);
-    put(dx - 52, hz - 112, 104, 42, [0.78, 0.77, 0.72]);
-    for (let i = 0; i < 6; i++) {
-      const w = 68 * (1 - i / 7), y = hz - 150 - i * 7;
-      put(dx - w / 2, y, w, 8, [0.80, 0.79, 0.74]);
-    }
-    put(dx - 2, hz - 206, 4, 18, [0.86, 0.85, 0.80]);
-  }
-}
-
-// Buildings, their windows, and the landmark, as quad instances in sim units.
-function buildCity(city) {
-  const rnd = mulberry(city.seed);
-  const a = [], hz = SIMH * HORIZON, roofs = [];
-  for (let x = -20; x < SIMW + 20;) {
-    const w = 40 + rnd() * 54;
-    const h = 70 + Math.pow(rnd(), 1.7) * 330;
-    const top = hz - h;
-    const shade = 0.022 + rnd() * 0.026;
-    pushQuad(a, x, top, w, h + 4, shade * 0.85, shade * 0.92, shade * 1.7, 0);
-    roofs.push({ x: x + w / 2, y: top });
-    // Lit windows. A warm office grid with a few cool ones, sparsely lit.
-    const cols = Math.max(1, Math.floor((w - 12) / 13));
-    const rows = Math.max(1, Math.floor((h - 16) / 15));
-    for (let r = 0; r < rows; r++) for (let cc = 0; cc < cols; cc++) {
-      if (rnd() > 0.34) continue;
-      const warm = rnd() > 0.24;
-      const g = 0.55 + rnd() * 0.45;
-      pushQuad(a, x + 7 + cc * 13, top + 11 + r * 15, 6, 8,
-        warm ? g : g * 0.62, warm ? g * 0.80 : g * 0.86, warm ? g * 0.42 : g, 1);
-    }
-    x += w + 5 + rnd() * 9;
-  }
-  landmarkQuads(a, city.landmark, city.landmark === 'monument' ? 300 : 512, hz, rnd);
-  return { quads: new Float32Array(a), count: a.length / 8, roofs };
-}
+// The layout FireworksShow.codex writes into WASM linear memory, in i32 words.
+const W_VTX_COUNT  = 131072 / 4;
+const W_ROOF_COUNT = 131080 / 4;
+const W_ROOF_BASE  = 196608 / 4;
+const W_VTX_BASE   = 262144 / 4;
+const VTX_WORDS    = 8;
 
 /* ------------------------------------------------------------------ WGSL */
 
@@ -237,27 +164,34 @@ fn hash21(p : vec2f) -> f32 {
 const CITY_WGSL = SCENE_STRUCT + `
 struct VOut {
   @builtin(position) pos : vec4f,
-  @location(0) rgb  : vec3f,
-  @location(1) kind : f32,
-  @location(2) sim  : vec2f,
+  @location(0) rgb   : vec3f,
+  @location(1) kind  : f32,
+  @location(2) sim   : vec2f,
+  @location(3) phase : f32,
 };
 
-@vertex fn vs(@builtin(vertex_index) vi : u32,
-              @location(0) rect : vec4f,
-              @location(1) tint : vec4f) -> VOut {
-  var cs = array<vec2f,6>(vec2f(0.0,0.0), vec2f(1.0,0.0), vec2f(0.0,1.0),
-                          vec2f(0.0,1.0), vec2f(1.0,0.0), vec2f(1.0,1.0));
-  let c = cs[vi];
-  let p = rect.xy + c * rect.zw;
+// The vertex buffer is the integer mesh FireworksShow.codex wrote into WASM
+// linear memory, uploaded verbatim: x and y in 1/16 of a pixel, colour in
+// thousandths, then the kind and a phase. Taking it as sint32 means nothing on
+// the JavaScript side converts a single coordinate.
+@vertex fn vs(@location(0) a : vec4i, @location(1) b : vec4i) -> VOut {
+  let p = vec2f(f32(a.x), f32(a.y)) / 16.0;
   var o : VOut;
-  o.pos  = vec4f(simToClip(p), 0.0, 1.0);
-  o.rgb  = tint.rgb;
-  o.kind = tint.w;
-  o.sim  = p;
+  o.pos   = vec4f(simToClip(p), 0.0, 1.0);
+  o.rgb   = vec3f(f32(a.z), f32(a.w), f32(b.x)) / 1000.0;
+  o.kind  = f32(b.y);
+  o.phase = f32(b.z) / 1000.0;
+  o.sim   = p;
   return o;
 }
 
 @fragment fn fs(i : VOut) -> @location(0) vec4f {
+  if (i.kind > 1.5) {
+    // An aviation beacon. Each carries its own phase so a skyline does not
+    // blink in unison, which is the tell that a light is decoration.
+    let b = pow(max(sin((S.time * 1.15 + i.phase) * 6.2832), 0.0), 6.0);
+    return vec4f(i.rgb * (0.06 + b * 5.5), 1.0);
+  }
   if (i.kind > 0.5) {
     // A lit window is its own small emitter and barely takes burst light.
     return vec4f(i.rgb * 0.85, 1.0);
@@ -479,7 +413,20 @@ async function main() {
   const sceneUni = device.createBuffer({ size: sceneArr.byteLength,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-  const cityBuf = device.createBuffer({ size: 4096 * 8 * 4,
+  // The skyline module. It composes the mesh; this page uploads it.
+  let show, showMem;
+  try {
+    const r = await fetch('fireworks-show.wasm');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const m = await WebAssembly.instantiate(await r.arrayBuffer(), {
+      wasi_snapshot_preview1: { fd_write: () => 0, fd_read: () => 0 },
+      env: { blit_framebuf: () => {}, on_key: () => 0 },
+    });
+    show = m.instance.exports;
+    showMem = new Int32Array(show.memory.buffer);
+  } catch (e) { return fail('Could not load the compiled skyline module: ' + e.message); }
+
+  const cityBuf = device.createBuffer({ size: 60000 * VTX_WORDS * 4,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
 
   const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear',
@@ -510,9 +457,9 @@ async function main() {
 
   const cityPipe = device.createRenderPipeline({ layout: 'auto',
     vertex: { module: cityMod, entryPoint: 'vs', buffers: [{
-      arrayStride: 32, stepMode: 'instance', attributes: [
-        { shaderLocation: 0, offset: 0,  format: 'float32x4' },
-        { shaderLocation: 1, offset: 16, format: 'float32x4' }] }] },
+      arrayStride: VTX_WORDS * 4, stepMode: 'vertex', attributes: [
+        { shaderLocation: 0, offset: 0,  format: 'sint32x4' },
+        { shaderLocation: 1, offset: 16, format: 'sint32x4' }] }] },
     fragment: { module: cityMod, entryPoint: 'fs', targets: [{ format: HDR }] },
     primitive: { topology: 'triangle-list' } });
 
@@ -599,18 +546,25 @@ async function main() {
   resize();
 
   /* ---- the show ---- */
-  const K_DEAD = 0, K_SPARK = 1, K_SHELL = 2, K_WILLOW = 3, K_GLITTER = 4, K_SMOKE = 5;
-  const PALETTE = [0xff3b2e, 0xffffff, 0x3f74ff, 0xffd23a, 0x46e070, 0xc64bff,
-                   0xff7ac0, 0x59e8ff, 0xffa030];
-  const TYPES = ['peony', 'chrysanthemum', 'ring', 'palm', 'crackle', 'double'];
+  const K_DEAD = 0, K_SPARK = 1, K_SHELL = 2, K_WILLOW = 3, K_GLITTER = 4, K_SMOKE = 5, K_TRAIL = 6;
+  // No pure white in the palette. The sprites are additive, so a dense burst
+  // saturates toward white on its own; starting a shell there leaves it no
+  // colour to saturate FROM and the screen goes monochrome.
+  const PALETTE = [0xff3b2e, 0x3f74ff, 0xffd23a, 0x46e070, 0xc64bff,
+                   0xff7ac0, 0x59e8ff, 0xffa030, 0xff5a3c, 0x8a6cff];
+  // Weighted, not uniform. The two willow types live long enough for drag to
+  // take their horizontal velocity to nothing, after which every arm is falling
+  // straight down and the shell reads as a fountain rather than a burst. They
+  // are worth having and worth being outnumbered.
+  const TYPES = ['peony', 'peony', 'peony', 'ring', 'ring', 'crackle',
+                 'crackle', 'double', 'double', 'chrysanthemum', 'palm'];
 
   let cursor = 0;                        // ring allocator over the state buffer
   const scratch = new Int32Array(MAXP * 8);
   const shells = [];
   const flashes = [];
   let city = 0, cityFrame = 0, frame = 0, finale = 0, lastType = '';
-  let cityData = buildCity(CITIES[0]);
-  device.queue.writeBuffer(cityBuf, 0, cityData.quads);
+  let cityVerts = 0, roofs = [];
 
   // Slots are handed out contiguously and wrap, so a burst is one or two
   // writeBuffer calls rather than one per spark.
@@ -645,7 +599,6 @@ async function main() {
 
   function launch(force) {
     const hz = SIMH * HORIZON;
-    const roofs = cityData.roofs;
     const r = roofs.length ? roofs[(Math.random() * roofs.length) | 0] : { x: SIMW / 2, y: hz };
     const x = force !== undefined ? force : r.x + (Math.random() - 0.5) * 40;
     const y0 = Math.min(r.y, hz) - 6;
@@ -677,46 +630,49 @@ async function main() {
       for (let i = 0; i < n; i++) {
         const a = i / n * Math.PI * 2, sp = 5.4 + Math.random() * 0.5;
         out.push({ x: s.x, y: s.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * tilt,
-          life: 78 + (Math.random() * 26) | 0, col: s.col, kind: K_SPARK });
+          life: 62 + (Math.random() * 150) | 0, col: s.col, kind: K_SPARK });
       }
     } else if (s.type === 'chrysanthemum') {
       for (let i = 0; i < 460; i++) {
         const a = Math.random() * Math.PI * 2;
         const sp = Math.sqrt(Math.random()) * 4.6 + 0.9;
-        push(a, sp, 130 + (Math.random() * 70) | 0, s.col, K_WILLOW);
+        push(a, sp, 70 + (Math.random() * 190) | 0, s.col, K_WILLOW);
       }
     } else if (s.type === 'palm') {
-      const arms = 9;
+      // Wider arms with fewer stars each. Fifty-two sparks inside a 0.16 rad
+      // arm overlap for their whole life, and additive overlap that dense is
+      // white whatever colour the shell was.
+      const arms = 11;
       for (let k = 0; k < arms; k++) {
         const base = k / arms * Math.PI * 2 + Math.random() * 0.2;
-        for (let i = 0; i < 52; i++) {
-          const a = base + (Math.random() - 0.5) * 0.16;
+        for (let i = 0; i < 26; i++) {
+          const a = base + (Math.random() - 0.5) * 0.42;
           const sp = 2.0 + Math.random() * 5.6;
-          push(a, sp, 120 + (Math.random() * 60) | 0, s.col, K_WILLOW);
+          push(a, sp, 66 + (Math.random() * 180) | 0, s.col, K_WILLOW);
         }
       }
     } else if (s.type === 'crackle') {
       for (let i = 0; i < 300; i++) {
         const a = Math.random() * Math.PI * 2;
-        push(a, Math.sqrt(Math.random()) * 4.4 + 0.6, 62 + (Math.random() * 30) | 0, s.col, K_SPARK);
+        push(a, Math.sqrt(Math.random()) * 4.4 + 0.6, 48 + (Math.random() * 120) | 0, s.col, K_SPARK);
       }
       for (let i = 0; i < 420; i++) {
         const a = Math.random() * Math.PI * 2;
-        push(a, Math.sqrt(Math.random()) * 3.4 + 0.4, 70 + (Math.random() * 46) | 0, 0xfff0d0, K_GLITTER);
+        push(a, Math.sqrt(Math.random()) * 3.4 + 0.4, 52 + (Math.random() * 145) | 0, 0xfff0d0, K_GLITTER);
       }
     } else if (s.type === 'double') {
       for (let i = 0; i < 240; i++) {
         const a = Math.random() * Math.PI * 2;
-        push(a, Math.sqrt(Math.random()) * 2.5 + 0.5, 84 + (Math.random() * 30) | 0, col2, K_SPARK);
+        push(a, Math.sqrt(Math.random()) * 2.5 + 0.5, 66 + (Math.random() * 160) | 0, col2, K_SPARK);
       }
       for (let i = 0; i < 400; i++) {
         const a = i / 400 * Math.PI * 2 + Math.random() * 0.02;
-        push(a, 5.0 + Math.random() * 0.9, 90 + (Math.random() * 34) | 0, s.col, K_SPARK);
+        push(a, 5.0 + Math.random() * 0.9, 72 + (Math.random() * 170) | 0, s.col, K_SPARK);
       }
     } else {                                            // peony
       for (let i = 0; i < 520; i++) {
         const a = Math.random() * Math.PI * 2;
-        push(a, Math.sqrt(Math.random()) * 5.2 + 0.7, 88 + (Math.random() * 40) | 0, s.col, K_SPARK);
+        push(a, Math.sqrt(Math.random()) * 5.2 + 0.7, 64 + (Math.random() * 175) | 0, s.col, K_SPARK);
       }
     }
     for (let i = 0; i < 26; i++) {                      // the smoke it leaves
@@ -735,9 +691,13 @@ async function main() {
       s.vy += 0.075; s.vx *= 0.999; s.vy *= 0.999;
       s.x += s.vx; s.y += s.vy; s.fuse--;
       // A rising shell trails embers, which is most of what makes the launch read.
+      // A long-lived, near-white trail draws the whole ascent as a bright line
+      // and there is one per shell in the air, which is what was reading as a
+      // screen full of white fountains. Short and amber: it marks the climb
+      // without competing with the burst it is delivering.
       if (s.fuse % 2 === 0) emit([{ x: s.x, y: s.y,
         vx: s.vx * 0.22 + (Math.random() - 0.5) * 0.5, vy: s.vy * 0.16 + 0.4,
-        life: 15 + (Math.random() * 10) | 0, col: 0xffc060, kind: K_WILLOW }]);
+        life: 34 + (Math.random() * 26) | 0, col: 0xff8a1e, kind: K_TRAIL }]);
       if (s.fuse <= 0 || s.vy >= -0.30 || s.y < 70) { burst(s); shells.splice(i, 1); }
     }
     // The shells themselves, written into the buffer as held particles.
@@ -764,9 +724,16 @@ async function main() {
 
   function setCity(i) {
     city = i % CITIES.length;
-    cityData = buildCity(CITIES[city]);
-    device.queue.writeBuffer(cityBuf, 0, cityData.quads);
-    nameEl.textContent = CITIES[city].name;
+    cityVerts = show.build_city(city);
+    // WASM memory can be detached by a grow, so the view is retaken each time.
+    showMem = new Int32Array(show.memory.buffer);
+    device.queue.writeBuffer(cityBuf, 0, showMem, W_VTX_BASE, cityVerts * VTX_WORDS);
+    const nr = showMem[W_ROOF_COUNT];
+    roofs = [];
+    for (let k = 0; k < nr; k++) {
+      roofs.push({ x: showMem[W_ROOF_BASE + k * 2] / 16, y: showMem[W_ROOF_BASE + k * 2 + 1] / 16 });
+    }
+    nameEl.textContent = CITIES[city];
   }
   setCity(0);
 
@@ -831,7 +798,7 @@ async function main() {
     let rp = pass(a, false);
     rp.setPipeline(skyPipe); rp.setBindGroup(0, bg.sky); rp.draw(3);
     rp.setPipeline(cityPipe); rp.setBindGroup(0, bg.city);
-    rp.setVertexBuffer(0, cityBuf); rp.draw(6, cityData.count);
+    rp.setVertexBuffer(0, cityBuf); rp.draw(cityVerts);
     rp.setPipeline(partPipe); rp.setBindGroup(0, bg.part); rp.draw(6, MAXP);
     rp.end();
 
@@ -857,8 +824,9 @@ async function main() {
     if (frame % 15 === 0) {
       shellEl.textContent = lastType ? lastType + ' shell' : '';
       hud.innerHTML = '<b>' + MAXP.toLocaleString() + '</b> particle slots &middot; '
+        + '<b>' + (cityVerts / 3 | 0).toLocaleString() + '</b> skyline triangles &middot; '
         + '<b>' + shells.length + '</b> shells up &middot; <b>' + fps.toFixed(0) + '</b> fps'
-        + ' &middot; sim compiled from Codex';
+        + ' &middot; sim and city compiled from Codex';
     }
     if (frame > 3) { window.__ready = true; window.__frame = frame; }
     requestAnimationFrame(tick);

@@ -3,9 +3,12 @@
 The Cobblestone Project's web surface, as one deployable static bundle:
 
 - `landing.html` -- the Cobblestone landing page
-- `compile/prism.html` -- Prism: Codex through every backend lens, packaged standalone
-- `compile/index.html` -- the self-compile page: the Codex compiler as a
-  WebAssembly module, fed its own source in your browser
+- `compile/prism.html` -- Prism: Codex through every backend lens, packaged
+  standalone, with the compiler's own source on board for the self-compile
+- the applications the landing page links to, each Codex compiled to
+  WebAssembly: `games/`, `c64/`, `mathbook/`, `data/`, `starmap/`, and the
+  `graphics/` gallery over `gpushow/`, `fireworks/`, `globe/`, `fishtank/`
+  and `safari/`
 - the photography the landing page tells its story with
 
 This repository is a **published artifact, not a source tree**. Everything
