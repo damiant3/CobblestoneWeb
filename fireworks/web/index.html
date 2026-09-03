@@ -694,27 +694,27 @@ async function main() {
     lastType = s.type;
   }
 
-  // THE STREAM STARTS DYING THE MOMENT THE SHELL POPS (Damian, 2026-09-03). Each
-  // ember of the ascent trail carries its own clock, so the ones left just under
-  // the apex were still at full brightness when the burst opened and hung there
-  // for most of a second. At the pop, every ember of that shell's trail that
-  // still has more than SNUFF frames ahead of it is given exactly SNUFF, from
-  // full: fresh embers are near full anyway, so nothing flashes, and the whole
-  // stream fades out together over a third of a second. Embers already past
-  // that point are left to finish on their own. The host knows each ember's
-  // birth frame and lifetime, which is how it can do this without a readback.
-  const SNUFF = 20;
-  const one = new Int32Array(2);
+  // THE STREAM IS THE CLIMB, AND IT STARTS DYING THE MOMENT THE SHELL POPS
+  // (Damian, 2026-09-03). Each frame of a climb leaves one bright, held ember at
+  // the shell's position, so the stream stands steady and white while the shell
+  // rises, which is the look the page had by accident when every frame's shell
+  // record was left behind in a fresh slot. What that accident lacked was an
+  // end: a held particle never ages, so the ghost stood until the 40,000-slot
+  // ring wrapped. Now the page remembers every ember's slot, and at the pop it
+  // rewrites each one as a trail particle with SNUFF frames to live, from full,
+  // at rest: the whole stream fades together over three quarters of a second,
+  // sagging a little under gravity as it goes, and nothing of the climb is left.
+  const SNUFF = 45;
+  const emberRec = new Int32Array(8);
   function snuffTrail(s) {
     for (const t of s.trail) {
-      const left = t.maxl - (frame - t.born);
-      if (left <= SNUFF) continue;
-      one[0] = SNUFF; one[1] = SNUFF;
-      device.queue.writeBuffer(stateBuf, (t.slot * 8 + 4) * 4, one);
+      emberRec[0] = Math.round(t.x * 256); emberRec[1] = Math.round(t.y * 256);
+      emberRec[2] = 0; emberRec[3] = 0;
+      emberRec[4] = SNUFF; emberRec[5] = SNUFF; emberRec[6] = 0xfff0c0; emberRec[7] = K_TRAIL;
+      device.queue.writeBuffer(stateBuf, (t.slot * 8) * 4, emberRec);
     }
     s.trail.length = 0;
   }
-
   function stepShells() {
     const hz = SIMH * HORIZON;
     for (let i = shells.length - 1; i >= 0; i--) {
@@ -726,13 +726,8 @@ async function main() {
       // and there is one per shell in the air, which is what was reading as a
       // screen full of white fountains. Short and amber: it marks the climb
       // without competing with the burst it is delivering.
-      if (s.fuse % 2 === 0) {
-        const life = 34 + (Math.random() * 26) | 0;
-        s.trail.push({ slot: cursor, born: frame, maxl: life });
-        emit([{ x: s.x, y: s.y,
-          vx: s.vx * 0.22 + (Math.random() - 0.5) * 0.5, vy: s.vy * 0.16 + 0.4,
-          life, col: 0xff8a1e, kind: K_TRAIL }]);
-      }
+      s.trail.push({ slot: cursor, x: s.x, y: s.y });
+      emit([{ x: s.x, y: s.y, vx: 0, vy: 0, life: 400, col: 0xfff0c0, kind: K_SHELL }]);
       if (s.fuse <= 0 || s.vy >= -0.30 || s.y < 70) { burst(s); shells.splice(i, 1); }
     }
     // The shells themselves, written into the buffer as held particles. EACH
