@@ -243,9 +243,13 @@ running in your browser: the page only paints what the module hands it.</p>
     var HEAD = 48;
     function hex(c) { return '#' + (c & 0xffffff).toString(16).padStart(6, '0'); }
 
+    // Per-half timing, readable by a harness: window.__bench sums the module's
+    // render and the page's paint separately, the way Steve's blitter's HUD does.
+    var bench = window.__bench = { n: 0, wasm: 0, paint: 0, max: 0 };
     function frame() {
       var t0 = performance.now();
       var used = ex.sfw_render(0) >>> 0;
+      var t1 = performance.now();
       var dv = new DataView(ex.memory.buffer);
       var skyHex = hex(dv.getUint32(base, true));
       var horHex = hex(dv.getUint32(base + 4, true));
@@ -263,7 +267,9 @@ running in your browser: the page only paints what the module hands it.</p>
       if (sunOn) sun(ctx, sx, sy, sscale);
       var res = paint(dv, base, used, HEAD);
       ctx.restore();
-      var ms = (performance.now() - t0).toFixed(0);
+      var t2 = performance.now();
+      bench.n++; bench.wasm += t1 - t0; bench.paint += t2 - t1; if (t2 - t0 > bench.max) bench.max = t2 - t0;
+      var ms = (t2 - t0).toFixed(0);
       hud.textContent = res.bad === null
         ? 'step ' + step + '   ' + res.cmds + ' commands   ' + (used / 1024).toFixed(0) + ' KiB   ' + ms + ' ms   ' + segments + ' segments'
         : 'unknown tag ' + res.bad + ' after ' + res.cmds + ' commands';
