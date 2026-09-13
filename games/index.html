@@ -40,7 +40,7 @@
   .side::-webkit-scrollbar{width:7px}
   .side::-webkit-scrollbar-thumb{background:#26263a;border-radius:4px}
   /* The picker is a row of kinds and then only that kind's games, rather
-     than all thirty-four in one column you have to scroll. */
+     than all thirty-five in one column you have to scroll. */
   .cats{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
   .cats button{background:rgba(18,18,30,.9);border:1px solid #26263a;border-radius:16px;
     color:var(--dim);font-family:inherit;font-size:11px;padding:5px 11px;cursor:pointer}
@@ -255,6 +255,11 @@
   .disc.yellow::after{background:radial-gradient(circle at 34% 28%,#ffe694,#cf9c0d)}
 
   .sq-light{background:#c8b48a}.sq-dark{background:#5c4326}
+/* One solid glyph set for both sides, coloured here. The outline glyphs
+   (U+2654..U+2659) read as damaged pieces at board size on a dark square. */
+.csp{font-size:34px;line-height:1;display:flex;align-items:center;justify-content:center}
+.csp.w{color:#fbf6ea;text-shadow:0 0 2px #2a1c08,0 1px 2px rgba(0,0,0,.65)}
+.csp.b{color:#241704;text-shadow:0 1px 1px rgba(255,255,255,.22)}
   /* Checkers pieces are drawn discs filling the square, not a glyph. */
   .ckp::after{content:'';position:absolute;inset:9%;border-radius:50%;
     box-shadow:0 2px 5px rgba(0,0,0,.65),inset 0 2px 4px rgba(255,255,255,.3),
@@ -583,12 +588,12 @@
 </div>
 
 <script type="module">
-import { GAMES, CHESS, IMPORTS, driver, renderHtml, esc } from './arcade.js';
+import { GAMES, IMPORTS, driver, renderHtml, esc } from './arcade.js';
 import { RULES } from './rules.js';
 
 const $ = id => document.getElementById(id);
 const CATS = ['Board', 'Card', 'Puzzle', 'Dice', 'Strategy', 'Other'];
-const all = [...GAMES, CHESS];
+const all = [...GAMES];
 
 // --- state ---------------------------------------------------------------
 // Declared BEFORE the gallery, which reads `cur` to mark the current game.
@@ -599,7 +604,7 @@ let cur = null, timer = null, playing = false, delay = 260;
 const DELAYS = [1400, 900, 600, 400, 280, 180, 110, 60, 25, 5];
 
 // --- the gallery ---------------------------------------------------------
-// A kind is picked first and then only its games are listed. Thirty-four in
+// A kind is picked first and then only its games are listed. Thirty-five in
 // one column meant scrolling past three quarters of them to reach any one.
 let cat = 'Board', pendingGallery = false;
 
@@ -611,12 +616,11 @@ function gallery() {
   }).join('') + '</div>';
 
   for (const g of all.filter(x => x.cat === cat)) {
-    const off = g === CHESS;
-    const tag = off ? 'not built' : (g.solo || g.move || g.keys) ? 'you play' : 'watch';
-    h += `<button class="pick${off ? ' off' : ''}${cur && cur.game.id === g.id ? ' on' : ''}" ` +
-      `data-id="${g.id}"${off ? ' disabled' : ''}>` +
-      // Chess has no thumbnail because chess is not built, and a game with
-      // no art should read as plain, not as a broken image.
+    const tag = (g.solo || g.move || g.keys) ? 'you play' : 'watch';
+    h += `<button class="pick${cur && cur.game.id === g.id ? ' on' : ''}" ` +
+      `data-id="${g.id}">` +
+      // A game whose art has not been drawn should read as plain, not as a
+      // broken image.
       `<img src="art/thumbs/${g.id}.png" alt="" loading="lazy" onerror="this.remove()">` +
       `<span class="nm">${esc(g.name)}<br><span class="tag">${tag}</span></span></button>`;
   }
