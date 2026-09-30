@@ -875,8 +875,8 @@ export const GAMES = [
       }
       if (i === BG_OFF) {
         if (!held) return null;
-        const ds = [...new Set(dice)].filter(d => legal(bgFrom(st.sel), d) && bgOffBy(st.sel, d));
-        return ds.length === 1 ? spend(ds[0]) : null;
+        const ds = [...new Set(dice)].filter(d => legal(bgFrom(st.sel), d) && bgOffBy(st.sel, d)).sort((a, b) => a - b);
+        return ds.length ? spend(ds[0]) : null;
       }
       if (!held) return dice.some(d => legal(i, d)) ? { sel: i } : null;
       if (i === st.sel) return { sel: null };
