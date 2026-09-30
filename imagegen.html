@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cobblestone</title>
+  <title>ImageGen</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     #app { display: contents; }
@@ -196,10 +196,12 @@ function _vecD(p){var cs=p.vp_commands||[],n=Math.min(Number(p.vp_count),cs.leng
 function svg_fill_path(id,p,col){var s=_svgOf(id);if(!s)return 0;s.appendChild(_svgEl('path',{d:_vecD(p),fill:_c(col),'fill-rule':'evenodd',stroke:'none'}));return 0}
 function svg_stroke_path(id,p,w,col){var s=_svgOf(id);if(!s)return 0;s.appendChild(_svgEl('path',{d:_vecD(p),fill:'none',stroke:_c(col),'stroke-width':w,'stroke-linecap':'square','stroke-linejoin':'miter'}));return 0}
 function __int(v) { return typeof v === 'number' ? BigInt(Math.trunc(v)) : v; }
+if (typeof request_render === 'function') { request_render = ((f) => (...a) => __int(f(...a)))(request_render); }
 if (typeof register_handlers === 'function') { register_handlers = ((f) => (...a) => __int(f(...a)))(register_handlers); }
 if (typeof set_render === 'function') { set_render = ((f) => (...a) => __int(f(...a)))(set_render); }
 if (typeof inject_theme_css === 'function') { inject_theme_css = ((f) => (...a) => __int(f(...a)))(inject_theme_css); }
 if (typeof mount_widget_themed === 'function') { mount_widget_themed = ((f) => (...a) => __int(f(...a)))(mount_widget_themed); }
+if (typeof gpu_probe_then === 'function') { gpu_probe_then = ((f) => (...a) => __int(f(...a)))(gpu_probe_then); }
 function Palette(fields) { return { _type: "Palette", ...fields }; }
 const CornerSharp = { _tag: "CornerSharp" };
 function CornerRound(_0) { return { _tag: "CornerRound", _0: _0 }; }
@@ -256,6 +258,9 @@ function layout_rect_zero() {
 }
 function widget_label(id, txt) {
   return { _type: "WidgetNode", wn_kind: WkLabel(txt), wn_id: id, wn_children: [], wn_child_count: 0n, wn_layout_dir: DirRow, wn_gap: 0n, wn_flex: 0n, wn_min_w: __narrow(((_v) => { if (BigInt.asIntN(64, _v) !== _v) { throw new Error("CODEX_TRAP_integer_overflow"); } return _v; })(text_length(txt) * 8n)), wn_min_h: 16n, wn_max_w: 0n, wn_max_h: 0n, wn_fit_w: true, wn_pref_w: 0n, wn_pref_h: 0n, wn_align: 0n, wn_flags: 0n, wn_data: 0n, wn_tone: tone_none(), wn_bounds: layout_rect_zero() };
+}
+function widget_button(id, txt) {
+  return { _type: "WidgetNode", wn_kind: WkButton(txt), wn_id: id, wn_children: [], wn_child_count: 0n, wn_layout_dir: DirRow, wn_gap: 0n, wn_flex: 0n, wn_min_w: __narrow(((_v) => { if (BigInt.asIntN(64, _v) !== _v) { throw new Error("CODEX_TRAP_integer_overflow"); } return _v; })(((_v) => { if (BigInt.asIntN(64, _v) !== _v) { throw new Error("CODEX_TRAP_integer_overflow"); } return _v; })(text_length(txt) * 8n) + 16n)), wn_min_h: 24n, wn_max_w: 0n, wn_max_h: 0n, wn_fit_w: true, wn_pref_w: 0n, wn_pref_h: 0n, wn_align: 0n, wn_flags: 0n, wn_data: 0n, wn_tone: tone_none(), wn_bounds: layout_rect_zero() };
 }
 function widget_custom(id, tag, w, h) {
   return { _type: "WidgetNode", wn_kind: WkCustom(tag), wn_id: id, wn_children: [], wn_child_count: 0n, wn_layout_dir: DirRow, wn_gap: 0n, wn_flex: 0n, wn_min_w: __narrow(w), wn_min_h: __narrow(h), wn_max_w: 0n, wn_max_h: 0n, wn_fit_w: false, wn_pref_w: 0n, wn_pref_h: 0n, wn_align: 0n, wn_flags: 0n, wn_data: 0n, wn_tone: tone_none(), wn_bounds: layout_rect_zero() };
@@ -398,16 +403,17 @@ function site_nav(...a) {
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
-function site_stat__tb(__a0, __a1, __a2) {
+function site_hero__tb(__a0, __a1, __a2, __a3) {
   while (true) {
-    const id = __a0;
-    const num = __a1;
-    const label = __a2;
-    return new __TC(widget_box__tb, [id, "stat", [widget_label((id + "n"), num), widget_label((id + "l"), label)]]);
+    const badge_text = __a0;
+    const title = __a1;
+    const subtitle = __a2;
+    const stats = __a3;
+    return new __TC(widget_box__tb, ["hero", "hero", [widget_label("badge", badge_text), widget_label("h-title", title), widget_label("h-sub", subtitle), widget_box("stats", "hero-stats", stats)]]);
   }
 }
-function site_stat(...a) {
-  let r = site_stat__tb(...a);
+function site_hero(...a) {
+  let r = site_hero__tb(...a);
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
@@ -426,15 +432,53 @@ function site_section(...a) {
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
-function site_card_grid_3__tb(__a0, __a1) {
+function site_card__tb(__a0, __a1, __a2, __a3) {
+  while (true) {
+    const id = __a0;
+    const icon = __a1;
+    const title = __a2;
+    const desc = __a3;
+    return new __TC(widget_box__tb, [id, "card", [widget_label((id + "i"), icon), widget_label((id + "t"), title), widget_label((id + "d"), desc)]]);
+  }
+}
+function site_card(...a) {
+  let r = site_card__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function site_card_grid__tb(__a0, __a1) {
   while (true) {
     const id = __a0;
     const cards = __a1;
-    return wk_attach(widget_custom(id, "box:card-grid-3", 0n, 0n), cards, 0n, list_length(cards));
+    return wk_attach(widget_custom(id, "box:card-grid", 0n, 0n), cards, 0n, list_length(cards));
   }
 }
-function site_card_grid_3(...a) {
-  let r = site_card_grid_3__tb(...a);
+function site_card_grid(...a) {
+  let r = site_card_grid__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function site_code_block__tb(__a0, __a1, __a2) {
+  while (true) {
+    const id = __a0;
+    const filename = __a1;
+    const code = __a2;
+    return new __TC(widget_box__tb, [id, "code-block", [widget_box((id + "h"), "code-hdr", [widget_label((id + "d0"), "&shy;"), widget_label((id + "d1"), "&shy;"), widget_label((id + "d2"), "&shy;"), widget_label((id + "f"), filename)]), widget_box((id + "b"), "code-body", [widget_label((id + "c"), code)])]]);
+  }
+}
+function site_code_block(...a) {
+  let r = site_code_block__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function site_footer__tb(__a0) {
+  while (true) {
+    const links = __a0;
+    return new __TC(widget_box__tb, ["foot", "footer", [widget_label("f-brand", "COBBLESTONE"), widget_label("f-text", "Built with Codex. The compiler compiled this page."), widget_box("f-links", "footer-links", links)]]);
+  }
+}
+function site_footer(...a) {
+  let r = site_footer__tb(...a);
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
@@ -444,75 +488,174 @@ function site_init(extra_css) {
     return 0n;
   })();
 }
-function landing_extra_css() {
-  return ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((".landing{max-width:1100px;margin:0 auto;padding:0 24px}" + "#root .wk-label{min-width:0!important;overflow-wrap:anywhere}") + ".ground{position:relative;z-index:1;width:100%;background:linear-gradient(180deg,rgba(9,11,20,.58) 0%,rgba(9,11,20,.74) 12%,rgba(9,11,20,.74) 88%,rgba(9,11,20,.62) 100%)}") + ".cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}") + ".cta{display:inline-block;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;letter-spacing:.4px;border:1px solid rgba(212,160,23,.35);color:#d4a017;background:rgba(212,160,23,.08);transition:background .15s,transform .15s}") + ".cta:hover{background:rgba(212,160,23,.18);transform:translateY(-2px);text-decoration:none}") + ".cta-primary{background:#d4a017;color:#0a0a12;border-color:#d4a017}") + ".cta-primary:hover{background:#e8b52a;color:#0a0a12}") + ".hero-sub>.wk-label{display:inline}") + ".hero-sub>.em-text{display:block;margin-top:18px;font-size:1.15em;font-style:italic;color:#fff}") + ".hero-sub>.em-text>.wk-label{display:inline}") + ".nav-links .nav-a{color:#8b949e;font-size:14px;transition:color .15s}") + ".nav-links .nav-a:hover{color:#d4a017;text-decoration:none}") + "#badge{background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.35)}") + "#h-title{color:#fff}") + "#h-sub{color:#b8c2cc}") + ".stat{max-width:240px}") + ".stat>.wk-label:last-child{color:#b8c2cc;text-shadow:0 1px 8px rgba(0,0,0,.8)}") + ".prose{max-width:680px;margin:0 auto;font-size:15.5px;color:#c8ccd4;text-align:left}") + ".prose>.wk-label{display:block;margin-bottom:1em;line-height:1.65}") + ".prose-quote{border-left:3px solid #d4a017;padding-left:1.2em;color:#e0e0e8;font-style:italic;margin:1.4em 0}") + ".prose-quote>.wk-label{display:block;line-height:1.65}") + ".prose-fine{color:#8b949e;font-size:.9em}") + ".prose-fine>.wk-label{display:block;line-height:1.6}") + ".rq{background:rgba(20,20,30,.7);border:1px solid #1e1e2e;border-radius:12px;padding:26px 32px;margin:32px auto 0;max-width:720px;text-align:left}") + ".rq>.wk-label:first-child{display:block;font-style:italic;color:#e0e0e8;line-height:1.65}") + ".rq>.wk-label:last-child{display:block;color:#8b949e;font-size:13px;margin-top:10px;line-height:1.5}") + ".card{text-align:left}") + ".tagrow{margin-top:2px}") + ".tag{display:inline-block;border:1px solid #1e1e2e;border-radius:999px;padding:2px 12px;font-size:12px;color:#8b949e;margin:10px 4px 0 0}") + ".tag>.wk-label{display:inline}") + ".tag-ok{border-color:#2e5e2e;color:#7fc97f}.tag-ok>.wk-label{color:#7fc97f}") + ".tag-soon{border-color:#5e4e1e;color:#e8c04a}.tag-soon>.wk-label{color:#e8c04a}") + ".card-a{display:inline-block;margin-top:12px;margin-right:16px;color:#d4a017;font-size:14px}") + ".card-src{color:#8b949e}.card-src:hover{color:#d4a017}") + ".card-a:hover{color:#e8c04a}") + ".foot2{border-top:1px solid #1e1e2e;padding:48px 24px;text-align:center}") + ".foot2>.wk-label:first-child{display:block;color:#e8c04a;font-style:italic;max-width:38em;margin:0 auto 22px}") + ".foot2>.wk-label:last-child{display:block;color:#8b949e;font-size:13.5px;margin-top:22px}") + ".foot-links{display:flex;flex-wrap:wrap;gap:26px;justify-content:center}") + ".foot-links .fla{color:#8b949e;font-size:14px}") + ".foot-links .fla:hover{color:#e0e0e8;text-decoration:none}") + ".scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}") + ".scene-layer{position:absolute;left:-6%;width:112%;bottom:0;background-repeat:no-repeat;background-size:100% 100%;will-change:transform}") + ".layer-sky{aspect-ratio:1536/640;background-image:url(hero-sky.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 130px);mask-image:linear-gradient(180deg,transparent 0,#000 130px)}") + ".layer-ridge{aspect-ratio:1536/295;background-image:url(hero-ridge.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 30px);mask-image:linear-gradient(180deg,transparent 0,#000 30px)}") + ".layer-hills{aspect-ratio:1536/220;background-image:url(hero-hills.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 26px);mask-image:linear-gradient(180deg,transparent 0,#000 26px)}") + ".layer-road{aspect-ratio:1536/120;background-image:url(hero-road.jpg);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 22px);mask-image:linear-gradient(180deg,transparent 0,#000 22px)}") + ".layer-scrim{top:0;aspect-ratio:auto;background:radial-gradient(ellipse 52% 44% at 50% 42%,rgba(6,10,18,.60) 0%,rgba(6,10,18,.34) 58%,rgba(6,10,18,0) 82%),linear-gradient(180deg,rgba(6,10,18,0) 60%,rgba(6,10,18,.50) 82%,rgba(6,10,18,.30) 100%)}") + ".layer-vignette{top:0;aspect-ratio:auto;background:radial-gradient(ellipse at 50% 42%,transparent 46%,rgba(8,12,22,.58) 100%)}") + ".story-layer{position:absolute;inset:0;background-size:cover;background-position:center center;background-repeat:no-repeat;opacity:0;will-change:opacity,transform}") + ".story-fields{opacity:1;background:none}") + ".story-town{background-image:url(story-town.jpg)}") + ".story-bridge{background-image:url(story-bridge.jpg)}") + ".story-lake{background-image:url(story-lake.jpg)}") + "@keyframes cbdrift{to{transform:translateY(var(--cbd))}}") + "@keyframes cbreveal{from{opacity:0;transform:translateY(38px)}to{opacity:1;transform:none}}") + "@keyframes stFields{0%,18%{opacity:1;transform:none}30%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stTown{0%,18%{opacity:0;transform:translateY(50px)}30%,48%{opacity:1;transform:none}60%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stBridge{0%,48%{opacity:0;transform:translateY(50px)}60%,74%{opacity:1;transform:none}86%,100%{opacity:0;transform:translateY(-40px)}}") + "@keyframes stLake{0%,74%{opacity:0;transform:translateY(50px)}86%,100%{opacity:1;transform:none}}") + "@supports (animation-timeline:scroll()){") + ".scene-layer{animation:cbdrift linear both;animation-timeline:scroll(root block);animation-range:0 100vh}") + ".layer-sky{--cbd:40px}.layer-ridge{--cbd:130px}.layer-hills{--cbd:250px}.layer-road{--cbd:430px}.layer-scrim{--cbd:0px}.layer-vignette{--cbd:0px}") + ".story-layer{animation:none linear both;animation-timeline:scroll(root block)}") + ".story-fields{animation-name:stFields}.story-town{animation-name:stTown}.story-bridge{animation-name:stBridge}.story-lake{animation-name:stLake}") + ".landing>.section{animation:cbreveal linear both;animation-timeline:view();animation-range:entry 0% entry 55%}") + "}") + "@media(prefers-reduced-motion:reduce){.scene-layer,.story-layer,.landing>.section{animation:none}}");
+function ig_ref_seconds() {
+  return 29n;
 }
-function site_link__tb(__a0, __a1, __a2, __a3) {
+function ig_ref_gflops() {
+  return 680n;
+}
+function ig_css() {
+  return ((((((((((".ig{max-width:960px;margin:0 auto;padding:0 24px}" + "#root .wk-label{min-width:0!important;overflow-wrap:anywhere}") + ".card{text-align:left}") + ".ig-a{display:inline-block;margin-top:10px;margin-right:16px;color:#d4a017;font-size:14px}") + ".ig-a:hover{color:#e8c04a}") + ".ig-probe{background:rgba(20,20,30,.7);border:1px solid #1e1e2e;border-radius:12px;padding:22px 28px;margin:12px auto 0;max-width:760px;text-align:left}") + ".ig-body .wk-label{display:block;line-height:1.6;color:#c8ccd4;margin-bottom:.5em}") + ".ig-good{color:#7fc97f!important}.ig-warn{color:#e8c04a!important}.ig-bad{color:#e87f7f!important}") + ".ig-probe button{background:#d4a017;color:#0a0a12;border:0;border-radius:10px;padding:10px 20px;font-weight:600;cursor:pointer;margin-bottom:14px}") + ".ig-step{max-width:760px;margin:18px auto 0;text-align:left}") + ".ig-step>.wk-label:first-child{display:block;color:#e8c04a;font-weight:600;margin-bottom:.4em}");
+}
+function ig_link__tb(__a0, __a1, __a2) {
   while (true) {
     const id = __a0;
-    const cls = __a1;
-    const href = __a2;
-    const label = __a3;
-    return wk_attach(widget_custom(id, ((("link:" + cls) + "|") + href), 0n, 0n), [widget_label((id + "t"), label)], 0n, 1n);
-  }
-}
-function site_link(...a) {
-  let r = site_link__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function land_card__tb(__a0, __a1, __a2, __a3) {
-  while (true) {
-    const id = __a0;
-    const icon = __a1;
-    const title = __a2;
-    const desc = __a3;
-    return new __TC(widget_box__tb, [id, "card", [widget_label((id + "i"), icon), widget_label((id + "n"), title), widget_label((id + "d"), desc)]]);
-  }
-}
-function land_card(...a) {
-  let r = land_card__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function land_card_fine__tb(__a0, __a1, __a2, __a3, __a4) {
-  while (true) {
-    const id = __a0;
-    const icon = __a1;
-    const title = __a2;
-    const desc = __a3;
-    const fine = __a4;
-    return new __TC(widget_box__tb, [id, "card", [widget_label((id + "i"), icon), widget_label((id + "n"), title), widget_label((id + "d"), desc), widget_label((id + "f"), fine)]]);
-  }
-}
-function land_card_fine(...a) {
-  let r = land_card_fine__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function land_tag__tb(__a0, __a1, __a2) {
-  while (true) {
-    const id = __a0;
-    const cls = __a1;
+    const href = __a1;
     const label = __a2;
-    return new __TC(widget_box__tb, [id, ("tag " + cls), [widget_label((id + "t"), label)]]);
+    return wk_attach(widget_custom(id, ("link:ig-a|" + href), 0n, 0n), [widget_label((id + "t"), label)], 0n, 1n);
   }
 }
-function land_tag(...a) {
-  let r = land_tag__tb(...a);
+function ig_link(...a) {
+  let r = ig_link__tb(...a);
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
-function landing_nav() {
-  return site_nav([site_link("nl0", "nav-a", "#promise", "The Promise"), site_link("nl1", "nav-a", "#family", "For Families"), site_link("nl2", "nav-a", "#business", "For Business"), site_link("nl3", "nav-a", "#today", "Try It"), site_link("nl4", "nav-a", "#join", "Join the Build")]);
+function ig_step__tb(__a0, __a1, __a2) {
+  while (true) {
+    const id = __a0;
+    const title = __a1;
+    const body = __a2;
+    return new __TC(widget_box__tb, [id, "ig-step", [widget_label((id + "h"), title), widget_box((id + "b"), "ig-body", body)]]);
+  }
 }
-function landing_hero() {
-  return widget_box("hero", "hero", [widget_box("scene", "scene", [widget_box("sc-fields", "story-layer story-fields", [widget_box("l-sky", "scene-layer layer-sky", []), widget_box("l-ridge", "scene-layer layer-ridge", []), widget_box("l-hills", "scene-layer layer-hills", []), widget_box("l-road", "scene-layer layer-road", [])]), widget_box("sc-town", "story-layer story-town", []), widget_box("sc-bridge", "story-layer story-bridge", []), widget_box("sc-lake", "story-layer story-lake", []), widget_box("l-scrim", "scene-layer layer-scrim", []), widget_box("l-vig", "scene-layer layer-vignette", [])]), widget_label("badge", "Software that has to prove it"), widget_label("h-title", "COBBLESTONE"), widget_box("h-sub", "hero-sub", [widget_label("h-sub-t", "Every app on your phone asks you to trust it. On your PC, the app doesn&#39;t even ask. Cobblestone is a new software ecosystem, built from the ground up in public, where trust is not a request: a program must declare what it touches, prove what it promises, and cannot do anything else. You decide what to trust. Always."), widget_box("h-sub-e", "em-text", [widget_label("h-sub-et", "Welcome to Cobblestone.")])]), widget_box("hero-cta", "cta-row", [site_link("hc0", "cta cta-primary", "compile/prism.html", "Compile code in your browser, right now")]), widget_box("stats", "hero-stats", [site_stat("s0", "0", "ways a program can touch your camera, files, or network without saying so"), site_stat("s1", "0", "dependencies on legacy code: no 1970s-vintage, unsafe-by-design toolchains underneath"), site_stat("s2", "52", "languages and chip architectures one program can become, from x86 to JavaScript to COBOL"), site_stat("s3", "2027", "the EU security deadline our evidence engine is built for")])]);
+function ig_step(...a) {
+  let r = ig_step__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function ig_text__tb(__a0, __a1) {
+  while (true) {
+    const id = __a0;
+    const t = __a1;
+    return widget_label(id, t);
+  }
+}
+function ig_text(...a) {
+  let r = ig_text__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function ig_num(o, k) {
+  return text_to_integer(json_obj_field(o, k));
+}
+function ig_arch_native(a) {
+  return ((a === "lovelace") ? true : (a === "blackwell"));
+}
+function ig_arch_old(a) {
+  return ((a === "fermi") ? true : ((a === "kepler") ? true : ((a === "maxwell") ? true : ((a === "pascal") ? true : ((a === "volta") ? true : ((a === "turing") ? true : (a === "ampere")))))));
+}
+function ig_card_line__tb(__a0) {
+  while (true) {
+    const o = __a0;
+    {
+      const vendor = json_obj_field(o, "vendor");
+      {
+        const arch = json_obj_field(o, "architecture");
+        {
+          const named = ((json_obj_field(o, "description") === "") ? ((vendor + " ") + arch) : json_obj_field(o, "description"));
+          if ((vendor !== "nvidia")) {
+            return widget_label("pv", (("Your browser reports a " + named) + " GPU. The local route runs on NVIDIA cards only: its kernels are PTX, run by the NVIDIA driver. There is no local route for this GPU yet."));
+          } else {
+            if (ig_arch_native(arch)) {
+              return new __TC(widget_box__tb, ["pvb", "ig-good", [widget_label("pv", (((("An NVIDIA " + arch) + " GPU (") + named) + "). This generation runs the native route."))]]);
+            } else {
+              if (ig_arch_old(arch)) {
+                return new __TC(widget_box__tb, ["pvb", "ig-bad", [widget_label("pv", (((("An NVIDIA " + arch) + " GPU (") + named) + "). The native route needs an RTX 40-series card or newer: its kernels are PTX for compute capability 8.9, which older cards cannot run."))]]);
+              } else {
+                return new __TC(widget_box__tb, ["pvb", "ig-warn", [widget_label("pv", (("An NVIDIA GPU (" + named) + "), but the browser does not say which generation. The native route needs compute capability 8.9 or higher, an RTX 40-series card or newer; nvidia-smi --query-gpu=name,compute_cap --format=csv answers it."))]]);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+function ig_card_line(...a) {
+  let r = ig_card_line__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function ig_gemm_line__tb(__a0) {
+  while (true) {
+    const o = __a0;
+    {
+      const g = ig_num(o, "gflops");
+      if ((json_obj_field(o, "bad") !== "0")) {
+        return new __TC(widget_box__tb, ["pgb", "ig-bad", [widget_label("pg", (((("The GPU test multiplied two 1024 x 1024 matrices and " + json_obj_field(o, "bad")) + " of ") + json_obj_field(o, "checked")) + " sampled results were wrong, so no speed is reported."))]]);
+      } else {
+        return widget_label("pg", (((((("The GPU test multiplied two 1024 x 1024 matrices " + json_obj_field(o, "runs")) + " times: ") + show(g)) + " GFLOPS in f32, every one of ") + json_obj_field(o, "checked")) + " sampled results exact."));
+      }
+    }
+  }
+}
+function ig_gemm_line(...a) {
+  let r = ig_gemm_line__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function ig_estimate_line__tb(__a0) {
+  while (true) {
+    const o = __a0;
+    {
+      const g = ig_num(o, "gflops");
+      if ((ig_ref_gflops() <= 0n)) {
+        return widget_label("pe", "An RTX 4060 Ti 16 GB makes a 1024 x 1024 SDXL image in about 29 seconds at 6 steps, once the model is loaded; the first image after starting takes about a minute.");
+      } else {
+        if ((g <= 0n)) {
+          return widget_label("pe", "No estimate: the test measured no speed.");
+        } else {
+          return widget_label("pe", (("Scaled from an RTX 4060 Ti 16 GB (29 seconds for a 1024 x 1024 SDXL image at 6 steps), this GPU would take about " + show((((_v) => { if (BigInt.asIntN(64, _v) !== _v) { throw new Error("CODEX_TRAP_integer_overflow"); } return _v; })(ig_ref_seconds() * ig_ref_gflops()) / g))) + " seconds, if the native route runs on it. The estimate prices the GPU only."));
+        }
+      }
+    }
+  }
+}
+function ig_estimate_line(...a) {
+  let r = ig_estimate_line__tb(...a);
+  while (r instanceof __TC) { r = r.f(...r.a); }
+  return r;
+}
+function ig_memory_line() {
+  return widget_label("pm", "Which families fit depends on the card\'s memory, which a browser cannot read. SDXL holds 9.6 GB on the device while it serves; SD1.5 holds less. Flux is not served yet. nvidia-smi --query-gpu=name,memory.total --format=csv shows the memory.");
+}
+function ig_result(t) {
+  return ((t === "") ? [widget_label("p0", "The check reads what your browser can see of your GPU and times a small matrix multiplication on it, for about three seconds. Nothing leaves this page.")] : ((t === "running") ? [widget_label("p0", "Checking...")] : (() => {
+    const o = json_parse_obj(t);
+    return ((json_obj_field(o, "webgpu") !== "true") ? [widget_box("p1b", "ig-warn", [widget_label("p1", "This browser does not offer WebGPU, so the page cannot see your GPU. The local route does not use the browser at all: nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv tells you what the steps below need to know.")])] : ((json_obj_field(o, "err") !== "") ? [widget_box("p1b", "ig-warn", [widget_label("p1", (("WebGPU is present but the check stopped: " + json_obj_field(o, "err")) + "."))]), ig_memory_line()] : [ig_card_line(o), ig_gemm_line(o), ig_estimate_line(o), ig_memory_line()]));
+  })()));
+}
+function ig_probe_box() {
+  return widget_box("probe", "ig-probe", [widget_button("probe-btn", "Run the check"), widget_box("pres", "ig-body", ig_result(state_get_text("probe")))]);
+}
+function ig_nav() {
+  return site_nav([ig_link("nl0", "landing.html", "Home"), ig_link("nl1", "#check", "Check"), ig_link("nl2", "#setup", "Set up"), ig_link("nl3", "#models", "Models"), ig_link("nl4", "#run", "Run")]);
+}
+function ig_hero() {
+  return site_hero("RUN IT AT HOME", "Make images on your own GPU", "codex_image is the project&#39;s own Stable Diffusion pipeline: SDXL and SD1.5, text to image, img2img, inpaint and hires fix, with LoRAs. Codex drives it and every layer runs as a GPU kernel the project&#39;s own compiler emitted. It runs on your machine and sends nothing anywhere.", []);
+}
+function ig_check() {
+  return site_section("check", "STEP 0", "Check this machine", "The local route needs an NVIDIA RTX 40-series card or newer, running Windows. This check reads what the browser can see.", [ig_probe_box()]);
+}
+function ig_need() {
+  return site_section("need", "WHAT YOU NEED", "Before you start", "", [site_card_grid("need-grid", [site_card("n0", "&#x1F3AE;", "An NVIDIA RTX 40-series GPU or newer", "Compute capability 8.9 or higher, with a current driver. About 10 GB of free GPU memory for SDXL."), site_card("n1", "&#x1FA9F;", "Windows 10 or 11, 64-bit", "With Windows Hypervisor Platform turned on: the pipeline runs inside codex-vm, the project&#39;s own virtual machine."), site_card("n2", "&#x1F6E0;", "Git, PowerShell 7, Visual Studio 2022, an MCP client", "Visual Studio 2022 Community in its default folder, with Desktop development with C++ (the build script looks for it there), to build codex-vm. An MCP client such as Claude Code, to ask for images."), site_card("n3", "&#x1F4BE;", "About 12 GB of disk", "7 GB for an SDXL checkpoint, 2 GB for an SD1.5 one, and room for LoRAs.")])]);
+}
+function ig_setup() {
+  return site_section("setup", "SET UP", "Build the pieces", "Once, in PowerShell 7. The paths below put the code in C:&#92;Cobblestone; any folder works.", [ig_step("s1", "1. Turn on Windows Hypervisor Platform", [ig_text("s1a", "Windows Features (Turn Windows features on or off), tick Windows Hypervisor Platform, and restart. Or, in PowerShell as administrator:"), site_code_block("s1c", "PowerShell (administrator)", "Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform")]), ig_step("s2", "2. Get the code", [site_code_block("s2c", "PowerShell", "git clone https://github.com/damiant3/Cobblestone C:&#92;Cobblestone<br>cd C:&#92;Cobblestone")]), ig_step("s3", "3. Build codex-vm", [ig_text("s3a", "The virtual machine the pipeline runs in, built from tools&#92;codex-vm.c with Visual Studio&#39;s C compiler."), site_code_block("s3c", "PowerShell", "pwsh tools&#92;build-vm.ps1")]), ig_step("s4", "4. Build the diffusion driver", [ig_text("s4a", "The Codex program that runs the pipeline, compiled by the project&#39;s own compiler (seed&#92;Codex.cdx, itself run in codex-vm). It takes seconds; build-output&#92;diffusion&#92;DiffusionDriver.cdx exists when it has worked, and driver.log beside it says why when it has not."), site_code_block("s4c", "PowerShell", "mkdir build-output&#92;diffusion<br>pwsh build&#92;compile.ps1 -Src apps&#92;diffusion&#92;DiffusionDriver.codex -Out build-output&#92;diffusion&#92;DiffusionDriver.cdx -Log build-output&#92;diffusion&#92;driver.log -Kernel seed&#92;Codex.cdx")]), ig_step("s5", "5. Build the tokenizer disk", [ig_text("s5a", "The text encoders read CLIP&#39;s vocabulary from a small disk image. Build it before the first run: the server would otherwise look for the vocabulary in a Forge install. Download vocab.json and merges.txt from Stable Diffusion XL&#39;s tokenizer folder into C:&#92;Cobblestone&#92;tokenizer, then:"), ig_link("s5l", "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/tree/main/tokenizer", "stabilityai/stable-diffusion-xl-base-1.0, tokenizer folder (CreativeML Open RAIL++-M) &#8594;"), site_code_block("s5c", "PowerShell", "pwsh build&#92;mint-clip-bpe-disk.ps1 -Source C:&#92;Cobblestone&#92;tokenizer -Out build-output&#92;diffusion&#92;clip-bpe.img")])]);
+}
+function ig_models() {
+  return site_section("models", "MODELS", "Checkpoints and LoRAs", "One models folder, with two folders inside: C:&#92;models&#92;Stable-diffusion for checkpoints and C:&#92;models&#92;Lora for LoRAs. A request names a file in them, never a path.", [ig_step("m1", "SDXL: DreamShaper XL Lightning", [ig_text("m1a", "DreamShaperXL_Lightning.safetensors, 6.94 GB, CreativeML Open RAIL++-M. The exact file this pipeline was built and measured against. Save it as dreamshaperXL_lightningDPMSDE.safetensors, the server&#39;s default model name. Its settings: DPM++ SDE, 6 steps, CFG 2, the server&#39;s defaults."), ig_link("m1l", "https://huggingface.co/Lykon/dreamshaper-xl-lightning/blob/main/DreamShaperXL_Lightning.safetensors", "Lykon/dreamshaper-xl-lightning on Hugging Face &#8594;")]), ig_step("m2", "SD1.5: Realistic Vision V6.0", [ig_text("m2a", "Realistic_Vision_V6.0_NV_B1_fp16.safetensors, 2.13 GB, CreativeML Open RAIL-M. Every tensor the SD1.5 path reads matches the file it was built against, name for name and shape for shape. Try 20 steps, CFG 7, 512 x 512."), ig_link("m2l", "https://huggingface.co/SG161222/Realistic_Vision_V6.0_B1_noVAE/blob/main/Realistic_Vision_V6.0_NV_B1_fp16.safetensors", "SG161222/Realistic_Vision_V6.0_B1_noVAE on Hugging Face &#8594;")]), ig_step("m3", "LoRAs from Civitai", [ig_text("m3a", "Filter by base model (SDXL 1.0 or SD 1.5) and by type LoRA or LyCORIS, and download the .safetensors into C:&#92;models&#92;Lora. LoRA, LoCon, LoHa, LoKr, GLoRA, DoRA and full-difference files load; IA3, OFT and BOFT do not. Use a LoRA with a checkpoint of its own base model. Each model page states its licence."), ig_link("m3l", "https://civitai.com/models", "civitai.com/models &#8594;")]), ig_step("m4", "Flux", [ig_text("m4a", "Not served yet. The pipeline has made its first Flux image; the server takes SDXL and SD1.5 today.")])]);
+}
+function ig_run() {
+  return site_section("run", "RUN", "Generate", "codex_image is an MCP server: any MCP client can call it. With Claude Code:", [ig_step("r1", "Register the server once", [site_code_block("r1c", "PowerShell", "claude mcp add codex-image -- pwsh -NoProfile -File C:&#92;Cobblestone&#92;apps&#92;diffusion&#92;serve.ps1 -Models C:&#92;models")]), ig_step("r2", "Ask for a picture", [ig_text("r2a", "Ask for an image in words; Claude calls codex_image with a prompt and, when you name them, the model, LoRAs (up to eight, weights from -4 to 4), sampler, scheduler, steps, CFG, seed and size (width and height multiples of 64, at most 1024 x 1024 pixels in all, so 2048 x 512 is allowed). Pictures and masks for img2img and inpaint go in C:&#92;Cobblestone&#92;build-output&#92;diffusion-inputs. The PNG lands in C:&#92;Cobblestone&#92;build-output&#92;diffusion-images with its settings written into it."), ig_text("r2b", "The server keeps the model on the GPU between calls and frees it after ten idle minutes.")])]);
+}
+function ig_foot() {
+  return site_footer([ig_link("f0", "landing.html", "Home"), ig_link("f1", "https://github.com/damiant3/Cobblestone/tree/master/apps/diffusion", "The pipeline&#39;s source")]);
 }
 function page_tree__tb(__a0) {
   while (true) {
     const x = __a0;
-    return new __TC(widget_box__tb, ["root", "", [landing_nav(), landing_hero(), widget_box("ground", "ground", [widget_box("body", "landing", [promise_section(0n), family_section(0n), honesty_section(0n), business_section(0n), today_section(0n), join_section(0n), landing_footer()])])]]);
+    return new __TC(widget_box__tb, ["root", "", [ig_nav(), ig_hero(), widget_box("ig", "ig", [ig_check(), ig_need(), ig_setup(), ig_models(), ig_run()]), ig_foot()]]);
   }
 }
 function page_tree(...a) {
@@ -520,88 +663,29 @@ function page_tree(...a) {
   while (r instanceof __TC) { r = r.f(...r.a); }
   return r;
 }
-function promise_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["promise", "THE PROMISE", "Code That Does What It Says. Nothing Else.", "In today&#39;s software, safety is a policy: an app-store rule, a privacy checkbox, a company&#39;s word. Policies are promises, and promises get broken. Cobblestone makes the promise physics: the machine refuses to build a program that violates it, so the violation never exists to be caught.", [site_card_grid_3("promise-grid", [land_card_fine("pr0", "&#x1F50F;", "The label is the law", "Every program carries its abilities in its own signature: this one reads files, that one uses the network. A recipe app that reads your contacts is not against the rules here. It is unwritable. There is no way to even express it without declaring it, and no way to run it without being granted it.", "Working today, enforced on every build."), land_card_fine("pr1", "&#x1F9FE;", "It cannot lose what you hand it", "Files, connections, and money-like things must be accounted for exactly once. Forgetting to close, spending twice, losing track: these are not bugs to find later. The program will not build until the accounting is exact.", "Working today, enforced on every build."), land_card_fine("pr2", "&#x23F1;", "On time, every time", "A piece of code can carry a proven worst case: it finishes on schedule and cannot eat all the memory. That is what a pacemaker, a car, or a flight controller actually needs, and here it is a property of the program, not a hope of the programmer.", "Working today. We believe this is the only shipping language with it.")])]]);
-  }
+function ig_probed(t) {
+  return (() => {
+    const s = state_set_text("probe", t);
+    return request_render(0n);
+  })();
 }
-function promise_section(...a) {
-  let r = promise_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
+function ig_click(id) {
+  return ((id === "probe-btn") ? (() => {
+    const s = state_set_text("probe", "running");
+    const r = request_render(0n);
+    return gpu_probe_then(3000n, ig_probed);
+  })() : 0n);
 }
-function family_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["family", "FOR FAMILIES", "Rules Your Family Can Set, in Plain English", "", [widget_box("fam-prose", "prose", [widget_label("fam-p1", "Picture it: your kid asks the flight simulator for one more hour. The simulator checks a rule you wrote yourself, in your own words: \"weekends only, two hours a day.\" Your sentence was read back to you, confirmed, and compiled into the machine, signed with your name."), widget_box("fam-q", "prose-quote", [widget_label("fam-qt", "When the network drops, permission expires into safety, never into yes. Silence restricts. And when the machine says no, your kid can ask \"why not?\" and see the rule, and who made it.")]), widget_label("fam-p2", "No app store settings page buried five menus deep. No workaround a clever teenager can talk their way past: you cannot sweet-talk a math proof, and identities here are cryptographic, signed to the person, not a password a sibling can lend."), widget_box("fam-fine", "prose-fine", [widget_label("fam-ft", "Honestly labeled: the family accounts, screens, and time controls exist today; the full enforcement loop is the road we are on, and it is the next big destination on the map.")])])]]);
-  }
-}
-function family_section(...a) {
-  let r = family_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function honesty_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["honesty", "BUILT BY AI, GOVERNED IN PUBLIC", "An AI Workforce Whose Failures Are Public Record, and Whose Successes Are Open Source", "Cobblestone is written every day by a fleet of AI agents under human command. That is not the surprising part. The surprising part is the constitution they work under, and what happens when one of them gets something wrong.", [site_card_grid_3("hon-grid", [land_card("ho0", "&#x2696;", "Truth outranks everything", "The fleet&#39;s first written rule: a failure is reported every time, in full. Nothing outranks it. Not deadlines, not politeness, not looking good. Nothing ships with a single failing test, and \"it was already broken\" is not an excuse."), land_card("ho1", "&#x1F4DC;", "Failures are published, by name", "Two agents once ended their day by writing public resignation letters into the project&#39;s own record: \"Five diagnoses in one session. Each stated like fact. Each wrong.\" The lesson became a standing rule. The letters are still there. Nothing is quietly rewritten here; corrections go at the top of the page."), land_card("ho2", "&#x1F50E;", "Even the checker is checked", "The machinery that verifies the safety claims is itself cross-examined by an independently written verifier, which had to prove it could catch planted lies (27 out of 27) before its agreement counted for anything. An instrument that cannot fail is not evidence.")]), widget_box("hon-rq", "rq", [widget_label("hon-rq1", "\"Ten hours and a week of computing for zero typed characters is the score, and it is a fair score. The keyboard was never the hard part. Seeing was.\""), widget_label("hon-rq2", "From the project&#39;s own published account of a two-month hardware mystery: written up like an aviation accident report, because that is the standard the work is held to.")]), widget_box("hon-prose", "prose", [widget_label("hon-p1", "Why should you care how the sausage is made? Because the same machinery that keeps this fleet honest is being built into the product: permissions AI agents cannot talk their way past, actions that land in a signed, permanent record, and claims that are measurements, not marketing.")])]]);
-  }
-}
-function honesty_section(...a) {
-  let r = honesty_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function business_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["business", "FOR BUSINESS", "Compliance Evidence That Rebuilds Itself", "If you ship a connected product into the EU, the Cyber Resilience Act&#39;s clock is already running: reporting duties begin in 2026 and full compliance is the price of staying on the market by the end of 2027. Today that means consultants, spreadsheets, and evidence that goes stale on the next firmware change.", [site_card_grid_3("biz-grid", [land_card_fine("bz0", "&#x1F4CB;", "The compiler is the auditor", "For a whole class of security requirements, the violation is a build error: if the firmware compiles, that evidence is valid by definition. Every build emits a signed evidence package mapping each requirement of the EU CRA, ETSI EN 303 645, IEC 62443, and the NIST IoT baseline to the mechanism that satisfies it.", "The package never says \"compliant.\" It says which requirements the language makes impossible to violate, which are enforced by checks while the device runs, and which remain on your desk, printed as an explicit checklist. Before this page was written, every claim of protection was fired at the compiler itself; the ones that failed were withdrawn in public, and everything still claimed is pinned by a test that would fail the build if it ever stopped being true. That honesty is the feature."), land_card_fine("bz1", "&#x1F504;", "Devices that keep their footing", "Firmware updates arrive signed, verified twice, and switch over so that losing power at any instant leaves the device on the old version or the fully verified new one, never in between. Old firmware cannot be pushed back on. A driver cannot touch hardware it was not granted; a device cannot go to sleep holding a bus open. Those are build errors, not code reviews.", "Proven in the test bed across nine real board families, from the chips in smart thermostats to Raspberry Pi to cellular and Bluetooth modules."), land_card_fine("bz2", "&#x1F9F1;", "One binary, no basement", "There is no operating system underneath, no decades-old code inherited from anywhere. The attack surface is your code plus what the compiler generated, and the compiler can prove what it generated: rebuild the same source anywhere and you get the identical binary, byte for byte. Roughly 70% of critical vulnerabilities industry-wide are memory-safety bugs; that entire class is unwritable here.", "The 70% figure is industry research; the rest is measured in this tree, and we say which is which. Always.")])]]);
-  }
-}
-function business_section(...a) {
-  let r = business_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function today_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["today", "TRY IT", "Things You Can Touch Today", "This is not a whitepaper. A complete desktop boots on a bare PC: windows, taskbar, start menu, an editor, a live 3D scene with real shadows, an aquarium. None of it borrowed from Microsoft, Apple, or Linux. And some of it is one click away, right in this browser.", [site_card_grid_3("today-grid", [widget_box("td0", "card", [widget_label("td0i", "&#x1F52E;"), widget_label("td0n", "Watch the compiler think"), widget_label("td0d", "Prism is a page where you type code and watch it become the machine&#39;s own languages, side by side, live in your browser tab. Nothing is sent anywhere: your browser does the compiling."), site_link("td0a", "card-a", "compile/prism.html", "Open Prism &#8594;"), site_link("td0s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/codex/compiler", "{ } The compiler&#39;s source"), widget_box("td0tr", "tagrow", [land_tag("td0t", "tag-ok", "working now")])]), widget_box("td2", "card", [widget_label("td2i", "&#x1F5A5;"), widget_label("td2n", "A desktop from another timeline"), widget_label("td2d", "The Cobblestone desktop: windows you can drag, minimize to the taskbar, and cycle with Tab; a start menu; fifteen built-in apps from a text editor to a system monitor to a live-shadowed 3D view. It boots from a USB stick on a plain PC."), site_link("td2s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/works", "{ } The desktop&#39;s source"), widget_box("td2tr", "tagrow", [land_tag("td2t", "tag-ok", "demoable now"), land_tag("td2u", "tag-soon", "consumer polish underway")])]), widget_box("td3", "card", [widget_label("td3i", "&#x1F30C;"), widget_label("td3n", "Fly through the stars, in this tab"), widget_label("td3d", "The real sky, from the HYG catalogue: 117,931 stars at their measured positions, magnitudes and colours, 489 of them named. The whole 3.8 MB catalogue is handed to a Codex program compiled to WebAssembly, which reads it in place and answers the only question a frame needs, which stars are above the magnitude you asked for. At the default cut that is 5,071, the sky a good pair of eyes gets on a dark night. Drag to look around, wheel to narrow the field, the brackets to pull fainter stars out of the dark, click any star to read what it is."), site_link("td3a", "card-a", "starmap/index.html", "Open the star map &#8594;"), site_link("td3s", "card-a card-src", "https://github.com/damiant3/Cobblestone/blob/master/apps/starmap/StarMapWasm.codex", "{ } Source"), widget_box("td3tr", "tagrow", [land_tag("td3t", "tag-ok", "running now")])]), widget_box("td5", "card", [widget_label("td5i", "&#x1F52C;"), widget_label("td5n", "Watch it compile, then watch it run"), widget_label("td5d", "The online REPL walks the whole pipeline in front of you: your program becomes the compiler&#39;s inner language, then Zig, then a real executable, then its own output. Four stages, no black box, every press sandboxed. It compiles through an independently written backend, and two implementations that have to agree is how you catch a compiler lying."), site_link("td5a", "card-a", "http://143.244.172.148:9100/repl", "Open the REPL &#8594;"), widget_box("td5tr", "tagrow", [land_tag("td5t", "tag-ok", "live now")])]), widget_box("td4", "card", [widget_label("td4i", "&#x1F3B2;"), widget_label("td4n", "And yes, games"), widget_label("td4d", "35 classics with opponents built in, Chess to Poker to Go to Monopoly, and every one of them runs in this browser tab. No server decides anything and no JavaScript picks a move: each engine is Codex, compiled to WebAssembly by the project&#39;s own backend. Every one of the thirty-five takes a turn from YOU, from Bridge and Pinochle to Risk and Hex War, with the board ringing what the rules allow so it will not let you cheat. A fun proof that this is a real computer, not the point of it."), site_link("td4a", "card-a", "games/index.html", "Open the arcade &#8594;"), site_link("td4s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/games/classic", "{ } Source"), widget_box("td4tr", "tagrow", [land_tag("td4t", "tag-ok", "playable now")])]), widget_box("td6", "card", [widget_label("td6i", "&#x1F3A8;"), widget_label("td6n", "The pictures are compiled, not hand-written"), widget_label("td6d", "A fireworks show over a city skyline with forty thousand sparks in the air, forty WebGPU demos, a ray-traced Earth with real satellite imagery, a black hole that bends the light around itself, an aquarium of fifty fish that school and scatter, and a drive through the savanna. Not one pixel of it is drawn by hand-written browser code: every shader and every simulation was generated from Codex by the project&#39;s own backends, the GPU work through the WGSL plug and the rest through the WebAssembly one. All of it runs on YOUR machine, in this tab, and the showcase gives you a Source button on every demo so you can read the program and then watch what it draws."), site_link("td6a", "card-a", "graphics/index.html", "Open the graphics &#8594;"), site_link("td6s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/gpushow/kernels", "{ } Source"), widget_box("td6tr", "tagrow", [land_tag("td6t", "tag-ok", "live now")])]), widget_box("td7", "card", [widget_label("td7i", "&#x1F579;"), widget_label("td7n", "A Commodore 64, booting in your tab"), widget_label("td7d", "A whole 1982 computer: a cycle-stepped 6502, the VIC-II, the CIA timers, and the real BASIC, KERNAL and character ROMs, written in Codex and compiled to WebAssembly by our own backend. It boots the actual KERNAL to the READY prompt, and then it is a C64 -- type PRINT 2+2, or a two-line program with a GOTO, and it does what a C64 does. The emulator was written for bare metal, against the desktop&#39;s framebuffer; the same source runs here because the machine it emulates lives at fixed addresses a browser holds as well as a PC does."), site_link("td7a", "card-a", "c64/index.html", "Boot the C64 &#8594;"), site_link("td7s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/c64", "{ } Source"), widget_box("td7tr", "tagrow", [land_tag("td7t", "tag-ok", "running now")])]), widget_box("td8", "card", [widget_label("td8i", "&#x1F9EE;"), widget_label("td8n", "Algebra that keeps the fraction"), widget_label("td8d", "Type an expression and a computer algebra system written in Codex answers it in this tab. It is not a calculator: ask it for a half plus a third and it says five sixths rather than 0.8333, because it works in exact rationals and never reaches for floating point. Ask it for x plus x and it says two x, because it collects like terms instead of demanding numbers. Parser, simplifier and printer are all Codex, compiled to WebAssembly by our own backend, and each answer runs in a fresh instance of the module."), site_link("td8a", "card-a", "mathbook/index.html", "Open the notebook &#8594;"), site_link("td8s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/mathbook", "{ } Source"), widget_box("td8tr", "tagrow", [land_tag("td8t", "tag-ok", "running now")])]), widget_box("td9", "card", [widget_label("td9i", "&#x1F5C3;"), widget_label("td9n", "A database that shows its working"), widget_label("td9d", "Codex DB is a real relational engine written in Codex: a catalog, typed rows, an executor, and the algebra underneath SQL -- scans, filters, projections, sorts, limits, joins and grouped aggregates. Compiled to WebAssembly, it answers queries in this tab with no server behind it. Pick a query and the page shows you both halves: the relational plan that ran, and the rows it returned. Ask for the department summary and the counts, totals and averages are computed by the engine on the spot."), site_link("td9a", "card-a", "data/index.html", "Query the database &#8594;"), site_link("td9s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/data", "{ } Source"), widget_box("td9tr", "tagrow", [land_tag("td9t", "tag-ok", "running now")])]), widget_box("td10", "card", [widget_label("td10i", "&#x1F5BC;"), widget_label("td10n", "Make images on your own GPU"), widget_label("td10d", "The project&#39;s own Stable Diffusion pipeline: SDXL and SD1.5, text to image, img2img, inpaint and hires fix, with LoRAs, every layer a GPU kernel our own compiler emitted. It runs on your machine, on an NVIDIA RTX 40-series card or newer, and sends nothing anywhere. The page checks your GPU in the browser, then walks you through building it and downloading the models."), site_link("td10a", "card-a", "imagegen.html", "Check your GPU and set it up &#8594;"), site_link("td10b", "card-a", "imagegen-browser.html", "Or generate SD1.5 right in this tab &#8594;"), site_link("td10s", "card-a card-src", "https://github.com/damiant3/Cobblestone/tree/master/apps/diffusion", "{ } Source"), widget_box("td10tr", "tagrow", [land_tag("td10t", "tag-ok", "runs locally")])])])]]);
-  }
-}
-function today_section(...a) {
-  let r = today_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function join_section__tb(__a0) {
-  while (true) {
-    const x = __a0;
-    return new __TC(site_section__tb, ["join", "JOIN THE BUILD", "This Road Gets Laid One Stone at a Time", "Cobblestone is built in public, and the build has room for more hands than ours. Three ways in, none of them requiring permission:", [site_card_grid_3("join-grid", [widget_box("jn0", "card", [widget_label("jn0i", "&#x1F6E0;"), widget_label("jn0n", "Developers"), widget_label("jn0d", "The whole tree is public and every outside contribution lands with credit, in the open. An outside contributor&#39;s first pull request found two real defects our own instruments could not see; his independent Zig backend, its public test ladder, and the online REPL that compiles through it are part of the same open build. Come find the third defect."), site_link("jn0a", "card-a", "https://github.com/damiant3/Cobblestone", "github.com/damiant3/Cobblestone &#8594;"), site_link("jn0b", "card-a", "https://github.com/showell/codex-zig-ladder", "Steve Howell&#39;s codex-zig-ladder &#8594;"), site_link("jn0c", "card-a", "http://143.244.172.148:9100/repl", "The online REPL &#8594;")]), land_card("jn1", "&#x1F50C;", "Gadget people", "Nine board families have drivers today; the world has a thousand more. If you know your way around a dev board, a datasheet, or a soldering iron, there are drivers waiting to be born with your name on them."), land_card("jn2", "&#x1F4BE;", "Sitting volunteers", "A \"sitting\" is volunteer testing, and we won&#39;t dress that up: boot a fresh build on a real PC and tell us what the glass actually shows. But it is also the one step no simulator can replace, every machine answers a question nothing else can, and what you find goes into the permanent record with your name on it. A spare PC and a USB stick make you a laboratory.")]), widget_box("join-rq", "rq", [widget_label("join-rq1", "\"The repository remembers everything. The language says what you mean. The machine checks that you meant it.\""), widget_label("join-rq2", "Where this goes next: a new home for the world&#39;s code, where nothing can be deleted or forged, every change carries its justification and its signatures, and trust is measured by proof instead of popularity. The foundations are built and tested; wiring the world to them is the road ahead.")])]]);
-  }
-}
-function join_section(...a) {
-  let r = join_section__tb(...a);
-  while (r instanceof __TC) { r = r.f(...r.a); }
-  return r;
-}
-function landing_footer() {
-  return widget_box("foot2", "foot2", [widget_label("foot-creed", "\"They call it crazy, right up until it boots.\""), widget_box("foot-links", "foot-links", [site_link("fl0", "fla", "https://github.com/damiant3/Cobblestone", "GitHub"), site_link("fl1", "fla", "compile/prism.html", "Prism")]), widget_label("foot-fine", "The Cobblestone Project &#xB7; Built with Codex, the language underneath &#xB7; Every claim on this page traces to a measured, public record, and the ones still on the road say so.")]);
-}
-function landing_click(id) {
-  return 0n;
-}
-function render_landing(x) {
+function render_ig(x) {
   return mount_widget_themed(site_theme(), page_tree(0n));
 }
 function opening() {
   return (() => {
     return (() => {
-      const t = site_init(landing_extra_css());
-      const s = set_render(render_landing);
-      const h = register_handlers(no_pick, landing_click);
-      return render_landing(0n);
+      const t = site_init(ig_css());
+      const s = set_render(render_ig);
+      const h = register_handlers(no_pick, ig_click);
+      return render_ig(0n);
     })();
   })();
 }
