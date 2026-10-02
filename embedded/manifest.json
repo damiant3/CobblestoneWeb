@@ -1,0 +1,1605 @@
+{
+  "complete": true,
+  "groups": [
+    {
+      "name": "games",
+      "assets": 35,
+      "encodedBytes": 1764439
+    },
+    {
+      "name": "c64",
+      "assets": 1,
+      "encodedBytes": 248960
+    },
+    {
+      "name": "data",
+      "assets": 1,
+      "encodedBytes": 82558
+    },
+    {
+      "name": "mathbook",
+      "assets": 1,
+      "encodedBytes": 70866
+    },
+    {
+      "name": "safari",
+      "assets": 1,
+      "encodedBytes": 2110386
+    },
+    {
+      "name": "spark",
+      "assets": 1,
+      "encodedBytes": 48852
+    },
+    {
+      "name": "starmap",
+      "assets": 2,
+      "encodedBytes": 5091566
+    },
+    {
+      "name": "fishtank",
+      "assets": 15,
+      "encodedBytes": 8220478
+    },
+    {
+      "name": "gpushow",
+      "assets": 87,
+      "encodedBytes": 442238
+    },
+    {
+      "name": "fireworks",
+      "assets": 3,
+      "encodedBytes": 72282
+    },
+    {
+      "name": "globe",
+      "assets": 3,
+      "encodedBytes": 8422324
+    },
+    {
+      "name": "experimental",
+      "assets": 3,
+      "encodedBytes": 9112
+    },
+    {
+      "name": "compiler",
+      "assets": 3,
+      "encodedBytes": 2395095
+    }
+  ],
+  "assets": [
+    {
+      "pack": "games",
+      "path": "games/backgammon.wasm",
+      "bytes": 33636,
+      "sha256": "59ebf586047f4f9878fb8718aae5ccdaa649031fcbcb17cc1fdacc662b64ce5d"
+    },
+    {
+      "pack": "games",
+      "path": "games/battleship.wasm",
+      "bytes": 28481,
+      "sha256": "09b38e99b778b34697d5879f5ad32157b4ca9f6bb4a5d28d91e5f473d75f01e0"
+    },
+    {
+      "pack": "games",
+      "path": "games/blackjack.wasm",
+      "bytes": 34191,
+      "sha256": "62baf621bd0216e0ae67716a6329f199a30b4c2f4ecd5f139d87a69e700ca7e4"
+    },
+    {
+      "pack": "games",
+      "path": "games/bridge.wasm",
+      "bytes": 37417,
+      "sha256": "b367d2ef2e8c914c1e188ca5347aa0818248241f754b97bb2cd7fede7fae85b3"
+    },
+    {
+      "pack": "games",
+      "path": "games/checkers.wasm",
+      "bytes": 29244,
+      "sha256": "a926f24ea75b7813f86a08c0af699610c9bf7705a2814832a53987b0d750abbc"
+    },
+    {
+      "pack": "games",
+      "path": "games/chess.wasm",
+      "bytes": 39127,
+      "sha256": "85ec2abf613de8c696348316b341474e8571937a3c55cad51b9755b5a9260a3f"
+    },
+    {
+      "pack": "games",
+      "path": "games/connect4.wasm",
+      "bytes": 26009,
+      "sha256": "4e9a90b198b3ffb6a5d7f1efd48d09f9fcbbde2cdf7baff2b979e1dc6ed6f213"
+    },
+    {
+      "pack": "games",
+      "path": "games/crazyeights.wasm",
+      "bytes": 32257,
+      "sha256": "2b8d523ec70f28f5cbb2b15f635de014138d2226ae92ccdc0186cf218a33642a"
+    },
+    {
+      "pack": "games",
+      "path": "games/dotsandboxes.wasm",
+      "bytes": 26284,
+      "sha256": "2ebbfaded9c7061f0d7afb12949c525e318558dd2d58662b45652fc7ecd2a39e"
+    },
+    {
+      "pack": "games",
+      "path": "games/game2048.wasm",
+      "bytes": 27547,
+      "sha256": "5b4da3298c44976b6bf7d43cb806ea1d28386dd58f3b0db4609b65f0ee4017f6"
+    },
+    {
+      "pack": "games",
+      "path": "games/go.wasm",
+      "bytes": 31973,
+      "sha256": "fb8e08be4fe6a2a6d42c197b6b5f06ab5a83f27438eaf0d0610d6d287ce37747"
+    },
+    {
+      "pack": "games",
+      "path": "games/gofish.wasm",
+      "bytes": 29880,
+      "sha256": "e89b9a8e518098be78f84232e4123d0224853f642cc2669ed075c0642179e65b"
+    },
+    {
+      "pack": "games",
+      "path": "games/hexgame.wasm",
+      "bytes": 27050,
+      "sha256": "6cac3811c9b1271aaf3cb797bd14175270e4569f73ef3149ba5da566cc91600d"
+    },
+    {
+      "pack": "games",
+      "path": "games/hexwar.wasm",
+      "bytes": 54847,
+      "sha256": "f08c497ae0059817fad6d161c7f25808b8896efd4ef065799c6beec153502d0b"
+    },
+    {
+      "pack": "games",
+      "path": "games/klondike.wasm",
+      "bytes": 34211,
+      "sha256": "0eeef9b609db8f66c5cd4e4a47c94a6e16076da33ba399487c2fd1ff509c5fd2"
+    },
+    {
+      "pack": "games",
+      "path": "games/liarsdice.wasm",
+      "bytes": 28150,
+      "sha256": "bad6b2dd39cff74f0bc7736ef1a8c62c5ec53836c99d6d7637d62024a5e6a942"
+    },
+    {
+      "pack": "games",
+      "path": "games/life.wasm",
+      "bytes": 24956,
+      "sha256": "1a95a9ea6e8f8577d5c6af777171b3e42e0f762ecd516d48d2e3c0fadc519966"
+    },
+    {
+      "pack": "games",
+      "path": "games/mahjong.wasm",
+      "bytes": 25475,
+      "sha256": "020fbf3c646b574544b38052d417bf84902d45385c9353dac788f0116d309dc0"
+    },
+    {
+      "pack": "games",
+      "path": "games/mancala.wasm",
+      "bytes": 27085,
+      "sha256": "955fd6e12ef21b686b8f77565b330411a820e043a57bdf57433b48906eb9062c"
+    },
+    {
+      "pack": "games",
+      "path": "games/mastermind.wasm",
+      "bytes": 25390,
+      "sha256": "f6582a12085d99c5301ad6bc188229892bb5e87b853dc06c4c7c452d241da725"
+    },
+    {
+      "pack": "games",
+      "path": "games/minesweeper.wasm",
+      "bytes": 27268,
+      "sha256": "2638c45ac15c6ef57ac7f899a841189f039eac242e4ea3144f04afa14dbd5755"
+    },
+    {
+      "pack": "games",
+      "path": "games/monopoly.wasm",
+      "bytes": 42530,
+      "sha256": "5b4b5f651cada4bcd9bb0221e7cb9aa53705bea0b44a4ddc508fd32a27b9af02"
+    },
+    {
+      "pack": "games",
+      "path": "games/othello.wasm",
+      "bytes": 26887,
+      "sha256": "c2b5c997e18961616fd0e9eebe751712e485bd88eaaa57e7c55cc5a132b0a4bb"
+    },
+    {
+      "pack": "games",
+      "path": "games/pinochle.wasm",
+      "bytes": 39405,
+      "sha256": "1f40411621d5e3c342435c09d2f97fa26d16ed0dd36a2752bffb6e05540ee504"
+    },
+    {
+      "pack": "games",
+      "path": "games/poker.wasm",
+      "bytes": 39114,
+      "sha256": "24551c9f21e21a841752cbe3136bbf2e8132b4b1767a54edfa9723fbc155c9e6"
+    },
+    {
+      "pack": "games",
+      "path": "games/pokervariants.wasm",
+      "bytes": 58951,
+      "sha256": "2a0022167195c863f6d2c864f89da6f3b529f1a62ef0f78e8306a2654bf9ac1f"
+    },
+    {
+      "pack": "games",
+      "path": "games/risk.wasm",
+      "bytes": 36460,
+      "sha256": "a49ada0f1e323729787191cfdc88ee21202e4bf5c4d1a3c4c643d25d226c5b4d"
+    },
+    {
+      "pack": "games",
+      "path": "games/royalur.wasm",
+      "bytes": 27717,
+      "sha256": "83354b34e44b1fe18dbff90e628125efa0c8b742d1cae9ad70d014f352d64684"
+    },
+    {
+      "pack": "games",
+      "path": "games/rps.wasm",
+      "bytes": 24895,
+      "sha256": "218f28cf67c9437afcdf63e01ade072a44ccc59108da816175c21b7a4707c56b"
+    },
+    {
+      "pack": "games",
+      "path": "games/setgame.wasm",
+      "bytes": 27779,
+      "sha256": "0645f69c460437d544f5da9086752953973b7b9713a2a555886ff434fa04b413"
+    },
+    {
+      "pack": "games",
+      "path": "games/spider.wasm",
+      "bytes": 38635,
+      "sha256": "9e1d1555afcfc3988b1082eec299559396d48bd5c78b8bef001ad14d6f81413c"
+    },
+    {
+      "pack": "games",
+      "path": "games/sudoku.wasm",
+      "bytes": 28288,
+      "sha256": "7c4fb1186e91d5b320878e3922dbd72ffe9f8f5799bca6506beac9a3b03ccb0a"
+    },
+    {
+      "pack": "games",
+      "path": "games/tictactoe.wasm",
+      "bytes": 25556,
+      "sha256": "4f126834bcabcf9790861ce1d3999525439e890fe527f762d6f58ed57f9d5468"
+    },
+    {
+      "pack": "games",
+      "path": "games/war.wasm",
+      "bytes": 26917,
+      "sha256": "47f6350f7d690aed60cf9a8e5b6c71379f1e3de21dabefc3b63b2b3a0973e1eb"
+    },
+    {
+      "pack": "games",
+      "path": "games/yahtzee.wasm",
+      "bytes": 28373,
+      "sha256": "b435866a073537d01adc7f040489ca71a774d7364974cb2c66af37229a1664e2"
+    },
+    {
+      "pack": "games",
+      "kind": "module",
+      "path": "games/arcade.js",
+      "bytes": 164563,
+      "sha256": "c3e8167243e19f70d81eb36c5cd1178eef234779a005c2969deb55940855b4b5"
+    },
+    {
+      "pack": "games",
+      "kind": "module",
+      "path": "games/rules.js",
+      "bytes": 35359,
+      "sha256": "52479cc00fb82856907d4043ebb1db8f8a9f35c7d8a606f44679faf21c2b4876"
+    },
+    {
+      "pack": "c64",
+      "path": "c64/c64.wasm",
+      "bytes": 186633,
+      "sha256": "0feea01edbf8edc131d1f29e4f8b96e896245aa27d0655212f9bb98542187b42"
+    },
+    {
+      "pack": "data",
+      "path": "data/data.wasm",
+      "bytes": 61830,
+      "sha256": "73201b5046120b94cc2d90397e574338d36ca0567268f71f087a83e9fcd7ddd3"
+    },
+    {
+      "pack": "mathbook",
+      "path": "mathbook/mathbook.wasm",
+      "bytes": 53055,
+      "sha256": "c0e281534e94be44519ae8f997b274699c22e08ba6032c5fcc9c8fde21e803c2"
+    },
+    {
+      "pack": "safari",
+      "path": "safari/safari.wasm",
+      "bytes": 1582698,
+      "sha256": "f0b1d8688e90d7d5feaa0a6defe5c78de60358691f06476f6974331a9717d04e"
+    },
+    {
+      "pack": "spark",
+      "path": "spark/spark.wasm",
+      "bytes": 36549,
+      "sha256": "d209cab0dcff796768e7b15748ac9685f111aaf4c72d5000ba869d380b2717dd"
+    },
+    {
+      "pack": "starmap",
+      "path": "starmap/starmap.dat",
+      "bytes": 3795864,
+      "sha256": "9d6e292e183f1ae2356649d16b31895407cc4b479da756c90bc4ad45d698efc6"
+    },
+    {
+      "pack": "starmap",
+      "path": "starmap/starmap.wasm",
+      "bytes": 22675,
+      "sha256": "e4c930adaa95b7510f09b31e3a725b48bdbee3fa116739bb9d052420edab459c"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/creature-seahorse.png",
+      "bytes": 166383,
+      "sha256": "3c074dcbb8eb55e9e5c062acdf037965c71622e0452533faf6dd95a71317fd8e"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/creature-shrimp.png",
+      "bytes": 79297,
+      "sha256": "7181437f48d528dbe5a4acbccca21378d2f4f03e9e1d28a17f182574b8018b82"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fg-coral-center.png",
+      "bytes": 489526,
+      "sha256": "4f5dfa62650cdaef0f9978a21653cbf678650e138292f1001719e945f6157612"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fg-coral-left.png",
+      "bytes": 174281,
+      "sha256": "62452c53cc52cd33ab625cc0c168398247efe9ffb5e092bfdad06e8b5421e747"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fg-coral-right.png",
+      "bytes": 695694,
+      "sha256": "94fa25a74b430a67bac1122cff12faf6ce5afc4a8fa56ccee522bef282f03284"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fg-rock-left.png",
+      "bytes": 674039,
+      "sha256": "6842d17524fa2ee387b21cd913bfcd6e7743a443b938f2833fc5b02dab26ce70"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fg-rock-right.png",
+      "bytes": 197664,
+      "sha256": "8bc20996e0d6d8d774bad443dc7797b64f46d96f7cb66a4c74ad5de0b6f68d9f"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-angelfish.png",
+      "bytes": 149373,
+      "sha256": "41ff064f25cde9ded6229d2d587d2b25d23f81a30b3f6740b68cc8efbcf814be"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-clownfish.png",
+      "bytes": 134399,
+      "sha256": "20603fedf0869a01ae839ca459c4bdd9c0af9650cc6815e52c186180733a303f"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-discus.png",
+      "bytes": 316682,
+      "sha256": "b12f377ec601f68d6897f6e8270e528ac9dc48888989484ffa81afd8d6963996"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-guppy.png",
+      "bytes": 123797,
+      "sha256": "3b1a16a32da35f641cdff2606a5cb0636b8af84c1b7de685b09b02bf88a894e8"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-neontetra.png",
+      "bytes": 95583,
+      "sha256": "2ccdb24c1863012dd9eefb218879c6216d5c30d1387d86f27738a2e1aaeade44"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/fish-tang.png",
+      "bytes": 134060,
+      "sha256": "c870833ff3ca79d2705184d4357fb3d005bd93e5df145f2c2fb76c21f7f728a6"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/assets/reef-backdrop.png",
+      "bytes": 2697353,
+      "sha256": "8b66634056141fc68894442ee8057554f5cf566282fd5fe35b02c81abd938fa3"
+    },
+    {
+      "pack": "fishtank",
+      "path": "fishtank/fishtank.wasm",
+      "bytes": 36563,
+      "sha256": "e0d38d7c8bc68e175bd24d8e55b385e5409d9f47627ca74c15006fadd65cab71"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/AlphaCoverageKernel.codex",
+      "bytes": 2132,
+      "sha256": "726607561e7c3f92e3b1d2c2d3bca4a5a1e1688390b2d9d56e0f33fd0a3a3abc"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/AlphaCoverageKernel.wgsl",
+      "bytes": 2694,
+      "sha256": "2abacd7413cbe5bc7e773dae7ea2d4449c684ba2c20929426d565dfcc003e210"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/BloomKernel.codex",
+      "bytes": 1994,
+      "sha256": "acd65e41006826238a388946fa72251c61cb1a7d7da4af20bb4dbf05b333dbe0"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/BloomKernel.wgsl",
+      "bytes": 2497,
+      "sha256": "55ed5480679baac8b48fecb0b5385bcdb2c52939f19acb720f4635ad6c24962a"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/BloomSceneKernel.codex",
+      "bytes": 1854,
+      "sha256": "b26d1348479a61a36371da71f772a790583c33547c0b544a8ed35126d81ce3d8"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/BloomSceneKernel.wgsl",
+      "bytes": 2085,
+      "sha256": "e50d20414b04774ff0c30ec7825ed97fa0d9f7ae7e384affc2f13380eb0e7bdb"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CpuParticlesKernel.codex",
+      "bytes": 1267,
+      "sha256": "8a7b85e513e81904f399d6d8eaa22b6b012226c434ab148b8431a34822f56721"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CpuParticlesKernel.wgsl",
+      "bytes": 1469,
+      "sha256": "32941d49c9c26f26941f0e577b9a05367eb4df5034d32cbda6f71cc92231ec60"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CubeKernel.codex",
+      "bytes": 3530,
+      "sha256": "9ff037358002524f5540eee43d79ea2e8bcd78578b40642c8657cfb58ead8de9"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CubeKernel.wgsl",
+      "bytes": 4323,
+      "sha256": "823ba536e41d1c8b9cc99b741aa45cbeabf4d1122a05491345c8ee7030dc48a9"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CubemapKernel.codex",
+      "bytes": 2567,
+      "sha256": "93974f962bd635e7462fd60cdec94cda99eed9505606688ed3ccc76aba3306df"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/CubemapKernel.wgsl",
+      "bytes": 3225,
+      "sha256": "d1c073ad8f0c5552ecd51d26a06d3398fa91808ba4d065589db3f990c8477deb"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/D20Kernel.codex",
+      "bytes": 8949,
+      "sha256": "460cb42483cf71c943bb199052c39494a3f1cc3970bd51f856e1127d097b2dd8"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/D20Kernel.wgsl",
+      "bytes": 10572,
+      "sha256": "8fcb21d46128a46bc8ca8a9ab5ab4a959db96c7e4f85cd745c7e3be6281609cf"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/DeferredKernel.codex",
+      "bytes": 3653,
+      "sha256": "91ee18bab3afbaf8fd5a79f6a9fd5b88d9f2487642fdebdc3fd2070c293b7fdd"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/DeferredKernel.wgsl",
+      "bytes": 5362,
+      "sha256": "34921f585d3f7e7d9521af785df87243598a3a68c54ffc359ee27b3393a45dcd"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/DeviceEffect.codex",
+      "bytes": 3239,
+      "sha256": "ee65359fc361d323ff5cf9c68375bef304cd7b70bdf260f7a04a316db5f23b0b"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/DeviceMath.codex",
+      "bytes": 8457,
+      "sha256": "003cd4bf7f26c69a5d5ea65b3c6c41dbe4e59905eee8a8839581523fbca481df"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/FireworksKernel.codex",
+      "bytes": 2533,
+      "sha256": "e993ac21cb78bd5a2458f3d8348928f94d4fb852f9375b1a6291e6a247a38fed"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/FireworksKernel.wgsl",
+      "bytes": 2799,
+      "sha256": "bbf43ef597d2453c6f359ccc7336d6b292f70104ff2fb21de92577b17bb0c3c0"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GbufKernel.codex",
+      "bytes": 4345,
+      "sha256": "04dd449a4fa9c5e5cf4df50b976177fa69f9c911eb0be0a7ce1212f3572facdf"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GbufKernel.wgsl",
+      "bytes": 7354,
+      "sha256": "8a9c6c585f0205875d91a82ed5259a3502f592aba67b23794ed3598d02b95b3b"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GearsKernel.codex",
+      "bytes": 2612,
+      "sha256": "551edd561dcc0f8dfeeed0e87372f89509af9781e0e50c13a71c096ac66a2fd2"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GearsKernel.wgsl",
+      "bytes": 3369,
+      "sha256": "a61f563f88a82b71d52890945925eef7b7e7652bd494b12d326bdb03e8717b94"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GltfKernel.codex",
+      "bytes": 6156,
+      "sha256": "2b61f80c3124f17577d10c63385b02f9cc7d344292dab95b1e96c8f0d8a1ce09"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/GltfKernel.wgsl",
+      "bytes": 7373,
+      "sha256": "35c731181dd18e017b0a3ad858e0199542ddfd67f99c2634f158bc1c21bf1c42"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/InstancingKernel.codex",
+      "bytes": 4694,
+      "sha256": "17cc3409a9c90ed450359f52c221df78557a102a3cda20cbda23b60aeb2ff733"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/InstancingKernel.wgsl",
+      "bytes": 6012,
+      "sha256": "bf01383ede2ed33e0272c032dde8180c13d181404f0eb8f4caef87bf307dfb2e"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/JuliaKernel.codex",
+      "bytes": 1626,
+      "sha256": "1ebe3aa600a779a5077bd525ff21c3675422a53ba98f6529c3f53506049c5836"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/JuliaKernel.wgsl",
+      "bytes": 2126,
+      "sha256": "e7f89d2c5ffe6602059ddd0eaecd08ae084f5c5107805313127960b359f5f9ec"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/MandelKernel.codex",
+      "bytes": 1748,
+      "sha256": "755c7aaecc0a22ce094c020ccca90f9779565c56b9f310bbd085d843ddfc7565"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/MandelKernel.wgsl",
+      "bytes": 1895,
+      "sha256": "22bd596626db220e3d80f38d9edd593da0fae09c57a629a4c8ee5285a122d462"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/MultisampleKernel.codex",
+      "bytes": 1855,
+      "sha256": "fbdf6ea4e7b338aeaf4c208440ebf5d3c3e1aca7d3f12b28a1e924b503894024"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/MultisampleKernel.wgsl",
+      "bytes": 2488,
+      "sha256": "993bb53f90a27c7d57900a313fefce4e044ec59b8c656502725ca72ae942f0ac"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/NbodyKernel.codex",
+      "bytes": 2549,
+      "sha256": "aeb99b244dab5113b90ea769fd16a7acb517eb48d711ee193827d0dd560c3fc1"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/NbodyKernel.wgsl",
+      "bytes": 2865,
+      "sha256": "6909da066cab9caf83ad768cf3a9c697960511533cdb80f2dd92995abaff7dc4"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/OcclusionKernel.codex",
+      "bytes": 2256,
+      "sha256": "854a084c9ce3dc27fa7acb6385ea960da02d981882cbee8a5fcdbfcef2f4da33"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/OcclusionKernel.wgsl",
+      "bytes": 3154,
+      "sha256": "bcdfe74662f94761ae835684dfe71c4dde6e0e39c0495bc4f6f106a1490d50be"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/OmniShadowKernel.codex",
+      "bytes": 4869,
+      "sha256": "a72a39440a35e5bf4593295678d47f394162db86d332b32f93be02158b9001cc"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/OmniShadowKernel.wgsl",
+      "bytes": 7685,
+      "sha256": "427e8a83bf08ea0bd48ca9fb21b47f5b7c7d75d03b51266bcfb94ebf692c2829"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ParallaxKernel.codex",
+      "bytes": 2870,
+      "sha256": "737c105d01536ebd9bbb691129ae8b4221713b30857f1a370d2a25cbdb852b2f"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ParallaxKernel.wgsl",
+      "bytes": 3229,
+      "sha256": "e477fca500bbb334b8efca3b6fa945aa4f54cbe60cfd2275df8b699ea5adb992"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ParticlesKernel.codex",
+      "bytes": 2962,
+      "sha256": "368b402cb01ac1cf02581af9b634d19e37ee2431e0593bba8b24cbd77bee963d"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ParticlesKernel.wgsl",
+      "bytes": 3126,
+      "sha256": "12a29347f1fce94cf91967c911e60081c7b1920d051bfae9453ae257fab9eae9"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrIblKernel.codex",
+      "bytes": 3822,
+      "sha256": "393f341c08894c10fe56b8d53e1e23b31042bd0dbccb68b9652290379f9b5c13"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrIblKernel.wgsl",
+      "bytes": 5580,
+      "sha256": "5b8e38c65e8d15a2be618b5a9eb898f50fa2b274cfa26cc8922abff6e4e449b0"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrKernel.codex",
+      "bytes": 4796,
+      "sha256": "48fe907b61e416653f021fba936398bc0a26b3805fa3f1383f82b4221c937d52"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrKernel.wgsl",
+      "bytes": 6022,
+      "sha256": "78217f9519157a2d84ff717f929c295b74be8c91d28c4e141519b9b68b747f19"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrTexKernel.codex",
+      "bytes": 3283,
+      "sha256": "554795cd5de0d450f874cbb439338c1bd26b37108c460bd8fc8e87e7451b16da"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PbrTexKernel.wgsl",
+      "bytes": 3772,
+      "sha256": "e260ca6f785bcaad118eb33df2db371bae5f6903fc0bde74ddf49f4709618486"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PipelinesKernel.codex",
+      "bytes": 3756,
+      "sha256": "991d3eaa9dea98335e6053459df84a94414e5484d36284a36aa9d48ffc1177f7"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PipelinesKernel.wgsl",
+      "bytes": 5656,
+      "sha256": "127fa5c478cadb7baf157968a64c1943b7f108678e6fc19ec98b1ed11b94a854"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PlasmaKernel.codex",
+      "bytes": 1577,
+      "sha256": "1b38f7de60589b1b6c7d783dd663c8a7d6d3460460a9b685aef407488dd73f45"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/PlasmaKernel.wgsl",
+      "bytes": 1806,
+      "sha256": "4258f1a0543e7df1408ca576a7afbe7aafcfe5a6e3a4efe66d3c9f36ea35ee69"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RadialKernel.codex",
+      "bytes": 1899,
+      "sha256": "dfcf4c540b47c793bf537bcfd059e65980c59a4625a59f02244c18c849105bf5"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RadialKernel.wgsl",
+      "bytes": 2497,
+      "sha256": "33e2646dc327a32b9bcd611cfed046fc7d5e830238e7ac211e6f45465c5e7cfe"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RaymarchKernel.codex",
+      "bytes": 3041,
+      "sha256": "0dcdcbe12ff7b974541e40c31684099fe3978fb9d3eedb89e4881dd7c79415f7"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RaymarchKernel.wgsl",
+      "bytes": 4008,
+      "sha256": "b9f95f431446513cc33d78005dcc79093601641ab03d0e9edd1a4cf59c6ae23c"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RaytraceKernel.codex",
+      "bytes": 5487,
+      "sha256": "173cdc7e35f7a63570bce876953e5821e7dc29dc4bc99d578e050144d6123e9e"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/RaytraceKernel.wgsl",
+      "bytes": 7704,
+      "sha256": "85542a1130694b5358a866219181fae6e185bfa9e13456a8cd8965e47a9b20d4"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ReflectKernel.codex",
+      "bytes": 6750,
+      "sha256": "eb2c2027dd4f42a469069887e2797f570187333b774aaa1b61d8676a9e72cae1"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ReflectKernel.wgsl",
+      "bytes": 9363,
+      "sha256": "f804d7e986840ee510e954abfe7951a9fbc3a606886668e7271660bd3c6da549"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowKernel.codex",
+      "bytes": 6002,
+      "sha256": "bfabe91a079e650a0d5c76d0c2e46949f8aa33292fd36b088dfae493964ae606"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowKernel.wgsl",
+      "bytes": 8864,
+      "sha256": "c73fa94acc6b26bea3051bda81581f918f11ca43618dab492a5831fdfa66f1a5"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowMapKernel.codex",
+      "bytes": 2733,
+      "sha256": "2ca107cb21bd2708a63cf1cf8ede4680aa51158c95c4ebe839ca8b6026b06f4b"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowMapKernel.wgsl",
+      "bytes": 3956,
+      "sha256": "0b3cc9a7099ecf7e259c65629c96717edaadb3dbe36c51d6ecef01a9bf76dfde"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowSceneKernel.codex",
+      "bytes": 5589,
+      "sha256": "483d48a634f6ddb39eb07e17eec9a6b4612484d213521808b15eb69532a5be01"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/ShadowSceneKernel.wgsl",
+      "bytes": 7641,
+      "sha256": "b3767d5e5b4e476deb44a09030b4d2d229467e5fa5082cc80f625bab8dd679ef"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/SsaoKernel.codex",
+      "bytes": 2514,
+      "sha256": "8b483bce51017fbed1d67e172288259aa57f2e89dfc7813d68cb4f01ef2bb79c"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/SsaoKernel.wgsl",
+      "bytes": 3184,
+      "sha256": "768bb580f236af48d278307e3be9d9517543cfdc233725fe48830ca01aa5528d"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/StencilKernel.codex",
+      "bytes": 2048,
+      "sha256": "015012fa9d27ff0635526ecfcfd5fee5a11a5fa0404cd982b17e2e01d15f3959"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/StencilKernel.wgsl",
+      "bytes": 2489,
+      "sha256": "6e18eca4d20e6613bc187936ad6213403c27f366cff97523f2b4cdaaf053cc56"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/SwarmKernel.codex",
+      "bytes": 2605,
+      "sha256": "2ea859b4f4747dc7aa4e7a9488383c6b0ea3356206909aee9e76e04afed4ff31"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/SwarmKernel.wgsl",
+      "bytes": 2888,
+      "sha256": "dbe333152422712e5796ca3480189cd24f062c16d5c60fbd4eeb4926155b3405"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TexArrayKernel.codex",
+      "bytes": 2441,
+      "sha256": "0900adfc5c8d6bb5e4303b253ed0252c3378f642ae18c728445e0ef6b8073185"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TexArrayKernel.wgsl",
+      "bytes": 3215,
+      "sha256": "a445a8580fcd14a630f712bcf2346c157a83b444a9c4e26d844168d1028a8b61"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TexMipmapKernel.codex",
+      "bytes": 1833,
+      "sha256": "a778ce5084a1afe906e8158c52f330d4892cdada5245ddb783218d8d98b6c392"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TexMipmapKernel.wgsl",
+      "bytes": 2116,
+      "sha256": "01cf4d71d153b805dd75f82b4b42f8b39b62a99fbeb52e681ace5e7ba0b91620"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TextKernel.codex",
+      "bytes": 2913,
+      "sha256": "1a45ca9ed26b2baf32e6d5ffb12b45b9dbb0f62fa284b8e23f4faef27bb42b09"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TextKernel.wgsl",
+      "bytes": 4261,
+      "sha256": "7544ec06f141edb98e3aa4d0db0ede9055129206ed5cd47fe8690c1c9f4cfcbf"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TextureKernel.codex",
+      "bytes": 2069,
+      "sha256": "2b8664dbccf28e9b25f8501cc4de1fa91ae39ba9f6b36fa3bf991c0f82fd36fe"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TextureKernel.wgsl",
+      "bytes": 2027,
+      "sha256": "06b9f514cb77ba2a10de8a3a941015a3b88acd6cf029b8410afd8a6d1b77e274"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/Thread.codex",
+      "bytes": 354,
+      "sha256": "96bf2add35938e5e43793fd017ab7decc784949004870cc15a213cdce61b924b"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TriangleKernel.codex",
+      "bytes": 2344,
+      "sha256": "d9a8af80f6423f2ae0bfaf4b32dda5fdd92e7e518ac1171a151a6bed3588cc92"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/TriangleKernel.wgsl",
+      "bytes": 2446,
+      "sha256": "9a58294d87cf254087c3e004ed3e2110c5fd31f5e115690b4705a48dbbe7b9b2"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/VertexAttrKernel.codex",
+      "bytes": 2414,
+      "sha256": "8922a5c5f4b55fdda38df964084b8c7720a5df4903252a3e6c9cef03f108e357"
+    },
+    {
+      "pack": "gpushow",
+      "path": "gpushow/kernels/VertexAttrKernel.wgsl",
+      "bytes": 2820,
+      "sha256": "99d0972b2001d44c2a2c5aeb5a04364aba14cbe86c1f21d082bf4ed320cfdf19"
+    },
+    {
+      "pack": "fireworks",
+      "path": "fireworks/kernels/FireworksSimKernel.codex",
+      "bytes": 12095,
+      "sha256": "a9a66a311ce38f998e2277b5f5b47076f2a9ba3c4829e84cb4c903c135bec0f7"
+    },
+    {
+      "pack": "fireworks",
+      "path": "fireworks/kernels/FireworksSimKernel.wgsl",
+      "bytes": 10389,
+      "sha256": "892a83ea1e167df358cac0664f578bbef414155a931ab5141b9b65677467ae62"
+    },
+    {
+      "pack": "fireworks",
+      "path": "fireworks/web/fireworks-show.wasm",
+      "bytes": 31507,
+      "sha256": "3316a5f4ae0330d2fdf637bbbade1ecf4ac4a2e4923d3e1a91da7ccff6b9ecc2"
+    },
+    {
+      "pack": "globe",
+      "path": "globe/earth-texture.raw",
+      "bytes": 6291456,
+      "sha256": "72da9d9fca56d467b8e665a031124d6a075486076bb7eff93a26e3c19336b011"
+    },
+    {
+      "pack": "globe",
+      "path": "globe/kernels/GlobeKernels.codex",
+      "bytes": 11465,
+      "sha256": "698bb77c60b5e8127aba221b32558a7dfbcb841ca8e053a3b8df69e00122144f"
+    },
+    {
+      "pack": "globe",
+      "path": "globe/kernels/GlobeKernels.wgsl",
+      "bytes": 13618,
+      "sha256": "6e29a4e88ca09aa33dfd5548a355381659347ab8f4ac84193e4d9f732c06d7fc"
+    },
+    {
+      "pack": "experimental",
+      "path": "experimental/DeviceEffect.codex",
+      "bytes": 3239,
+      "sha256": "ee65359fc361d323ff5cf9c68375bef304cd7b70bdf260f7a04a316db5f23b0b"
+    },
+    {
+      "pack": "experimental",
+      "path": "gpushow/kernels/PlasmaKernel.codex",
+      "bytes": 1577,
+      "sha256": "1b38f7de60589b1b6c7d783dd663c8a7d6d3460460a9b685aef407488dd73f45"
+    },
+    {
+      "pack": "experimental",
+      "path": "gpushow/kernels/PlasmaKernel.wgsl",
+      "bytes": 1806,
+      "sha256": "4258f1a0543e7df1408ca576a7afbe7aafcfe5a6e3a4efe66d3c9f36ea35ee69"
+    },
+    {
+      "pack": "compiler",
+      "path": "compile/codex-compiler.wasm",
+      "bytes": 1441918,
+      "sha256": "77312c99e02be616a50311b12ac671054c8f08a1d53241b1b0652ada57375f36"
+    },
+    {
+      "pack": "compiler",
+      "path": "compile/wasm-stdio.wasm",
+      "bytes": 262037,
+      "sha256": "afea8ff893d2743363bff44bede33ddb2455827b12ff177ab4d32d6fa40b2cd8"
+    },
+    {
+      "pack": "compiler",
+      "path": "compile/wgsl-stdio.wasm",
+      "bytes": 92189,
+      "sha256": "08b96be05867f1f63a5591f84cf4ff11f9aab7e7be701eeefd0906dbd7e509c9"
+    }
+  ],
+  "pages": [
+    {
+      "path": "games/index.html",
+      "packs": [
+        "games"
+      ]
+    },
+    {
+      "path": "c64/index.html",
+      "packs": [
+        "c64"
+      ]
+    },
+    {
+      "path": "data/index.html",
+      "packs": [
+        "data"
+      ]
+    },
+    {
+      "path": "mathbook/index.html",
+      "packs": [
+        "mathbook"
+      ]
+    },
+    {
+      "path": "safari/index.html",
+      "packs": [
+        "safari"
+      ]
+    },
+    {
+      "path": "spark/index.html",
+      "packs": [
+        "spark"
+      ]
+    },
+    {
+      "path": "starmap/index.html",
+      "packs": [
+        "starmap"
+      ]
+    },
+    {
+      "path": "fishtank/index.html",
+      "packs": [
+        "fishtank"
+      ]
+    },
+    {
+      "path": "gpushow/web/alphacov.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/bloom.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/cpuparticles.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/cube.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/cubemap.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/d20.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/deferred.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/fireworks.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/gears.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/gltf.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/index.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/instancing.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/julia.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/mandelbrot.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/multisample.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/nbody.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/occlusion.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/omnishadow.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/parallax.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/particles.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/pbr.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/pbribl.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/pbrtex.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/pipelines.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/plasma.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/radial.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/raymarch.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/raytrace.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/reflect.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/shadowmap.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/shadows.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/ssao.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/stencil.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/swarm.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/texarray.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/texmipmap.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/text.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/texture.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/triangle.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "gpushow/web/vertexattr.html",
+      "packs": [
+        "compiler",
+        "gpushow"
+      ]
+    },
+    {
+      "path": "fireworks/web/index.html",
+      "packs": [
+        "fireworks"
+      ]
+    },
+    {
+      "path": "globe/web/index.html",
+      "packs": [
+        "globe"
+      ]
+    },
+    {
+      "path": "experimental/index.html",
+      "packs": [
+        "compiler",
+        "experimental"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "path": "c64/index.html",
+      "sha256": "88079a93051733adaa993adc56cc39185f81b47c73d2fee30e68f9305b6fb81d"
+    },
+    {
+      "path": "compile/prism.html",
+      "sha256": "a9d1d9d9b8d563d6bf33b484c505d293742b5341c4d584d5bb29cabac4aa23d0"
+    },
+    {
+      "path": "data/index.html",
+      "sha256": "dd28712e3bbad1bb4759e5d270902958d7f29299a3c5102a1c4ac0887e2d3296"
+    },
+    {
+      "path": "experimental/index.html",
+      "sha256": "aaf3f35032df224aa036c1dc7fea317065f0a290a8ba22d7853df1f7abcfe7c8"
+    },
+    {
+      "path": "fireworks/web/index.html",
+      "sha256": "1be0e9c15f0a273f079caa2f3cfbb24187a6427bfacbe447b9f35a86fb9e948c"
+    },
+    {
+      "path": "fishtank/index.html",
+      "sha256": "2ebbe36950cb8d4f162a00526fe516fcf80b9834777ba07ffcbff1d5a4d277f0"
+    },
+    {
+      "path": "games/index.html",
+      "sha256": "06c929096312798c5e6e76316dbbc92fdb737edbf8d58125c2e92b37bc22b72c"
+    },
+    {
+      "path": "globe/web/index.html",
+      "sha256": "e8b96779220de7864a250659cff593f098fa30cb1ef827430c75d136311cfb5e"
+    },
+    {
+      "path": "gpushow/web/alphacov.html",
+      "sha256": "c53bddb19a5f641554a009659478932193a2c060532dd21218002d62bbbb48c4"
+    },
+    {
+      "path": "gpushow/web/bloom.html",
+      "sha256": "65888b79f80157019eee1325fd8ac50308a73a2c9081b7d72103350abc62a526"
+    },
+    {
+      "path": "gpushow/web/cpuparticles.html",
+      "sha256": "498ba935b00dc6065767823a09f7260069e7e4e93c98468ad8936c03fe0f52d5"
+    },
+    {
+      "path": "gpushow/web/cube.html",
+      "sha256": "c51d9020ca2470fea1723615d127678ff98f2921a7be8d1c70d5f80b16e054a4"
+    },
+    {
+      "path": "gpushow/web/cubemap.html",
+      "sha256": "8bee27176f5aa623cd08f2a439a557248f6122593215fb3ed21b82498503005f"
+    },
+    {
+      "path": "gpushow/web/d20.html",
+      "sha256": "395a892c565f2cd9ffd629b14692bd8f6ab2bc0ab0060b7f0aa579002d1e5798"
+    },
+    {
+      "path": "gpushow/web/deferred.html",
+      "sha256": "c1b922c97da54a6d2148ffa18aaf44228dc0073c0254bc5790077cc437b94cd0"
+    },
+    {
+      "path": "gpushow/web/fireworks.html",
+      "sha256": "d352998b965bc382f223c5dde8307ca2aea965c5668f534b10a0520947a6ce7b"
+    },
+    {
+      "path": "gpushow/web/gears.html",
+      "sha256": "e4b7a2fe0c2af6a15759b8009e7921306ceed38ae726e2959884869883e63f54"
+    },
+    {
+      "path": "gpushow/web/gltf.html",
+      "sha256": "5bfaf24db37d1ed8b0d671328c4fddbd47beadceaab6d677320216eb8f0e6e9d"
+    },
+    {
+      "path": "gpushow/web/index.html",
+      "sha256": "29ebeb0ec51d3e0107c47aeb7b110af9e1524a1dd6ddc6efe5282d237280a3f0"
+    },
+    {
+      "path": "gpushow/web/instancing.html",
+      "sha256": "5ea6d4cee186e1731178f4afc4ab81a093bc129bcc2abd091ccad5587f8fe254"
+    },
+    {
+      "path": "gpushow/web/julia.html",
+      "sha256": "1da7fe1a9d370461542dcc7662b903c513ca2bbb4edd7da0fe8a29e45cb263d4"
+    },
+    {
+      "path": "gpushow/web/mandelbrot.html",
+      "sha256": "db904fc1a55d18a5ae105c4cfe0aac7a08104bd6009f535b6dcfef02589d0abc"
+    },
+    {
+      "path": "gpushow/web/multisample.html",
+      "sha256": "371dbdc5555f9899efea31bdac04b06be970a97e99227653b65604239c2caa6f"
+    },
+    {
+      "path": "gpushow/web/nbody.html",
+      "sha256": "fc6b44ed23e50cad217f7b0978aeb49c64ff84d488f9d0eca3d758d3c59a8ac8"
+    },
+    {
+      "path": "gpushow/web/occlusion.html",
+      "sha256": "ac8534b0cb426ed1ebfff249ee1be7a2a40bd6259dd7e0618d467e29748fc6d3"
+    },
+    {
+      "path": "gpushow/web/omnishadow.html",
+      "sha256": "5d9d3238064bba6299c130ef72590755b4415a4b39b5ab9f073515758d504b79"
+    },
+    {
+      "path": "gpushow/web/parallax.html",
+      "sha256": "5ec36902fbed1015b2d1e8eaf5ddc9b9695c7d175e1a8e59daea81046c7785cf"
+    },
+    {
+      "path": "gpushow/web/particles.html",
+      "sha256": "bbb9b3736fbf5db045aac56b244507ba8cf28a9bec07c0a91a050537d6b9101a"
+    },
+    {
+      "path": "gpushow/web/pbr.html",
+      "sha256": "420689aeffa9ae83eb08209e0fdadb914deb53064214603c7b9d50adeb415e10"
+    },
+    {
+      "path": "gpushow/web/pbribl.html",
+      "sha256": "83f29337f2b7a54a7d23908a19f04dbcde915cd2fbc1de4b029de4ffe32f5399"
+    },
+    {
+      "path": "gpushow/web/pbrtex.html",
+      "sha256": "2acae0a32aa4f2c74f23e56c7adb8d6f01f69126ba5803bb7535de218a04536b"
+    },
+    {
+      "path": "gpushow/web/pipelines.html",
+      "sha256": "25914fd05f02a8f8b8aa51a6b0b48a7da4106996699fd390167906bbc805f570"
+    },
+    {
+      "path": "gpushow/web/plasma.html",
+      "sha256": "b21f4a8eb093c210025fae761f865a51b355835959311aa412704daf0f13eb34"
+    },
+    {
+      "path": "gpushow/web/radial.html",
+      "sha256": "0a3f63279db80ffb37fe67807b502c1f67b82a87f604e35c2499e700f95cb91b"
+    },
+    {
+      "path": "gpushow/web/raymarch.html",
+      "sha256": "87b374aefd9dd62b334aa6d61bd2626351bf43b0e4539bac721e06404f1e4642"
+    },
+    {
+      "path": "gpushow/web/raytrace.html",
+      "sha256": "5fca2072108a326d5ea7ec2d3d6928a2292239f9fef8ffad8e25754a14a3ff38"
+    },
+    {
+      "path": "gpushow/web/reflect.html",
+      "sha256": "aafb3e6b3a1a984cc7946c44807a302933967cfaed7621a8432e4ce1e20c1353"
+    },
+    {
+      "path": "gpushow/web/shadowmap.html",
+      "sha256": "2e0163b3f51c95ed4f9734ed9724700ac5fbda749b3b9ab4995fc09b8d6e0d46"
+    },
+    {
+      "path": "gpushow/web/shadows.html",
+      "sha256": "85661015f70ad907d731ffdf6c84b8cbddf7900d61067ea8f549890604f74cce"
+    },
+    {
+      "path": "gpushow/web/ssao.html",
+      "sha256": "3f27ce6880a9d3c8e0d09c9cdbb87354b21745945b0cef713ce0994ffbd8d726"
+    },
+    {
+      "path": "gpushow/web/stencil.html",
+      "sha256": "474cb7a5b536402a8a321ef3ea50f27714e7e4fcfe555327ce355af44f75685b"
+    },
+    {
+      "path": "gpushow/web/swarm.html",
+      "sha256": "8bb3eceb7ad0532aff14469ece81555a1bd646e0bf2cf5d159ac093300a27e20"
+    },
+    {
+      "path": "gpushow/web/texarray.html",
+      "sha256": "96e1aafdbc61406e237605bb0387f72616c5d669d62c2ad166a4edda6c760e3b"
+    },
+    {
+      "path": "gpushow/web/texmipmap.html",
+      "sha256": "a84a15ca5c56eca6f8089b3f24c6a18bd473d1baa56c70cd85f260e17f4f8473"
+    },
+    {
+      "path": "gpushow/web/text.html",
+      "sha256": "c1df832d22156f884055d170202057c841e32e567e432178fe1fe3e9affee918"
+    },
+    {
+      "path": "gpushow/web/texture.html",
+      "sha256": "ee4a0c6e03820b5f0e8e3a37197fe1729a0202fac6e3ab1989fdd577b0effbc9"
+    },
+    {
+      "path": "gpushow/web/triangle.html",
+      "sha256": "1650a515a6206e2c9c95047d2480a6325e54aab9a095ba04edc369cda3a91478"
+    },
+    {
+      "path": "gpushow/web/vertexattr.html",
+      "sha256": "bda6b29f0b8b3d3546b025795ab3c04db97223796cc0967be09981c1b7070298"
+    },
+    {
+      "path": "graphics/index.html",
+      "sha256": "d3cb0ecacb172b795f7f0eca395a6e7efca9264a95db6f10d700e83c8f00ec55"
+    },
+    {
+      "path": "imagegen-browser.html",
+      "sha256": "790a4067dc4c30592b0e999ed616a94d62cd26431ee68cea80b2c553e2ef6842"
+    },
+    {
+      "path": "imagegen.html",
+      "sha256": "c1f2e414cf589b44a67ce883487ee7eefdaca37a73ea47477ffce204788ded9f"
+    },
+    {
+      "path": "landing.html",
+      "sha256": "b6a9b2e1b132ac76c4aaa2618e6756316ee4b1a732d7d4736c753de1ee2a1720"
+    },
+    {
+      "path": "mathbook/index.html",
+      "sha256": "17cbeb31a26b5c7359194bf809d0c45bd6aeb0b1736886a25e89993d756b33b9"
+    },
+    {
+      "path": "modbuilder/index.html",
+      "sha256": "6f3b8e1c2c0eb745749e60a36ceb0a3768d7daa884a5144d866351fb87e6170c"
+    },
+    {
+      "path": "safari/index.html",
+      "sha256": "ce50af9b9d90dadd96601b0a0db046260b5dc0e97519eecda7e083a4a005e7a8"
+    },
+    {
+      "path": "spark/index.html",
+      "sha256": "5ec55b4930d8904c4e9fdedf0fc2d62b79a23dc49f8799535473d07c3d10e7c9"
+    },
+    {
+      "path": "sparkstudio.html",
+      "sha256": "6467dc0cfbafc24b4a22b981bb75d433bdaaa1f4ca6d054af4b5f11cf886be00"
+    },
+    {
+      "path": "starmap/index.html",
+      "sha256": "6ac89d2904dfbe853395d2a55ad74993da934784020890160b180741edbcd4af"
+    }
+  ]
+}

@@ -20,6 +20,9 @@
 var __cce_t0=[0,10,32,48,49,50,51,52,53,54,55,56,57,101,116,97,111,105,110,115,104,114,100,108,99,117,109,119,102,103,121,112,98,118,107,106,120,113,122,69,84,65,79,73,78,83,72,82,68,76,67,85,77,87,70,71,89,80,66,86,75,74,88,81,90,46,44,33,63,58,59,39,34,45,40,41,43,61,42,60,62,47,64,35,38,95,92,124,91,93,123,125,126,96,94,36,37,233,232,234,235,225,224,226,228,243,244,246,250,252,241,231,237,1072,1086,1077,1080,1085,1090,1089,1088,1074,1083,1082,1084,1076,1087,1091],__cce_t1=[128,256,1024,128,880,128,1536,128,1424,128,2304,128,3584,128,4352,128,19968,512,12352,256,8704,128],__cce_t2=[12288,64,12352,96,12448,96,19968,20992,13312,6592,44032,11172,3584,256,8192,512,127744,1024,9728,256];
 function __c2u(cp){if(cp<0)return 65533;if(cp<128)return __cce_t0[cp];if(cp<2176){var v=cp-128;var b=v<256?0:v<384?1:v<512?2:v<640?3:v<768?4:v<896?5:v<1024?6:v<1152?7:v<1664?8:v<1920?9:v<2048?10:-1;if(b<0)return 65533;var off=v<256?v:v<1152?(v-256)%128:v<1664?v-1152:v<1920?v-1664:v-1920;return __cce_t1[b*2]+off}if(cp<67712){var base=2176;for(var k=0;k*2<__cce_t2.length;k++){var size=__cce_t2[k*2+1];if(cp>=base&&cp<base+size)return __cce_t2[k*2]+(cp-base);base+=size}}return 65533}
 function __u2c(u){var t=__cce_t0.indexOf(u);if(t>=0)return t;for(var b=0;b*2<__cce_t1.length;b++){var base=__cce_t1[b*2],size=__cce_t1[b*2+1];if(u>=base&&u<base+size){var start=b==0?128:b<8?256+b*128:b==8?1280:b==9?1792:b==10?2048:-1;return start<0?-1:start+(u-base)}}var cb=2176;for(var k=0;k*2<__cce_t2.length;k++){var tb=__cce_t2[k*2],ts=__cce_t2[k*2+1];if(u>=tb&&u<tb+ts)return cb+(u-tb);cb+=ts}return -1}
+function utf8_bytes_to_text(bs){var s=new TextDecoder().decode(new Uint8Array(bs.map(Number))),o='';for(var ch of s){if(__u2c(ch.codePointAt(0))>=0)o+=ch}return o}
+function text_to_unicode_bytes(t){var o=[];for(var ch of t)o.push(BigInt(ch.codePointAt(0)));return o}
+function unicode_bytes_to_text(us){var o='';for(var i=0;i<us.length;i++){var u=Number(us[i]);if(__u2c(u)>=0)o+=String.fromCodePoint(u)}return o}
 function print_line_uni(s) { const el = document.createElement('div'); el.textContent = s; document.getElementById('app').appendChild(el); }
 function print_line(s) { print_line_uni(s); }
 function print_line_raw(s) { print_line_uni(s); }
@@ -81,7 +84,7 @@ function dom_set_style(el,k,v){if(!el)return el;el.style[k]=v;return el;}
 function dom_on(el,ev,fn){if(!el)return el;el.addEventListener(ev,fn);return el;}
 function dom_query(sel){return document.querySelector(sel);}
 function dom_body(){return document.body;}
-function random_int(lo,hi){lo=Number(lo);return lo+Math.floor(Math.random()*(Number(hi)-lo+1));}
+function random_int(lo,hi){lo=BigInt(lo);hi=BigInt(hi);var span=hi-lo+1n;if(span<=0n)throw new RangeError('random-int lower bound exceeds upper bound');if(span===1n)return lo;var bits=(span-1n).toString(2).length,words=Math.ceil(bits/32),mask=(1n<<BigInt(bits))-1n,r;do{r=0n;for(var i=0;i<words;i++)r=(r<<32n)|BigInt(Math.floor(Math.random()*4294967296));r&=mask}while(r>=span);return lo+r}
 function set_timeout(fn,ms){return setTimeout(function(){fn(0n)},Number(ms));}
 var _actx=null;function _audioctx(){if(!_actx){try{_actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(_actx.state==='suspended'){try{_actx.resume()}catch(e){}}return _actx}
 function play_tone(freq,ms,wave){freq=Number(freq);ms=Number(ms);wave=Number(wave);try{var c=_audioctx();if(!c)return 0;var o=c.createOscillator();var g=c.createGain();o.type=wave===1?'triangle':wave===2?'square':wave===3?'sawtooth':'sine';o.frequency.value=freq;o.connect(g);g.connect(c.destination);var t=c.currentTime;var d=ms/1000;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.start(t);o.stop(t+d+0.02)}catch(e){}return 0}
@@ -115,6 +118,13 @@ var _st={};function state_get(k){return _st[k]!==undefined?_st[k]:0;}function st
 function dom_on_click(el,cb){if(!el)return el;el.addEventListener('click',function(){cb(el.id||'')});return el}
 function dom_on_input(el,cb){if(!el)return el;el.addEventListener('input',function(){cb(el.value||'')});return el}
 function dom_on_key(el,cb){if(!el)return el;el.addEventListener('keydown',function(e){cb(e.key)});return el}
+function dom_click(el){if(el)el.click();return el}
+function audio_on_position(el,cb){if(!el)return el;var events=['timeupdate','seeked','loadedmetadata','ended'];if(el._codexPosition)events.forEach(function(n){el.removeEventListener(n,el._codexPosition)});var f=function(){if(!el.isConnected)return;var d=el.duration,t=el.currentTime;cb(BigInt(Number.isFinite(d)&&d>0&&Number.isFinite(t)?Math.round(Math.max(0,Math.min(1,t/d))*1000):0))};el._codexPosition=f;events.forEach(function(n){el.addEventListener(n,f)});f();return el}
+function audio_seek(el,position){if(!el)return el;var d=el.duration,p=Number(position);if(Number.isFinite(d)&&d>0&&Number.isFinite(p))el.currentTime=d*Math.max(0,Math.min(1000,p))/1000;return el}
+function canvas_pixels(el,w,h,p){w=Number(w);h=Number(h);if(!el||w<1||h<1||w*h>1048576||p.length!==w*h)return el;if(el.width!==w)el.width=w;if(el.height!==h)el.height=h;var x=el.getContext('2d'),d=x.createImageData(w,h);for(var i=0;i<p.length;i++){var v=Number(p[i]);d.data[i*4]=v>>>16&255;d.data[i*4+1]=v>>>8&255;d.data[i*4+2]=v&255;d.data[i*4+3]=255}x.putImageData(d,0,0);return el}
+function media_seek_ms(el,ms){if(!el)return el;if(el._codexSeek)el.removeEventListener('loadedmetadata',el._codexSeek);var seek=function(){if(Number.isFinite(el.duration)&&el.duration>0)el.currentTime=Math.max(0,Math.min(el.duration,Number(ms)/1000))};if(Number.isFinite(el.duration)&&el.duration>0)seek();else{el._codexSeek=seek;el.addEventListener('loadedmetadata',seek,{once:true})}return el}
+function media_pause(el){if(el)el.pause();return el}
+function media_play_then(el,cb){if(!el||!el.getAttribute('src')){cb('');return 0}el.play().then(function(){cb('')},function(e){cb(String(e.message||e))});return 0}
 var _renderFn=null;var _renderPending=false;
 function set_render(fn){_renderFn=fn;return 0}
 function request_render(x){if(_renderFn&&!_renderPending){_renderPending=true;requestAnimationFrame(function(){_renderPending=false;_renderFn(0)})}return 0}

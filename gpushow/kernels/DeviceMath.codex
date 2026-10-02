@@ -1,0 +1,222 @@
+Chapter: DeviceMath
+
+ We say:
+
+Section: Clamps and Selection
+
+  real-min : Real, Real -> Real
+  real-min (a) (b) = if a < b then a else b
+
+  real-max : Real, Real -> Real
+  real-max (a) (b) = if a > b then a else b
+
+  real-abs : Real -> Real
+  real-abs (x) = if x < 0.0 then 0.0 - x else x
+
+Section: Square Root
+
+  real-sqrt : Real -> Real
+  real-sqrt (x) =
+    if x <= 0.0 then 0.0
+    else dm-sqrt-scaled x 1.0 700
+
+  dm-sqrt-scaled : Real, Real, Integer -> Real
+  dm-sqrt-scaled (x) (s) (fuel) =
+    if fuel <= 0 then s * dm-sqrt-core x
+    else if x >= 4.0 then dm-sqrt-scaled (x / 4.0) (s * 2.0) (fuel - 1)
+    else if x < 0.25 then dm-sqrt-scaled (x * 4.0) (s * 0.5) (fuel - 1)
+    else s * dm-sqrt-core x
+
+  dm-sqrt-core : Real -> Real
+  dm-sqrt-core (r) =
+    let g0 = (r + 1.0) * 0.5
+    in let g1 = (g0 + r / g0) * 0.5
+    in let g2 = (g1 + r / g1) * 0.5
+    in let g3 = (g2 + r / g2) * 0.5
+    in let g4 = (g3 + r / g3) * 0.5
+    in (g4 + r / g4) * 0.5
+
+Section: Sine and Cosine
+
+  dm-two-pi : Real
+  dm-two-pi = 6.283185307179586
+
+  dm-pi : Real
+  dm-pi = 3.141592653589793
+
+  dm-half-pi : Real
+  dm-half-pi = 1.570796326794897
+
+  dm-reduce : Real -> Real
+  dm-reduce (x) =
+    let k = real-from-int (real-to-int (x / dm-two-pi))
+    in let r = x - k * dm-two-pi
+    in if r > dm-pi then r - dm-two-pi
+    else if r < 0.0 - dm-pi then r + dm-two-pi
+    else r
+
+  dm-quarter-pi : Real
+  dm-quarter-pi = 0.785398163397448
+
+  dm-three-quarter-pi : Real
+  dm-three-quarter-pi = 2.356194490192345
+
+ ACCURACY, measured against python math.sin and math.cos over the arguments in
+ codex/test/lib/device-math.codex: worst absolute error 9.4e-16 for |x| <= pi,
+ and 9.8e-15 over the whole set, the larger figure at x = 100. Past |x| = pi
+ the bound is the ARGUMENT REDUCTION and not the series: dm-reduce subtracts a
+ multiple of a dm-two-pi that is itself a rounded double, so the error grows
+ with the multiple and no improvement to the polynomials below can touch it.
+ real-cos 0.0 is exactly 1.0 and real-sin 0.0 is exactly 0.0.
+
+ THE OCTANT FOLD IS WHY, AND A QUADRANT FOLD IS NOT ENOUGH. A series about
+ zero is worst at the far end of the interval it must cover, so the cost of
+ folding to a quadrant is that pi/2 remains legal and is the worst point:
+ (pi/2)^13 / 13! is 5.7e-8, and until 2026-09-08 real-cos 0.0 routed straight
+ through it, because cos 0 was evaluated as sin (pi/2). Folding to an octant
+ caps every argument at pi/4, where the same term is 6.9e-12, and paying for
+ two more terms in each series takes the bound to 4.6e-17. The second series
+ is what makes the octant fold possible: within pi/4 of a multiple of pi/2 the
+ answer must come from a cosine about zero, and there is no sine argument that
+ will do.
+
+  dm-sin-poly : Real -> Real
+  dm-sin-poly (r) =
+    let r2 = r * r
+    in let r3 = r2 * r
+    in let r5 = r3 * r2
+    in let r7 = r5 * r2
+    in let r9 = r7 * r2
+    in let r11 = r9 * r2
+    in let r13 = r11 * r2
+    in let r15 = r13 * r2
+    in r - r3 / 6.0 + r5 / 120.0 - r7 / 5040.0 + r9 / 362880.0 - r11 / 39916800.0 + r13 / 6227020800.0 - r15 / 1307674368000.0
+
+  dm-cos-poly : Real -> Real
+  dm-cos-poly (r) =
+    let r2 = r * r
+    in let r4 = r2 * r2
+    in let r6 = r4 * r2
+    in let r8 = r6 * r2
+    in let r10 = r8 * r2
+    in let r12 = r10 * r2
+    in let r14 = r12 * r2
+    in let r16 = r14 * r2
+    in 1.0 - r2 / 2.0 + r4 / 24.0 - r6 / 720.0 + r8 / 40320.0 - r10 / 3628800.0 + r12 / 479001600.0 - r14 / 87178291200.0 + r16 / 20922789888000.0
+
+  dm-sin-octant : Real -> Real
+  dm-sin-octant (a) =
+    if a <= dm-quarter-pi then dm-sin-poly a
+    else if a <= dm-three-quarter-pi then dm-cos-poly (a - dm-half-pi)
+    else dm-sin-poly (dm-pi - a)
+
+  dm-cos-octant : Real -> Real
+  dm-cos-octant (a) =
+    if a <= dm-quarter-pi then dm-cos-poly a
+    else if a <= dm-three-quarter-pi then dm-sin-poly (dm-half-pi - a)
+    else 0.0 - dm-cos-poly (dm-pi - a)
+
+  real-sin : Real -> Real
+  real-sin (x) =
+    let r = dm-reduce x
+    in if r < 0.0 then 0.0 - dm-sin-octant (0.0 - r)
+    else dm-sin-octant r
+
+  real-cos : Real -> Real
+  real-cos (x) = dm-cos-octant (real-abs (dm-reduce x))
+
+Section: Arc Tangent
+
+ The inverse of the pair above, and the one this chapter was missing. Nothing in
+ the foreword answered an arc tangent at Real: Math chapter Cordic and Math
+ chapter Geodesic both have one, and both are integer milliradian routines whose
+ output cannot be fed back into real-sin.
+
+ THE ARGUMENT IS HALVED BEFORE THE SERIES, WHICH IS THE WHOLE METHOD. The Taylor
+ series for the arc tangent converges hopelessly near |t| = 1 -- that is where
+ its terms stop shrinking -- and |t| near 1 is exactly what a caller taking the
+ angle of a diagonal hands it. The half-angle identity
+
+     atan t = 2 * atan (t / (1 + sqrt (1 + t*t)))
+
+ shrinks the argument geometrically instead. Four applications take |t| <= 1
+ down to 0.0492: the angle is at most pi/4, so a sixteenth of it is at most
+ 0.0490874 and its tangent is 0.0491258. Six terms there are good to 1.1e-17,
+ and the sixteen the result is multiplied back by cannot undo that.
+
+ Above |t| = 1 the reciprocal identity folds the argument back into range first,
+ so the series never sees a value it handles badly.
+
+ ACCURACY: worst absolute error 6.7e-16 radians, 4 ULP, against zig 0.16.0
+ std.math.atan. The series truncation above is not what bounds it. dm-half-pi
+ parses 2 ulp above pi/2, an error of 4.4e-16, and that flows into every
+ |t| > 1 result and into real-atan2's x = 0 arms, so the constant dominates the
+ method by five orders.
+
+  dm-atan-half-step : Real -> Real
+  dm-atan-half-step (t) = t / (1.0 + real-sqrt (1.0 + t * t))
+
+  dm-atan-halve : Real, Integer -> Real
+  dm-atan-halve (t) (n) =
+    if n <= 0 then t
+    else dm-atan-halve (dm-atan-half-step t) (n - 1)
+
+  dm-atan-series : Real -> Real
+  dm-atan-series (u) =
+    let u2 = u * u
+    in let u3 = u2 * u
+    in let u5 = u3 * u2
+    in let u7 = u5 * u2
+    in let u9 = u7 * u2
+    in let u11 = u9 * u2
+    in u - u3 / 3.0 + u5 / 5.0 - u7 / 7.0 + u9 / 9.0 - u11 / 11.0
+
+ Four halvings, so the series result is scaled back by two to the fourth.
+
+  dm-atan-core : Real -> Real
+  dm-atan-core (t) = 16.0 * dm-atan-series (dm-atan-halve t 4)
+
+  real-atan : Real -> Real
+  real-atan (t) =
+    if t > 1.0 then dm-half-pi - dm-atan-core (1.0 / t)
+    else if t < 0.0 - 1.0 then (0.0 - dm-half-pi) - dm-atan-core (1.0 / t)
+    else dm-atan-core t
+
+ A caller that divides its two coordinates and calls real-atan has folded two
+ quadrants onto one and cannot get them back; real-atan2 branches before it
+ divides.
+
+ The x = 0 arms are exact rather than a limit, and the y = 0, x = 0 case answers
+ zero, which is what a caller comparing against zig's std.math.atan2 will expect
+ of two positive zeroes. It diverges from that reference on a NEGATIVE zero:
+ -0.0 >= 0.0 is true, so real-atan2 (-0.0) (-1.0) answers +pi where zig answers
+ -pi, and real-atan2 (-0.0) (1.0) answers +0.0 where zig answers -0.0.
+
+  real-atan2 : Real, Real -> Real
+  real-atan2 (y) (x) =
+    if x > 0.0 then real-atan (y / x)
+    else if x < 0.0 then (if y >= 0.0 then real-atan (y / x) + dm-pi else real-atan (y / x) - dm-pi)
+    else if y > 0.0 then dm-half-pi
+    else if y < 0.0 then 0.0 - dm-half-pi
+    else 0.0
+
+Section: Base-Two Exponential
+
+ ACCURACY: the PTX plug lowers real-exp2-approx to ex2.approx.f32, whose
+ relative error is 2^-22 on an argument first rounded to f32, at f32
+ throughput; Ada runs f64 at 1/64 of that. Elsewhere the body below runs: the
+ argument times ln 2, reduced by 2^20 for five Taylor terms and squared back.
+
+  real-exp2-approx : Real -> Real
+  real-exp2-approx (x) =
+    let c = if x > 1000.0 then 1000.0 else if x < 0.0 - 1000.0 then 0.0 - 1000.0 else x
+    in dm-square-n (dm-exp-small (c * 0.6931471805599453 / 1048576.0)) 20
+
+  real-approx-exp2 : Real approximate -> Real approximate
+  real-approx-exp2 (x) = to-real-approx (real-exp2-approx (from-real-approx x))
+
+  dm-exp-small : Real -> Real
+  dm-exp-small (r) = 1.0 + r * (1.0 + r * (0.5 + r * (0.16666666666666666 + r * (0.041666666666666664 + r * 0.008333333333333333))))
+
+  dm-square-n : Real, Integer -> Real
+  dm-square-n (v) (k) = if k <= 0 then v else dm-square-n (v * v) (k - 1)

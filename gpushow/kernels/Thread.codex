@@ -1,0 +1,21 @@
+Chapter: Thread
+
+ We say:
+
+Section: Types
+
+  ThreadIndex = record {
+    ti-value : Integer
+  }
+
+Section: Construction
+
+  make-thread-index : Integer -> ThreadIndex
+  make-thread-index (val) = ThreadIndex { ti-value = val }
+
+Section: Access
+
+  thread-index-get : ThreadIndex -> Integer
+  thread-index-get (idx) = idx.ti-value
+
+Page 1

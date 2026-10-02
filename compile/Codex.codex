@@ -7872,7 +7872,19 @@ Section: Frontend
     }))
     in let keep-metrics = phase-measure keep-phase "DESUGAR-KEEP"
     in let keep-ov = check-deck-overflow (keep-metrics.deck-end - keep-metrics.deck-origin) fk-height
-    in let keep-note-bag = deck-record (if flags.phase-trace | flags.escape-check then bag-from-list [make-warning cdx-escape-violation ("DESUGAR-KEEP fk-base=" & show fk-base & " origin=" & show (keep-metrics.deck-origin) & " end=" & show (keep-metrics.deck-end) & " used=" & show (keep-metrics.deck-end - keep-metrics.deck-origin) & " desugar-deck=" & show (desugar-metrics.deck-end - desugar-metrics.deck-origin) & " desugar-bivy=" & show (desugar-metrics.bivy-hwm - desugar-metrics.bivy-origin) & " escapes-above-keep=" & show keep-escapes) synthetic-span] else no-overflow-bag)
+    in let keep-note-bag = deck-record (
+      if flags.phase-trace | flags.escape-check then
+        let msg0 = "DESUGAR-KEEP fk-base=" & show fk-base
+        in let msg1 = msg0 & " origin=" & show (keep-metrics.deck-origin)
+        in let msg2 = msg1 & " end=" & show (keep-metrics.deck-end)
+        in let msg3 = msg2 & " used=" & show (keep-metrics.deck-end - keep-metrics.deck-origin)
+        in let msg4 = msg3 & " desugar-deck=" & show (desugar-metrics.deck-end - desugar-metrics.deck-origin)
+        in let msg5 = msg4 & " desugar-bivy=" & show (desugar-metrics.bivy-hwm - desugar-metrics.bivy-origin)
+        in let msg6 = msg5 & " escapes-above-keep=" & show keep-escapes
+        in let note = make-warning cdx-escape-violation msg6 synthetic-span
+        in bag-from-list [note]
+      else no-overflow-bag
+    )
     in let desugar-ov-bag = deck-record (if desugar-ov == 1 | dr.dr-sat == 1 then deck-overflow-bag "DESUGAR" else no-overflow-bag)
     in let keep-ov-bag = deck-record (if keep-ov == 1 | fkcopy.sat == 1 then deck-overflow-bag "DESUGAR-KEEP" else no-overflow-bag)
     in let desugar-esc-bag = deck-record (escape-check-bag (flags.escape-check) desugar-metrics "DESUGAR")
@@ -7947,7 +7959,10 @@ Section: Frontend
     in let check-ceiling = check-base + check-deck-height
     in let check-origin = __deck-pos
     in let check-phase = phase-start
-    in let check-result = deck-record (check-chapter (sr.scoped) (sr.renames) (sr.colliding) (sr.assignments) check-ceiling check-base keep-base (keep-base + keep-height - 4194304) (if flags.poison-compact then poison-check else 0) (flags.fidelity))
+    in let check-result = deck-record (check-chapter
+      (sr.scoped) (sr.renames) (sr.colliding) (sr.assignments)
+      check-ceiling check-base keep-base (keep-base + keep-height - 4194304)
+      (if flags.poison-compact then poison-check else 0) (flags.fidelity))
     in let batch-bag = if flags.phase-trace then
       deck-record (bag-from-list [
         make-warning cdx-escape-violation (check-result.batch-note) synthetic-span
@@ -8041,7 +8056,7 @@ Section: Frontend
     else []
     in let (sorted-fid, kc-fid) = if flags.fidelity then
       tail-resolve-expr-types (check-result.state) pre-fid 0 (list-length pre-fid) acc-fid mc tail-scratch tail-bivy __deck-pos
-    else ([], __deck-pos)
+    else (deck-record [], __deck-pos)
     in let tail-rewind = __heap-restore tail-bivy
     in let tail-memo-z = __memset (mc.mc-table) 0 (mc.mc-slots * 8)
     in let tail-bag = if flags.phase-trace then
@@ -13537,6 +13552,8 @@ Section: Parser
 
   cdx-discarded-literal-statement : Integer = 1079
 
+  cdx-ctor-return-annotation-unsupported : Integer = 1080
+
   cdx-prose-function-name-mismatch : Integer = 1101
   cdx-prose-parameter-mismatch : Integer = 1102
   cdx-prose-record-field-mismatch : Integer = 1103
@@ -13719,6 +13736,7 @@ Section: Proof
   cdx-circular-proof : Integer = 4023
 
   cdx-non-grammatical-proof : Integer = 4024
+  cdx-proof-undecided : Integer = 4025
 
 Section: Hard Realtime
   cdx-rt-calls-unsafe : Integer = 6001
@@ -13828,6 +13846,7 @@ Section: Registry
     mk-cdx cdx-binary-crosses-prose "BinaryCrossesProse" sev-warning phase-parser "A binary expression crosses a column-2 prose line. Parsing is unchanged; keep intended arithmetic together or indent every prose line at column 2.",
     mk-cdx cdx-not-codex-operator "NotCodexOperator" sev-error phase-parser "An operator from another language: `++` is not Codex, and text concatenation is `&`.",
     mk-cdx cdx-ctor-field-comma "CtorFieldComma" sev-error phase-parser "A constructor field written (A, B) with no arrow; fields are separate parentheses, (A) (B), and a tuple field is ((A, B)).",
+    mk-cdx cdx-ctor-return-annotation-unsupported "CtorReturnAnnotationUnsupported" sev-error phase-parser "Explicit constructor return annotations are not supported and are rejected before type checking.",
     mk-cdx cdx-top-level-token-dropped "TopLevelTokenDropped" sev-error phase-parser "A token at column 3 begins no definition, so top-level recovery would drop it. A continuation belongs to the definition above only when it is indented past column 3.",
     mk-cdx cdx-body-tokens-left "BodyTokensLeft" sev-error phase-parser "A definition's expression ended and tokens remain inside its body; they are not part of the definition. Prose belongs at column 2.",
     mk-cdx cdx-discarded-literal-statement "DiscardedLiteralStatement" sev-error phase-parser "A bare literal is a statement of an act block other than the last, so its value is discarded and the line does nothing.",
@@ -13840,6 +13859,7 @@ Section: Registry
     mk-cdx cdx-induction-unverified "InductionUnverified" sev-warning phase-parser "An 'induction' proof is parsed and its obligation accepted as an unproven axiom. Structural subgoal checking is not yet implemented (proof-system Stage 5), so the proof is trusted, not verified.",
     mk-cdx cdx-circular-proof "CircularProof" sev-error phase-type-checker "A proof definition depends on itself, directly or through other proof definitions or cited lemmas. A proof term cannot assume its own conclusion; recursion in a proof is only sound through structural induction, and lemma chains must be acyclic. To assert an equality without proof, use 'assume' (CDX4021).",
     mk-cdx cdx-non-grammatical-proof "NonGrammaticalProof" sev-error phase-type-checker "A proof term used a disallowed expression form. A proof body may only be a proof builtin (Refl, sym, trans, cong, app-cong, assume), an inductive hypothesis, a cited claim, an 'induction' expression, or a let of proof terms. A proposition produced by an if, when, act, lambda, or other general expression is rejected, because such a form can launder a proof of a false proposition. To assert an equality without proof, use 'assume' (CDX4021).",
+    mk-cdx cdx-proof-undecided "ProofUndecided" sev-error phase-type-checker "A definition's type nests more than 64 levels deep, so whether it states a proof could not be decided; the definition is refused rather than guessed. Name an inner type to shorten the nesting.",
     mk-cdx cdx-prose-function-name-mismatch "ProseFunctionNameMismatch" sev-warning phase-parser "Prose function name does not match the notation definition below.",
     mk-cdx cdx-prose-parameter-mismatch "ProseParameterMismatch" sev-warning phase-parser "Prose parameter does not match the notation parameter.",
     mk-cdx cdx-prose-record-field-mismatch "ProseRecordFieldMismatch" sev-warning phase-parser "Prose record field does not match the notation record field.",
@@ -23121,6 +23141,7 @@ Section: Memory Address Map
   slice-table-addr : Integer = 30008
   fork-free-head-addr : Integer = 30040
   starve-counter-addr : Integer = 30048
+  starve-cursor-addr : Integer = 30052
   boot-factstore-addr : Integer = 30056
   identity-table-base : Integer = 30064
   device-seed-addr : Integer = 30576
@@ -23753,9 +23774,10 @@ Section: Size and Threshold Constants
   spawn-slot-region-size : Integer = 33554432
   spawn-slot-region-shift : Integer = 25
   spawn-pool-span : Integer = 536870912
+  spawn-pool-cell : Integer = 127200
   proc-starvation-threshold : Integer = 100
 
- A process's FXSAVE area is the top page of its slot's spawn region: FXSAVE
+ A process's FXSAVE area is the top page of its active-pool slot: FXSAVE
  writes 512 bytes at a 16-aligned address, and the 256-byte process entry
  cannot hold them. Slot 0 is the boot process, which no spawn claims, so the
  same formula serves it. A spawn may therefore use at most the region less
@@ -23764,6 +23786,59 @@ Section: Size and Threshold Constants
   fx-area-size : Integer = 4096
   fx-area-offset : Integer = spawn-pool-base + spawn-slot-region-size - fx-area-size
   spawn-slot-usable-size : Integer = spawn-slot-region-size - fx-area-size
+
+ The UEFI handoff v4 extends the existing 224-byte block with pool base,
+ root allocation bounds and pool span. Native boot initializes the same
+ pool-base cell to its fixed reservation before scheduling can run.
+
+  emit-load-spawn-base : CodegenState, Integer -> CodegenState
+  emit-load-spawn-base (st) (dest) =
+    st-append-code st (li dest spawn-pool-cell & mov-load dest dest 0)
+
+  emit-spawn-pool-default : CodegenState -> CodegenState
+  emit-spawn-pool-default (st) =
+    st-append-code st (li reg-rdi spawn-pool-cell & li reg-rax spawn-pool-base & mov-store reg-rdi reg-rax 0)
+
+  emit-spawn-pool-admit : CodegenState -> CodegenState
+  emit-spawn-pool-admit (st) =
+    let s0 = st-append-code st (li reg-rdi 126976 & mov-load reg-rax reg-rdi 0 & li reg-rcx 5063257923364865091 & cmp-rr reg-rax reg-rcx)
+    in let legacy1 = s0.code-len
+    in let s1 = st-append-code s0 (jcc cc-ne 0 & mov-load-u32 reg-rax reg-rdi 8 & cmp-ri reg-rax 4)
+    in let legacy2 = s1.code-len
+    in let s2 = st-append-code s1 (jcc cc-b 0 & mov-load-u32 reg-rax reg-rdi 12 & cmp-ri reg-rax 256)
+    in let short = s2.code-len
+    in let s3 = st-append-code s2 (jcc cc-b 0 & mov-load reg-rdx reg-rdi 224 & cmp-ri reg-rdx 6291456)
+    in let low = s3.code-len
+    in let s4 = st-append-code s3 (jcc cc-b 0 & mov-rr reg-rax reg-rdx & and-ri reg-rax 4095 & test-rr reg-rax reg-rax)
+    in let align = s4.code-len
+    in let s5 = st-append-code s4 (jcc cc-ne 0 & mov-load reg-rcx reg-rdi 248 & cmp-ri reg-rcx spawn-pool-span)
+    in let span = s5.code-len
+    in let s6 = st-append-code s5 (jcc cc-ne 0 & cmp-ri reg-rdx (2147483648 - spawn-pool-span))
+    in let high = s6.code-len
+    in let s7 = st-append-code s6 (jcc cc-a 0 & mov-rr reg-rax reg-rdx & add-ri reg-rax spawn-pool-span & mov-load reg-rcx reg-rdi 232 & test-rr reg-rcx reg-rcx)
+    in let empty = s7.code-len
+    in let bounds = st-append-code s7 (jcc cc-e 0 & mov-load reg-r8 reg-rdi 240 & cmp-rr reg-r8 reg-rcx)
+    in let reversed = bounds.code-len
+    in let stacklo = st-append-code bounds (jcc cc-be 0 & cmp-rr reg-rsp reg-rcx)
+    in let stack-low = stacklo.code-len
+    in let stackhi = st-append-code stacklo (jcc cc-b 0 & cmp-rr reg-rsp reg-r8)
+    in let stack-high = stackhi.code-len
+    in let s8 = st-append-code stackhi (jcc cc-ae 0 & cmp-rr reg-rax reg-rcx)
+    in let below = s8.code-len
+    in let s9 = st-append-code s8 (jcc cc-be 0 & mov-load reg-rax reg-rdi 240 & cmp-rr reg-rdx reg-rax)
+    in let above-pos = s9.code-len
+    in let s10 = st-append-code s9 (jcc cc-ae 0)
+    in let refused = s10.code-len
+    in let s11 = emit-jmp-to s10 "__out_of_memory"
+    in let legacy = s11.code-len
+    in let s12 = emit-spawn-pool-default s11
+    in let done = s12.code-len
+    in let p0 = patch-jcc-at (patch-jcc-at s12 legacy1 legacy) legacy2 legacy
+    in let p1 = patch-jcc-at (patch-jcc-at p0 short refused) low refused
+    in let p2 = patch-jcc-at (patch-jcc-at p1 align refused) span refused
+    in let p3 = patch-jcc-at (patch-jcc-at (patch-jcc-at p2 high refused) empty refused) reversed refused
+    in let p4 = patch-jcc-at (patch-jcc-at p3 stack-low refused) stack-high refused
+    in patch-jcc-at (patch-jcc-at p4 below done) above-pos done
 
 Section: I/O Port Constants
   ata-data-port : Integer = 496
@@ -24593,11 +24668,11 @@ Section: Which Process Is Running
  stored anywhere.
 
  Every spawned process runs on a stack inside its own slot-indexed
- region -- spawn-pool-base + slot * spawn-slot-region-size -- so the
+ region -- active pool base + slot * spawn-slot-region-size -- so the
  slot index is recoverable from a stack address by arithmetic alone:
  subtract the pool base, and the region shift is the slot. An address
- outside the pool belongs to proc 0, the program the machine booted,
- whose stack is the boot stack at the top of RAM.
+ outside the pool belongs to proc 0, the program the machine booted.
+ UEFI v4 owns a disjoint pool; native boot uses spawn-pool-base.
 
  emit-load-current-proc reads it from the live RSP. emit-slot-from-addr
  takes an address already in the destination register -- the interrupt
@@ -24613,7 +24688,10 @@ Section: Which Process Is Running
 
   emit-slot-from-addr : CodegenState, Integer -> CodegenState
   emit-slot-from-addr (st) (dest) =
-    let st1 = st-append-code st (sub-ri dest spawn-pool-base)
+    let temp = if dest == reg-rax then reg-rcx else reg-rax
+    in let s0 = st-append-code st (push-r temp)
+    in let s1 = emit-load-spawn-base s0 temp
+    in let st1 = st-append-code s1 (sub-rr dest temp & pop-r temp)
     in let st2 = st-append-code st1 (cmp-ri dest spawn-pool-span)
     in let outside-pos = st2.code-len
     in let st3 = st-append-code st2 (jcc cc-ae 0)
@@ -24819,11 +24897,11 @@ Section: Common Interrupt Handler
     in let sp40 = st-append-code sp39 (li reg-r8 (-1))
     in let sp41 = st-append-code sp40 (li reg-r9 4)
     in let sp41c = st-append-code sp41 (mov-load reg-r11 reg-rcx proc-core-offset)
-    in let sp42 = st-append-code sp41c (xor-rr reg-rax reg-rax)
+    in let sp42 = st-append-code sp41c (mov-rr reg-rax reg-rdi)
     in let pscan-top = sp42.code-len
-    in let sp43 = st-append-code sp42 (cmp-ri reg-rax 16)
+    in let sp43 = st-append-code sp42 (add-ri reg-rax 1 & and-ri reg-rax 15 & cmp-rr reg-rax reg-rdi)
     in let pscan-done = sp43.code-len
-    in let sp44 = st-append-code sp43 (jcc cc-ge 0)
+    in let sp44 = st-append-code sp43 (jcc cc-e 0)
     in let sp45 = st-append-code sp44 (cmp-rr reg-rax reg-rdi)
     in let pscan-skip = sp45.code-len
     in let sp46 = st-append-code sp45 (jcc cc-e 0)
@@ -24856,8 +24934,7 @@ Section: Common Interrupt Handler
     in let sp56 = st-append-code sp55 (mov-rr reg-r8 reg-rax)
     in let sp57 = st-append-code sp56 (mov-rr reg-r9 reg-rdx)
     in let pscan-next = sp57.code-len
-    in let sp58 = st-append-code sp57 (add-ri reg-rax 1)
-    in let sp59 = st-append-code sp58 (jmp (pscan-top - (sp58.code-len + 5)))
+    in let sp59 = st-append-code sp57 (jmp (pscan-top - (sp57.code-len + 5)))
     in let sp60 = patch-jcc-at sp59 pscan-skip pscan-next
     in let sp61 = patch-jcc-at sp60 pscan-nr pscan-next
     in let sp62 = patch-jcc-at sp61 pscan-worse pscan-next
@@ -24865,26 +24942,27 @@ Section: Common Interrupt Handler
     in let sp62b = patch-jcc-at sp62a pscan-s0 pscan-next
     in let sp63 = patch-jcc-at sp62b pscan-done (sp62b.code-len)
     in let sv0 = st-append-code sp63 (li reg-rsi starve-counter-addr)
-    in let sv1 = st-append-code sv0 (mov-load reg-rcx reg-rsi 0)
+    in let sv1 = st-append-code sv0 (mov-load-u32 reg-rcx reg-rsi 0)
     in let sv2 = st-append-code sv1 (add-ri reg-rcx 1)
-    in let sv3 = st-append-code sv2 (mov-store reg-rsi reg-rcx 0)
+    in let sv3 = st-append-code sv2 (mov-store-32 reg-rsi reg-rcx 0)
     in let sv4 = st-append-code sv3 (cmp-ri reg-rcx starve-threshold)
     in let sv-skip-pos = sv4.code-len
     in let sv5 = st-append-code sv4 (jcc cc-l 0)
     in let sv6 = st-append-code sv5 (xor-rr reg-rcx reg-rcx)
-    in let sv7 = st-append-code sv6 (mov-store reg-rsi reg-rcx 0)
+    in let sv7 = st-append-code sv6 (mov-store-32 reg-rsi reg-rcx 0)
     in let sv8 = st-append-code sv7 (cmp-ri reg-r9 2)
     in let sv-nolo = sv8.code-len
     in let sv9 = st-append-code sv8 (jcc cc-ge 0)
     in let sv10 = st-append-code sv9 (cmp-ri reg-r8 (-1))
     in let sv-none = sv10.code-len
     in let sv11 = st-append-code sv10 (jcc cc-e 0)
-    in let sv12 = st-append-code sv11 (xor-rr reg-rax reg-rax)
-    in let rscan-top = sv12.code-len
-    in let sv13 = st-append-code sv12 (cmp-ri reg-rax 16)
+    in let sv12 = st-append-code sv11 (li reg-rax starve-cursor-addr)
+    in let sv12a = st-append-code sv12 (mov-load-u32 reg-rax reg-rax 0 & li reg-rcx 16)
+    in let rscan-top = sv12a.code-len
+    in let sv13 = st-append-code sv12a (test-rr reg-rcx reg-rcx)
     in let rscan-done = sv13.code-len
-    in let sv14 = st-append-code sv13 (jcc cc-ge 0)
-    in let sv15 = st-append-code sv14 (cmp-rr reg-rax reg-rdi)
+    in let sv14 = st-append-code sv13 (jcc cc-e 0)
+    in let sv15 = st-append-code sv14 (add-ri reg-rax 1 & and-ri reg-rax 15 & cmp-rr reg-rax reg-rdi)
     in let rscan-skip = sv15.code-len
     in let sv16 = st-append-code sv15 (jcc cc-e 0)
     in let sv16g0 = st-append-code sv16 (test-rr reg-rax reg-rax)
@@ -24915,10 +24993,11 @@ Section: Common Interrupt Handler
     in let sv25 = st-append-code sv24 (jcc cc-l 0)
     in let sv26 = st-append-code sv25 (mov-rr reg-r8 reg-rax)
     in let sv27 = st-append-code sv26 (mov-rr reg-r9 reg-rdx)
-    in let rscan-found = sv27.code-len
-    in let sv28 = st-append-code sv27 (jmp 0)
+    in let sv27a = st-append-code sv27 (li reg-rsi starve-cursor-addr & mov-store-32 reg-rsi reg-rax 0)
+    in let rscan-found = sv27a.code-len
+    in let sv28 = st-append-code sv27a (jmp 0)
     in let rscan-next = sv28.code-len
-    in let sv29 = st-append-code sv28 (add-ri reg-rax 1)
+    in let sv29 = st-append-code sv28 (sub-ri reg-rcx 1)
     in let sv30 = st-append-code sv29 (jmp (rscan-top - (sv29.code-len + 5)))
     in let sv31 = patch-jcc-at sv30 rscan-skip rscan-next
     in let sv32 = patch-jcc-at sv31 rscan-nr rscan-next
@@ -25487,7 +25566,8 @@ Section: Runtime Init Builtin
     in let m4 = st-append-code m3 [15, 50]
     in let m5 = st-append-code m4 ([72, 13] & write-i32 efer-sce-nxe)
     in let m6 = st-append-code m5 [15, 48]
-    in let z0 = emit-zero-region m6 proc-table-base 512
+    in let pool = emit-spawn-pool-admit m6
+    in let z0 = emit-zero-region pool proc-table-base 512
     in let p0a = st-append-code z0 (li reg-rdi proc-table-base)
     in let p0b = st-append-code p0a (li reg-rax proc-state-running)
     in let p0c = st-append-code p0b (mov-store reg-rdi reg-rax 0)
@@ -25505,7 +25585,8 @@ Section: Runtime Init Builtin
     in let z13 = st-append-code z12 (mov-store reg-rdi reg-rax 0)
     in let z14 = st-append-code z13 (li reg-rdi prof-cursor-addr)
     in let z15 = st-append-code z14 (mov-store reg-rdi reg-rax 0)
-    in let s0 = emit-interrupt-setup z15
+    in let slices = emit-slice-table-init z15
+    in let s0 = emit-interrupt-setup slices
     in let e0 = st-append-code s0 (li reg-rax 0)
     in st-append-code e0 [195]
 
@@ -26084,7 +26165,8 @@ Section: Process Management
     in let st1c = emit-device-seed-init st1b
     in let st1d = emit-zero-region st1c identity-key-addr 6
     in let st1e = emit-ata-active-init st1d
-    in let apd0 = st-append-code st1e (li reg-rdi ap-dispatch-count-addr)
+    in let st1f = emit-zero-region st1e starve-counter-addr 1
+    in let apd0 = st-append-code st1f (li reg-rdi ap-dispatch-count-addr)
     in let apd1 = st-append-code apd0 (li reg-rax 0)
     in let apd2 = st-append-code apd1 (mov-store reg-rdi reg-rax 0)
     in let app0 = st-append-code apd2 (li reg-rdi ap-preempt-count-addr)
@@ -26096,15 +26178,7 @@ Section: Process Management
     in let dvv0 = st-append-code dvc2 (li reg-rdi devint-last-vec-addr)
     in let dvv1 = st-append-code dvv0 (li reg-rax 0)
     in let dvv2 = st-append-code dvv1 (mov-store reg-rdi reg-rax 0)
-    in let slt0 = st-append-code dvv2 (li reg-rdi slice-table-addr)
-    in let slt1 = st-append-code slt0 (li reg-rax 0)
-    in let slt2 = st-append-code slt1 (mov-store reg-rdi reg-rax 0)
-    in let slt3 = st-append-code slt2 (li reg-rax proc-slice-system)
-    in let slt4 = st-append-code slt3 (mov-store reg-rdi reg-rax 8)
-    in let slt5 = st-append-code slt4 (li reg-rax proc-slice-normal)
-    in let slt6 = st-append-code slt5 (mov-store reg-rdi reg-rax 16)
-    in let slt7 = st-append-code slt6 (li reg-rax proc-slice-background)
-    in let slt8 = st-append-code slt7 (mov-store reg-rdi reg-rax 24)
+    in let slt8 = emit-slice-table-init dvv2
     in let st5 = emit-build-process-page-tables slt8 32768 6291456
     in let st5u = emit-demand-unmap st5
     in let saff0 = st-append-code st5u (li reg-rdi spawn-affinity-addr)
@@ -26117,6 +26191,18 @@ Section: Process Management
     in let st7 = st-append-code p0aff2 (li reg-rax 32768)
     in let st8 = st-append-code st7 [15, 34, 216]
     in st-append-code st8 (li reg-r10 6291456)
+
+  emit-slice-table-init : CodegenState -> CodegenState
+  emit-slice-table-init (st) =
+    let slt0 = st-append-code st (li reg-rdi slice-table-addr)
+    in let slt1 = st-append-code slt0 (li reg-rax 0)
+    in let slt2 = st-append-code slt1 (mov-store reg-rdi reg-rax 0)
+    in let slt3 = st-append-code slt2 (li reg-rax proc-slice-system)
+    in let slt4 = st-append-code slt3 (mov-store reg-rdi reg-rax 8)
+    in let slt5 = st-append-code slt4 (li reg-rax proc-slice-normal)
+    in let slt6 = st-append-code slt5 (mov-store reg-rdi reg-rax 16)
+    in let slt7 = st-append-code slt6 (li reg-rax proc-slice-background)
+    in st-append-code slt7 (mov-store reg-rdi reg-rax 24)
 
 Section: Device Seed
   emit-device-seed-init : CodegenState -> CodegenState
@@ -29888,7 +29974,8 @@ Section: Bare-Metal Start
     else
       let st0 = record-func-offset st "__start"
       in let st1 = st-append-code st0 (push-r reg-rbp & mov-rr reg-rbp reg-rsp & push-r reg-rbx & push-r reg-r12 & push-r reg-r13 & push-r reg-r14 & emit-sub-rsp-imm32 0)
-      in let st2 = st-append-code st1 cli
+      in let pool0 = st-append-code st1 cli
+      in let st2 = emit-spawn-pool-default pool0
       in let st2a = st-append-code st2 (li reg-rdi ram-size-addr)
       in let st3 = st-append-code st2a (mov-load reg-rsp reg-rdi 0)
       in let st4 = st-append-code st3 (mov-rr reg-rbp reg-rsp)
@@ -39521,7 +39608,7 @@ Section: IPC and Network Helpers
 
     in let range-deny = st11.code-len
 
-    in let st12 = st-append-code st11 (jcc cc-ge 0)
+    in let st12 = st-append-code st11 (jcc cc-ae 0)
 
     in let st14 = emit-load-current-proc st12 reg-rax
 
@@ -41095,7 +41182,7 @@ Section: IPC and Network Helpers
 
     in let s18b = st-append-code s18a (jcc cc-a 0)
 
-    in let s19a = emit-call-to s18b "__spawn_pool_carve"
+    in let s19a = emit-call-to s18b "__spawn_pool_carve_v2"
 
     in let s19b = emit-call-to s19a "__fx_init"
 
@@ -43988,7 +44075,8 @@ Section: Process Scheduler Helpers
   emit-process-resume-helper (st) =
     let st0 = record-func-offset st "__process_resume"
     in let fx0 = st-append-code st0 (mov-rr reg-rax reg-rsi & sub-ri reg-rax proc-table-base & shr-ri reg-rax 8)
-    in let fx1 = st-append-code fx0 (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax fx-area-offset & mov-rr reg-rcx reg-rax)
+    in let fxb = emit-load-spawn-base fx0 reg-rcx
+    in let fx1 = st-append-code fxb (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax (spawn-slot-region-size - fx-area-size) & add-rr reg-rcx reg-rax)
     in let fx2 = emit-vec-state-op fx1 xrstor64-rcx fxrstor64-rcx False
     in let st1 = st-append-code fx2 (mov-load reg-rsp reg-rsi proc-saved-rsp-offset)
     in let st2 = st-append-code st1 (sub-ri reg-rsp 40)
@@ -44251,7 +44339,7 @@ Section: Process Scheduler Helpers
     in emit-jmp-to st5 "process-exit-self"
 
  Spawn-region carve. Child heap and stack come from the slot-indexed
- region spawn-pool-base + slot * spawn-slot-region-size, never from
+ region active-pool-base + slot * spawn-slot-region-size, never from
  the spawner's R10 - a spawned child owns a fixed region, and carving
  a grandchild from the child's own R10 would overlap the child's
  stack. The process table IS the allocator: a slot freed by exit or
@@ -44259,7 +44347,7 @@ Section: Process Scheduler Helpers
  same addresses, so a long-running spawn loop plateaus at its working
  set instead of marching across the address space. Every call site
  sets R12 to the claimed slot index before calling; RDX carries the
- region size in; RDI returns the heap base, RSI the stack top.
+ region size in; RDI returns the heap base, RSI the stack top; RAX is scratch.
  process-spawn-with-heap bounds-checks its request against
  spawn-slot-region-size at the call site - a request that cannot fit
  the slot is refused with -1, never silently overlapped.
@@ -44269,7 +44357,8 @@ Section: Process Scheduler Helpers
     let st0 = record-func-offset st "__fx_save"
     in let st1 = st-append-code st0 (push-r reg-rax & push-r reg-rdx & push-r reg-rcx & mov-rr reg-rax reg-rcx)
     in let st2 = st-append-code st1 (sub-ri reg-rax proc-table-base & shr-ri reg-rax 8)
-    in let st3 = st-append-code st2 (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax fx-area-offset & mov-rr reg-rcx reg-rax)
+    in let pool = emit-load-spawn-base st2 reg-rcx
+    in let st3 = st-append-code pool (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax (spawn-slot-region-size - fx-area-size) & add-rr reg-rcx reg-rax)
     in let st4 = emit-vec-state-op st3 xsave64-rcx fxsave64-rcx True
     in st-append-code st4 (pop-r reg-rcx & pop-r reg-rdx & pop-r reg-rax & x86-ret)
 
@@ -44277,7 +44366,8 @@ Section: Process Scheduler Helpers
   emit-fx-init-helper (st) =
     let st0 = record-func-offset st "__fx_init"
     in let st1 = st-append-code st0 (push-r reg-rax & push-r reg-rdx & push-r reg-rcx & mov-rr reg-rax reg-r12)
-    in let st2 = st-append-code st1 (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax fx-area-offset & mov-rr reg-rcx reg-rax)
+    in let pool = emit-load-spawn-base st1 reg-rcx
+    in let st2 = st-append-code pool (shl-ri reg-rax spawn-slot-region-shift & add-ri reg-rax (spawn-slot-region-size - fx-area-size) & add-rr reg-rcx reg-rax)
     in let st3 = emit-vec-state-op st2 xsave64-rcx fxsave64-rcx True
     in st-append-code st3 (pop-r reg-rcx & pop-r reg-rdx & pop-r reg-rax & x86-ret)
 
@@ -44308,10 +44398,11 @@ Section: Process Scheduler Helpers
 
   emit-spawn-pool-carve-helper : CodegenState -> CodegenState
   emit-spawn-pool-carve-helper (st) =
-    let st0 = record-func-offset st "__spawn_pool_carve"
+    let st0 = record-func-offset st "__spawn_pool_carve_v2"
     in let st1 = st-append-code st0 (mov-rr reg-rdi reg-r12)
     in let st2 = st-append-code st1 (shl-ri reg-rdi spawn-slot-region-shift)
-    in let st3 = st-append-code st2 (add-ri reg-rdi spawn-pool-base)
+    in let pool = emit-load-spawn-base st2 reg-rax
+    in let st3 = st-append-code pool (add-rr reg-rdi reg-rax)
     in let st4 = st-append-code st3 (mov-rr reg-rsi reg-rdi)
     in let st5 = st-append-code st4 (add-rr reg-rsi reg-rdx)
     in st-append-code st5 x86-ret
@@ -44351,7 +44442,7 @@ Section: Process Scheduler Helpers
     in let st15 = st-append-code st14 (mov-rr reg-r12 reg-rcx)
     in let st16 = st-append-code st15 (mov-rr reg-r13 reg-rdx)
     in let st17 = st-append-code st16 (li reg-rdx (proc-spawn-heap-size + proc-spawn-stack-size))
-    in let st19a = emit-call-to st17 "__spawn_pool_carve"
+    in let st19a = emit-call-to st17 "__spawn_pool_carve_v2"
     in let st19b = emit-call-to st19a "__fx_init"
     in let st19c = emit-spawn-stack-pretouch st19b
     in let st20 = emit-load-func-addr st19c reg-rax "__proc_entry"
@@ -44459,7 +44550,7 @@ Section: Process Scheduler Helpers
     in let st17 = st-append-code st16 (mov-rr reg-r12 reg-rcx)
     in let st18 = st-append-code st17 (mov-rr reg-r13 reg-rdx)
     in let st19 = st-append-code st18 (li reg-rdx (proc-spawn-heap-size + proc-spawn-stack-size))
-    in let st23a = emit-call-to st19 "__spawn_pool_carve"
+    in let st23a = emit-call-to st19 "__spawn_pool_carve_v2"
     in let st23 = emit-call-to st23a "__fx_init"
     in let st23c = emit-spawn-stack-pretouch st23
     in let st24 = emit-load-func-addr st23c reg-rax "__proc_entry"
@@ -58736,7 +58827,8 @@ Chapter: Semantics--Chapter Scoper
   cites Codex chapter Collections (bsearch-text-set)
   cites Codex chapter SkipListText (skip-list-text-empty, skip-list-text-has, skip-list-text-insert)
   cites Codex chapter Name (opening-entry-point)
-  cites Codex chapter CdxCodes (cdx-duplicate-definition, cdx-shadows-builtin, cdx-collides-across-chapters)
+  cites Codex chapter CdxCodes (cdx-duplicate-definition, cdx-shadows-builtin)
+  cites Codex chapter CdxCodes (cdx-collides-across-chapters)
 
 Section: Chapter Assignment
   ChapterAssignment = record {
@@ -58771,12 +58863,17 @@ Section: Collision Detection
     in if pos < slen then
       if list-at seen-names pos == a.def-name then
         if list-at seen-slugs pos /= a.chapter-slug then
-          find-collisions-loop assignments (i + 1) len (skip-list-text-insert acc (a.def-name)) seen-names seen-slugs
+          let next = skip-list-text-insert acc (a.def-name)
+          in find-collisions-loop assignments (i + 1) len next seen-names seen-slugs
         else find-collisions-loop assignments (i + 1) len acc seen-names seen-slugs
       else
-        find-collisions-loop assignments (i + 1) len acc (list-insert-at seen-names pos (a.def-name)) (list-insert-at seen-slugs pos (a.chapter-slug))
+        let names = list-insert-at seen-names pos (a.def-name)
+        in let slugs = list-insert-at seen-slugs pos (a.chapter-slug)
+        in find-collisions-loop assignments (i + 1) len acc names slugs
     else
-      find-collisions-loop assignments (i + 1) len acc (list-insert-at seen-names pos (a.def-name)) (list-insert-at seen-slugs pos (a.chapter-slug))
+      let names = list-insert-at seen-names pos (a.def-name)
+      in let slugs = list-insert-at seen-slugs pos (a.chapter-slug)
+      in find-collisions-loop assignments (i + 1) len acc names slugs
 
   count-openings : List ChapterAssignment, Integer, Integer, Integer -> Integer
   count-openings (assignments) (i) (len) (count) =
@@ -58789,7 +58886,8 @@ Section: Collision Detection
   check-entry-point-duplicate (assignments) =
     if count-openings assignments 0 (list-length assignments) 0 >= 2 then
       [
-        make-error cdx-duplicate-definition "'opening' is defined in multiple chapters. A program has exactly one entry point." synthetic-span
+        let msg = "'opening' is defined in multiple chapters. A program has exactly one entry point."
+        in make-error cdx-duplicate-definition msg synthetic-span
       ]
     else []
 
@@ -58821,7 +58919,10 @@ Section: Builtin Shadowing
     else let h = list-at headers i
     in let n = token-text (h.name)
     in if skip-list-text-has bset n then
-      check-shadowed-builtins headers bset (i + 1) len (list-push acc (make-warning cdx-shadows-builtin ("Definition '" & n & "' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it.") (token-span (h.name))))
+      let suffix = "' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it."
+      in let msg = "Definition '" & n & suffix
+      in let diag = make-warning cdx-shadows-builtin msg (token-span (h.name))
+      in check-shadowed-builtins headers bset (i + 1) len (list-push acc diag)
     else check-shadowed-builtins headers bset (i + 1) len acc
 
 Section: Colliding Across Chapters
@@ -58848,7 +58949,12 @@ Section: Colliding Across Chapters
     in let n = token-text (h.name)
     in if skip-list-text-has colliding n then
       let other = colliding-other-chapter assignments n (h.chapter-slug) 0 (list-length assignments)
-      in check-cross-chapter-collisions headers colliding assignments (i + 1) len (list-push acc (make-warning cdx-collides-across-chapters ("Definition '" & n & "' is also defined in chapter '" & other & "'. Both are kept and each chapter sees its own, so this compiles and runs -- but which definition a mention gets depends on the chapter the mention sits in, and in a chapter that defines neither it depends on the order the build globs files. Move this body to the other chapter and it silently means the other thing. Give one of them a chapter-specific prefix, or cite the one you mean instead of defining it twice.") (token-span (h.name))))
+      in let prefix = "Definition '" & n & "' is also defined in chapter '" & other
+      in let suffix = "'. Both are kept and each chapter sees its own, so this compiles and runs -- but which definition a mention gets depends on the chapter the mention sits in, and in a chapter that defines neither it depends on the order the build globs files. Move this body to the other chapter and it silently means the other thing. Give one of them a chapter-specific prefix, or cite the one you mean instead of defining it twice."
+      in let msg = prefix & suffix
+      in let diag = make-warning cdx-collides-across-chapters msg (token-span (h.name))
+      in let next = list-push acc diag
+      in check-cross-chapter-collisions headers colliding assignments (i + 1) len next
     else check-cross-chapter-collisions headers colliding assignments (i + 1) len acc
 
 Section: Name Mangling
@@ -58898,7 +59004,9 @@ Section: Binary Search -- RenameEntry (lower bound by original)
 
   sorted-rename-insert : List RenameEntry, RenameEntry -> List RenameEntry
   sorted-rename-insert (entries) (entry) =
-    list-insert-at entries (bsearch-rename-pos entries (entry.original) 0 (list-length entries)) entry
+    let len = list-length entries
+    in let pos = bsearch-rename-pos entries (entry.original) 0 len
+    in list-insert-at entries pos entry
 
 Section: Apply Rename
   scope-copy-text : Text -> Text
@@ -59049,38 +59157,38 @@ Section: Chapter Scoping Pipeline
   build-mod-renames (colliding) (assignments) (cur-chap) (i) (len) (acc) =
     if i == len then acc
     else let a = list-at assignments i
-    in if is-colliding colliding (a.def-name)
-       then if a.chapter-slug == cur-chap
-            then let cleaned = remove-rename acc (a.def-name)
-            in build-mod-renames colliding assignments cur-chap (i + 1) len (sorted-rename-insert cleaned (RenameEntry {
-                          original = a.def-name,
-                          mangled = mangle-name cur-chap (a.def-name)
-                         }))
-       else if has-rename acc (a.def-name)
-            then build-mod-renames colliding assignments cur-chap (i + 1) len acc
-       else
-         build-mod-renames colliding assignments cur-chap (i + 1) len (sorted-rename-insert acc (RenameEntry {
+    in if is-colliding colliding (a.def-name) then
+      if a.chapter-slug == cur-chap then
+        let cleaned = remove-rename acc (a.def-name)
+        in let entry = RenameEntry {
           original = a.def-name,
-          mangled = mangle-name (a.chapter-slug) (a.def-name)
-         }))
+          mangled = mangle-name cur-chap (a.def-name)
+        }
+        in let next = sorted-rename-insert cleaned entry
+        in build-mod-renames colliding assignments cur-chap (i + 1) len next
+      else if has-rename acc (a.def-name) then
+        build-mod-renames colliding assignments cur-chap (i + 1) len acc
+      else let entry = RenameEntry {
+        original = a.def-name,
+        mangled = mangle-name (a.chapter-slug) (a.def-name)
+      }
+      in let next = sorted-rename-insert acc entry
+      in build-mod-renames colliding assignments cur-chap (i + 1) len next
     else build-mod-renames colliding assignments cur-chap (i + 1) len acc
 
   build-global-rename-table : List ChapterAssignment, SkipListText -> List RenameEntry
   build-global-rename-table (assignments) (colliding) =
-    let pushed = build-global-renames assignments colliding (list-length assignments - 1) (__list-with-capacity (list-length assignments))
+    let count = list-length assignments
+    in let first = count - 1
+    in let entries = __list-with-capacity count
+    in let pushed = build-global-renames assignments colliding first entries
     in dedupe-renames (sort-by pushed compare-rename-originals)
 
- The table is built by a single reversed push pass, one merge sort,
- and an adjacent dedupe - O(n log n). The previous per-entry
- sorted-rename-insert rebuilt the whole immutable list on every
- insert: O(n squared) ALLOCATION, and because the call site runs
- inside deck-record the quadratic garbage landed on the scope deck
- and was retained for the entire compile (~180 MB on the selfhost -
- the largest single retained block in the compiler, found by the
- MEASURE deck-span map). Winner preservation: the old leftmost-equal
- bsearch returned the LAST-inserted duplicate; pushing in reverse
- assignment order and relying on merge-sort stability puts that same
- entry leftmost, and the dedupe keeps it.
+ Preallocated reverse pushes avoid per-entry sorted-insertion copies
+ retained on the scope deck. sort-by uses in-place quicksort: average
+ O(n log n), worst-case O(n squared) comparison work. Equal-key order is
+ not stable, so retaining the first sorted duplicate does not guarantee
+ the last assignment wins. The duplicate-selection gap is COMPILER-115.
 
   compare-rename-originals : RenameEntry, RenameEntry -> Integer
   compare-rename-originals (a) (b) = text-compare (a.original) (b.original)
@@ -59140,7 +59248,10 @@ Section: Duplicate Cite Detection
 
   add-duplicate-cite-error : DiagnosticBag, ACitesDecl, Text, Text -> DiagnosticBag
   add-duplicate-cite-error (bag) (cite) (name-val) (conflict) =
-    bag-add bag (make-error cdx-duplicate-cite ("Name '" & name-val & "' is cited from both '" & (cite.chapter-name.value) & "' and '" & conflict & "' in chapter '" & (cite.citing-chapter) & "'") (cite.span))
+    let prefix = "Name '" & name-val & "' is cited from both '" & (cite.chapter-name.value)
+    in let msg = prefix & "' and '" & conflict & "' in chapter '" & (cite.citing-chapter) & "'"
+    in let diag = make-error cdx-duplicate-cite msg (cite.span)
+    in bag-add bag diag
 
   check-cite-names : ACitesDecl, Integer, Integer, List ACitesDecl, Integer, Integer, DiagnosticBag -> DiagnosticBag
   check-cite-names (cite) (j) (nlen) (all-citations) (i) (total) (bag) =
@@ -59422,8 +59533,11 @@ Chapter: Semantics--Name Resolution
   cites Codex chapter Build Settings (max-recursion-depth, demand-scope-guard-band)
   cites Codex chapter Diagnostics (make-error)
   cites Codex chapter Builtins (builtins, builtin-names-from)
-  cites Codex chapter SkipListText (skip-list-text-empty, skip-list-text-has, skip-list-text-insert, skip-list-text-clone, skip-list-text-from-list)
-  cites Codex chapter CdxCodes (cdx-duplicate-definition, cdx-class-shadows-derived, cdx-applied-local-is-builtin)
+  cites Codex chapter SkipListText (skip-list-text-empty, skip-list-text-has)
+  cites Codex chapter SkipListText (skip-list-text-insert, skip-list-text-clone)
+  cites Codex chapter SkipListText (skip-list-text-from-list)
+  cites Codex chapter CdxCodes (cdx-duplicate-definition, cdx-class-shadows-derived)
+  cites Codex chapter CdxCodes (cdx-applied-local-is-builtin)
   cites Codex chapter Chapter Scoper (rename-lookup)
 
 Section: Scope
@@ -59533,25 +59647,26 @@ Section: Collect Names
   }
 
   collect-ctor-names : List ATypeDef, Integer, Integer, SkipListText, SkipListText, List Diagnostic -> CtorCollectResult
-  collect-ctor-names (type-defs) (i) (len) (type-acc) (ctor-acc) (errs) =
+  collect-ctor-names (types) (i) (len) (type-acc) (ctor-acc) (errs) =
     if i == len then deck-record (CtorCollectResult {
-     type-names = type-acc,
-     ctor-names = ctor-acc,
-     errors = errs
+      type-names = type-acc,
+      ctor-names = ctor-acc,
+      errors = errs
     })
-    else let td = list-at type-defs i
+    else let td = list-at types i
     in when td
       is AVariantTypeDef (name) (params) (ctors) (s) ->
-       let dup-check = check-type-name-dup type-acc (name.value) s errs
-       in let ctor-result = collect-variant-ctors ctors 0 (list-length ctors) ctor-acc (dup-check.errors)
-       in collect-ctor-names type-defs (i + 1) len (dup-check.type-acc) (ctor-result.ctor-acc) (ctor-result.errors)
+        let checked = check-type-name-dup type-acc (name.value) s errs
+        in let count = list-length ctors
+        in let found = collect-variant-ctors ctors 0 count ctor-acc (checked.errors)
+        in collect-ctor-names types (i + 1) len (checked.type-acc) (found.ctor-acc) (found.errors)
       is ARecordTypeDef (name) (params) (fields) (is-mut) (s) ->
-       let dup-check = check-type-name-dup type-acc (name.value) s errs
-       in collect-ctor-names type-defs (i + 1) len (dup-check.type-acc) ctor-acc (dup-check.errors)
+        let checked = check-type-name-dup type-acc (name.value) s errs
+        in collect-ctor-names types (i + 1) len (checked.type-acc) ctor-acc (checked.errors)
       is AUnitTypeDef (name) (base) (s) ->
-       let dup-check = check-type-name-dup type-acc (name.value) s errs
-       in let unit-ctor-acc = skip-list-text-insert ctor-acc (name.value)
-       in collect-ctor-names type-defs (i + 1) len (dup-check.type-acc) unit-ctor-acc (dup-check.errors)
+        let checked = check-type-name-dup type-acc (name.value) s errs
+        in let unit-ctors = skip-list-text-insert ctor-acc (name.value)
+        in collect-ctor-names types (i + 1) len (checked.type-acc) unit-ctors (checked.errors)
 
   CtorCollectResult = record {
    type-names : SkipListText,
@@ -59576,15 +59691,15 @@ Section: Collect Names
 
   check-type-name-dup : SkipListText, Text, SourceSpan, List Diagnostic -> TypeNameDupResult
   check-type-name-dup (type-acc) (name) (span) (errs) =
-    if skip-list-text-has type-acc name then deck-record (TypeNameDupResult {
-     type-acc = type-acc,
-     errors = errs & [
-       make-error cdx-duplicate-definition ("Duplicate type definition: '" & name & "' is already defined") span
-     ]
-    })
+    if skip-list-text-has type-acc name then
+      deck-record (let msg = "Duplicate type definition: '" & name & "' is already defined"
+      in TypeNameDupResult {
+        type-acc = type-acc,
+        errors = errs & [make-error cdx-duplicate-definition msg span]
+      })
     else deck-record (TypeNameDupResult {
-     type-acc = skip-list-text-insert type-acc name,
-     errors = errs
+      type-acc = skip-list-text-insert type-acc name,
+      errors = errs
     })
 
   VariantCtorResult = record {
@@ -59598,9 +59713,9 @@ Section: Collect Names
     else let c = list-at ctors i
     in let name = c.name.value
     in if skip-list-text-has acc name then
-      collect-variant-ctors ctors (i + 1) len acc (errs & [
-        make-error cdx-duplicate-definition ("Duplicate constructor: '" & name & "' is already defined") (c.span)
-      ])
+      let msg = "Duplicate constructor: '" & name & "' is already defined"
+      in let error = make-error cdx-duplicate-definition msg (c.span)
+      in collect-variant-ctors ctors (i + 1) len acc (errs & [error])
     else collect-variant-ctors ctors (i + 1) len (skip-list-text-insert acc name) errs
 
 Section: Collect Effect Op Names
@@ -59613,7 +59728,8 @@ Section: Collect Effect Op Names
   collect-effect-op-names (effs) (top-names) (ctor-names) (i) (len) (op-acc) (errs) =
     if i == len then deck-record (EffectOpCollectResult { op-names = op-acc, errors = errs })
     else let eff = list-at effs i
-    in let after = collect-ops-of-effect (eff.ops) top-names ctor-names 0 (list-length (eff.ops)) op-acc errs
+    in let count = list-length (eff.ops)
+    in let after = collect-ops-of-effect (eff.ops) top-names ctor-names 0 count op-acc errs
     in collect-effect-op-names effs top-names ctor-names (i + 1) len (after.op-names) (after.errors)
 
   collect-ops-of-effect : List AEffectOpDef, SkipListText, SkipListText, Integer, Integer, SkipListText, List Diagnostic -> EffectOpCollectResult
@@ -59622,12 +59738,12 @@ Section: Collect Effect Op Names
     else let op = list-at ops i
     in let name = op.name.value
     in let op-is-dup = skip-list-text-has op-acc name
-    in let collides = op-is-dup | skip-list-text-has top-names name | skip-list-text-has ctor-names name
+    in let top-collision = op-is-dup | skip-list-text-has top-names name
+    in let collides = top-collision | skip-list-text-has ctor-names name
     in let new-acc = if op-is-dup then op-acc else skip-list-text-insert op-acc name
     in let new-errs = if collides then
-      errs & [
-        make-error cdx-duplicate-definition ("Effect operation '" & name & "' conflicts with existing name") (op.span)
-      ]
+      let msg = "Effect operation '" & name & "' conflicts with existing name"
+      in errs & [make-error cdx-duplicate-definition msg (op.span)]
     else errs
     in collect-ops-of-effect ops top-names ctor-names (i + 1) len new-acc new-errs
 
@@ -59658,60 +59774,78 @@ Section: Resolve Expressions
   resolve-expr-at : Scope, AExpr, Integer -> List Diagnostic
   resolve-expr-at (sc) (expr) (depth) =
     if depth >= max-recursion-depth then
-      [
-        make-error cdx-resource-exhausted ("compiler resource exhausted in name-resolver.resolve-expr (budget " & integer-to-text max-recursion-depth & ")") (aexpr-span expr)
-      ]
+      let prefix = "compiler resource exhausted in name-resolver.resolve-expr (budget "
+      in let msg = prefix & integer-to-text max-recursion-depth & ")"
+      in [make-error cdx-resource-exhausted msg (aexpr-span expr)]
     else when expr
       is ALitExpr (val) (kind) (s) -> []
       is ANameExpr (name) (s) ->
-       if scope-has sc (name.value) | is-type-name (name.value) then []
-       else
-         [
-           make-error cdx-undefined-name ("Undefined name: " & name.value & (if name.value == "do" then " (note: `do` is not Codex; use act ... end)" else "")) s
-         ]
+        if scope-has sc (name.value) | is-type-name (name.value) then []
+        else
+          let hint = if name.value == "do" then
+            " (note: `do` is not Codex; use act ... end)"
+          else ""
+          in let msg = "Undefined name: " & name.value & hint
+          in [make-error cdx-undefined-name msg s]
       is ABinaryExpr (left) (op) (right) (s) ->
-       resolve-expr-at sc left (depth + 1) & resolve-expr-at sc right (depth + 1)
+        resolve-expr-at sc left (depth + 1) & resolve-expr-at sc right (depth + 1)
       is AUnaryExpr (operand) (s) -> resolve-expr-at sc operand (depth + 1)
       is AApplyExpr (func) (arg) (s) ->
-       applied-local-builtin sc func & resolve-expr-at sc func (depth + 1) & resolve-expr-at sc arg (depth + 1)
+        let local-errors = applied-local-builtin sc func
+        in let func-errors = resolve-expr-at sc func (depth + 1)
+        in let leading = local-errors & func-errors
+        in leading & resolve-expr-at sc arg (depth + 1)
       is AIfExpr (cond) (then-e) (else-e) (s) ->
-       resolve-expr-at sc cond (depth + 1) & resolve-expr-at sc then-e (depth + 1) & resolve-expr-at sc else-e (depth + 1)
+        let cond-errors = resolve-expr-at sc cond (depth + 1)
+        in let then-errors = resolve-expr-at sc then-e (depth + 1)
+        in let leading = cond-errors & then-errors
+        in leading & resolve-expr-at sc else-e (depth + 1)
       is ALetExpr (bindings) (body) (s) ->
-       resolve-let (scope-fork sc) bindings body
+        resolve-let (scope-fork sc) bindings body
       is ALambdaExpr (params) (body) (s) ->
-       let param-result = add-lambda-params sc params 0 (list-length params) s skip-list-text-empty []
-       in param-result.errors & resolve-expr-at (param-result.scope) body (depth + 1)
+        let n = list-length params
+        in let param-result = add-lambda-params sc params 0 n s skip-list-text-empty []
+        in param-result.errors & resolve-expr-at (param-result.scope) body (depth + 1)
       is AMatchExpr (scrutinee) (arms) (s) ->
-       resolve-expr-at sc scrutinee (depth + 1) & resolve-match-arms sc arms 0 (list-length arms) []
+        let scrut-errors = resolve-expr-at sc scrutinee (depth + 1)
+        in scrut-errors & resolve-match-arms sc arms 0 (list-length arms) []
       is AListExpr (elems) (s) ->
-       resolve-list-elems sc elems 0 (list-length elems) []
+        resolve-list-elems sc elems 0 (list-length elems) []
       is ARecordExpr (name) (fields) (s) ->
-       resolve-record-fields sc fields 0 (list-length fields) []
+        resolve-record-fields sc fields 0 (list-length fields) []
       is AFieldAccess (obj) (field) (s) -> resolve-expr-at sc obj (depth + 1)
-      is AActExpr (stmts) (s) -> resolve-act-stmts (scope-fork sc) stmts 0 (list-length stmts) skip-list-text-empty []
+      is AActExpr (stmts) (s) ->
+        let inner = scope-fork sc
+        in resolve-act-stmts inner stmts 0 (list-length stmts) skip-list-text-empty []
       is AHandleExpr (eff) (body) (clauses) (s) ->
-       resolve-expr-at sc body (depth + 1) & resolve-handle-clauses sc clauses 0 (list-length clauses) []
+        let body-errors = resolve-expr-at sc body (depth + 1)
+        in body-errors & resolve-handle-clauses sc clauses 0 (list-length clauses) []
       is AWithTimeoutExpr (timeout) (effs) (scopes) (body) (s) ->
-       resolve-expr-at sc body (depth + 1)
+        resolve-expr-at sc body (depth + 1)
       is ATryExpr (max) (body) (fb) (fail) (s) ->
-       resolve-try-region sc body & resolve-try-region sc fb & resolve-try-region sc fail
+        resolve-try-region sc body & resolve-try-region sc fb & resolve-try-region sc fail
       is AFieldAssignExpr (rec) (field) (val) (s) ->
-       resolve-expr-at sc rec (depth + 1) & resolve-expr-at sc val (depth + 1)
+        resolve-expr-at sc rec (depth + 1) & resolve-expr-at sc val (depth + 1)
       is ALazyExpr (inner) (s) -> resolve-expr-at sc inner (depth + 1)
       is AErrorExpr (msg) (s) -> []
       is AInductionExpr (scrut) (arms) (s) ->
-       let sc2 = when scrut is ANameExpr (nm) (ss) -> scope-add-local (scope-fork sc) (nm.value) is otherwise -> sc
-       in resolve-match-arms sc2 arms 0 (list-length arms) []
+        let sc2 = when scrut
+          is ANameExpr (nm) (ss) -> scope-add-local (scope-fork sc) (nm.value)
+          is otherwise -> sc
+        in resolve-match-arms sc2 arms 0 (list-length arms) []
 
   applied-local-builtin : Scope, AExpr -> List Diagnostic
   applied-local-builtin (sc) (func) =
     when func
       is ANameExpr (name) (s) ->
-       if skip-list-text-has (sc.locals) (name.value) & skip-list-text-has (sc.builtins) (name.value) then
-         [
-           make-error cdx-applied-local-is-builtin ("'" & name.value & "' is applied here, and it is both a local binding and a builtin, so the call does not say which one it means; rename the local") s
-         ]
-       else []
+        let local-name = skip-list-text-has (sc.locals) (name.value)
+        in if local-name & skip-list-text-has (sc.builtins) (name.value) then
+          [
+            let suffix = "' is applied here, and it is both a local binding and a builtin, so the call does not say which one it means; rename the local"
+            in let msg = "'" & name.value & suffix
+            in make-error cdx-applied-local-is-builtin msg s
+          ]
+        else []
       is otherwise -> []
 
   resolve-try-region : Scope, List AActStmt -> List Diagnostic
@@ -59725,7 +59859,8 @@ Section: Resolve Expressions
     in let clause-scope = scope-fork sc
     in let sc2 = scope-add-local clause-scope (c.resume-name.value)
     in let resume-seen = skip-list-text-insert skip-list-text-empty (c.resume-name.value)
-    in let param-result = scope-add-clause-params sc2 (c.params) 0 (list-length (c.params)) (c.span) resume-seen []
+    in let count = list-length (c.params)
+    in let param-result = scope-add-clause-params sc2 (c.params) 0 count (c.span) resume-seen []
     in let clause-errs = resolve-expr (param-result.scope) (c.body)
     in resolve-handle-clauses sc clauses (i + 1) len (errs & param-result.errors & clause-errs)
 
@@ -59737,8 +59872,9 @@ Section: Resolve Expressions
       scope-add-clause-params sc ps (i + 1) len clause-span seen (errs & [
         make-error cdx-duplicate-definition ("Duplicate parameter: '" & name & "'") clause-span
       ])
-    else
-      scope-add-clause-params (scope-add-local sc name) ps (i + 1) len clause-span (skip-list-text-insert seen name) errs
+    else let inner = scope-add-local sc name
+    in let next-seen = skip-list-text-insert seen name
+    in scope-add-clause-params inner ps (i + 1) len clause-span next-seen errs
 
 Section: Resolve Let
 
@@ -59752,7 +59888,9 @@ Section: Resolve Let
       [make-error cdx-duplicate-definition ("Duplicate binding: '" & name & "'") (b.span)]
     else []
     in let sc2 = scope-add-local sc name
-    in resolve-let-binds sc2 bindings (i + 1) len (skip-list-text-insert seen name) (errs & bind-errs & dup-errs)
+    in let next-seen = skip-list-text-insert seen name
+    in let next-errs = errs & bind-errs & dup-errs
+    in resolve-let-binds sc2 bindings (i + 1) len next-seen next-errs
 
   resolve-let : Scope, List ALetBind, AExpr -> List Diagnostic
   resolve-let (sc) (bindings) (body) =
@@ -59768,8 +59906,9 @@ Section: Resolve Lambda Parameters
       add-lambda-params sc params (i + 1) len lam-span seen (errs & [
         make-error cdx-duplicate-definition ("Duplicate parameter: '" & name & "'") lam-span
       ])
-    else
-      add-lambda-params (scope-add-local sc name) params (i + 1) len lam-span (skip-list-text-insert seen name) errs
+    else let inner = scope-add-local sc name
+    in let next-seen = skip-list-text-insert seen name
+    in add-lambda-params inner params (i + 1) len lam-span next-seen errs
 
 Section: Resolve Match Arms
   resolve-match-arms : Scope, List AMatchArm, Integer, Integer, List Diagnostic -> List Diagnostic
@@ -59793,22 +59932,23 @@ Section: Resolve Match Arms
       deck-record (PatResult { scope = sc, seen = seen, errors = errs })
     else when pat
       is AVarPat (name) (s) ->
-       if skip-list-text-has seen (name.value) then
-         deck-record (PatResult {
-           scope = sc,
-           seen = seen,
-           errors = errs & [
-             make-error cdx-duplicate-definition ("Duplicate pattern variable: '" & name.value & "'") s
-           ]
-         })
-       else
-         deck-record (PatResult {
-           scope = scope-add-local sc (name.value),
-           seen = skip-list-text-insert seen (name.value),
-           errors = errs
-         })
-      is ACtorPat (name) (subs) (s) -> collect-ctor-pat-names sc subs 0 (list-length subs) (depth + 1) seen errs
-      is AVecPat (subs) (s) -> collect-ctor-pat-names sc subs 0 (list-length subs) (depth + 1) seen errs
+        if skip-list-text-has seen (name.value) then
+          deck-record (let msg = "Duplicate pattern variable: '" & name.value & "'"
+          in PatResult {
+            scope = sc,
+            seen = seen,
+            errors = errs & [make-error cdx-duplicate-definition msg s]
+          })
+        else
+          deck-record (PatResult {
+            scope = scope-add-local sc (name.value),
+            seen = skip-list-text-insert seen (name.value),
+            errors = errs
+          })
+      is ACtorPat (name) (subs) (s) ->
+        collect-ctor-pat-names sc subs 0 (list-length subs) (depth + 1) seen errs
+      is AVecPat (subs) (s) ->
+        collect-ctor-pat-names sc subs 0 (list-length subs) (depth + 1) seen errs
       is ALitPat (val) (kind) (s) | AWildPat (s) -> deck-record (PatResult {
         scope = sc,
         seen = seen,
@@ -59844,31 +59984,34 @@ Section: Resolve Act Statements
     else let stmt = list-at stmts i
     in when stmt
       is AActExprStmt (e) (s) ->
-       when e
-         is ALetExpr (binds) (lbody) (ls) -> resolve-act-let sc binds lbody stmts i len seen errs
-         is otherwise ->
-          let errs2 = resolve-expr sc e
-          in resolve-act-stmts sc stmts (i + 1) len seen (errs & errs2)
+        when e
+          is ALetExpr (binds) (lbody) (ls) -> resolve-act-let sc binds lbody stmts i len seen errs
+          is otherwise ->
+            let errs2 = resolve-expr sc e
+            in resolve-act-stmts sc stmts (i + 1) len seen (errs & errs2)
       is AActBindStmt (name) (e) (s) ->
-       let errs2 = resolve-expr sc e
-       in let dup-errs = if skip-list-text-has seen (name.value) then
-         [make-error cdx-duplicate-definition ("Duplicate binding: '" & name.value & "'") s]
-       else []
-       in let sc2 = scope-add-local sc (name.value)
-       in resolve-act-stmts sc2 stmts (i + 1) len (skip-list-text-insert seen (name.value)) (errs & errs2 & dup-errs)
+        let errs2 = resolve-expr sc e
+        in let dup-errs = if skip-list-text-has seen (name.value) then
+          [make-error cdx-duplicate-definition ("Duplicate binding: '" & name.value & "'") s]
+        else []
+        in let sc2 = scope-add-local sc (name.value)
+        in let next-seen = skip-list-text-insert seen (name.value)
+        in let next-errs = errs & errs2 & dup-errs
+        in resolve-act-stmts sc2 stmts (i + 1) len next-seen next-errs
 
   resolve-act-let : Scope, List ALetBind, AExpr, List AActStmt, Integer, Integer, SkipListText, List Diagnostic -> List Diagnostic
   resolve-act-let (sc) (binds) (body) (stmts) (i) (len) (seen) (errs) =
     let bind-errs = resolve-let-binds sc binds 0 (list-length binds) skip-list-text-empty []
     in when body
-      is ALetExpr (binds2) (body2) (ls2) -> resolve-act-let sc binds2 body2 stmts i len seen (errs & bind-errs)
+      is ALetExpr (binds2) (body2) (ls2) ->
+        resolve-act-let sc binds2 body2 stmts i len seen (errs & bind-errs)
       is otherwise ->
-       let body-errs = resolve-expr sc body
-       in resolve-act-stmts sc stmts (i + 1) len seen (errs & bind-errs & body-errs)
+        let body-errs = resolve-expr sc body
+        in resolve-act-stmts sc stmts (i + 1) len seen (errs & bind-errs & body-errs)
 
 Section: Resolve All Definitions
 
- The ceiling is the SCOPE deck reservation's top, and this loop checks it
+ The limit is the SCOPE deck reservation's top, and this loop checks it
  because it is the phase's bulk deck writer -- not through its own records
  but through resolve-expr's pattern path, whose per-pattern-variable
  deck-record wraps the scope and seen skiplist inserts, so every insert
@@ -59883,31 +60026,32 @@ Section: Resolve All Definitions
  deck-short-of again after the walk and raises CDX9002 from there.
 
   resolve-all-defs : Scope, List ADef, Integer, Integer, List Diagnostic, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, Integer -> List Diagnostic
-  resolve-all-defs (sc) (defs) (i) (len) (errs) (colliding) (assignments) (citations) (cite-slugs) (cur-slug) (cur-chapter-rn) (ceiling) =
-    if i == len then errs
-    else if deck-short-of ceiling demand-scope-guard-band then errs
+  resolve-all-defs (sc) (defs) (i) (n) (errs) (dups) (assigns) (refs) (slugs) (cur) (rn) (limit) =
+    if i == n then errs
+    else if deck-short-of limit demand-scope-guard-band then errs
     else let def = list-at defs i
-    in let chapter-rn = if def.chapter-slug == cur-slug then cur-chapter-rn
-    else
-      apply-cite-overrides (build-chapter-rename-map colliding assignments (def.chapter-slug)) citations colliding assignments cite-slugs (def.chapter-slug) 0
+    in let slug = def.chapter-slug
+    in let next-rn = if slug == cur then rn
+    else let base = build-chapter-rename-map dups assigns slug
+    in apply-cite-overrides base refs dups assigns slugs slug 0
     in let bivy-mark = __heap-save
     in let deck-mark = __deck-pos
     in let fresh-scope = Scope {
       names = sc.names,
       locals = skip-list-text-empty,
       builtins = sc.builtins,
-      chapter-renames = chapter-rn
+      chapter-renames = next-rn
     }
     in let param-result = add-def-params fresh-scope (def.params) 0 (list-length (def.params)) []
     in let body-scope = add-forall-binders (param-result.scope) def
     in let errs2 = resolve-expr body-scope (def.body)
     in let errs-new = param-result.errors & errs2
-    in if list-length errs-new == 0
-       then let deck-back = __deck-set deck-mark
-       in let bivy-back = __heap-restore bivy-mark
-       in resolve-all-defs sc defs (i + 1) len errs colliding assignments citations cite-slugs (def.chapter-slug) chapter-rn ceiling
-    else
-      resolve-all-defs sc defs (i + 1) len (errs & errs-new) colliding assignments citations cite-slugs (def.chapter-slug) chapter-rn ceiling
+    in if list-length errs-new == 0 then
+      let deck-back = __deck-set deck-mark
+      in let bivy-back = __heap-restore bivy-mark
+      in resolve-all-defs sc defs (i + 1) n errs dups assigns refs slugs slug next-rn limit
+    else let all-errs = errs & errs-new
+    in resolve-all-defs sc defs (i + 1) n all-errs dups assigns refs slugs slug next-rn limit
 
  A definition's resolution answers only its diagnostics; every scope,
  pattern result and rename lookup it built is dead once resolve-expr
@@ -59948,26 +60092,45 @@ Section: Resolve Chapter
     resolve-chapter-with-citations mod [] colliding assignments ceiling
 
   resolve-chapter-with-citations : AChapter, List ResolveResult, SkipListText, List ChapterAssignment, Integer -> ResolveResult
-  resolve-chapter-with-citations (mod) (imported) (colliding) (assignments) (ceiling) =
-    let top = collect-top-level-names (mod.defs) 0 (list-length (mod.defs)) skip-list-text-empty []
-    in let ctors = collect-ctor-names (mod.type-defs) 0 (list-length (mod.type-defs)) skip-list-text-empty skip-list-text-empty []
-    in let effect-ops = collect-effect-op-names (mod.effect-defs) (top.names) (ctors.ctor-names) 0 (list-length (mod.effect-defs)) skip-list-text-empty []
-    in let cited-names = collect-cited-names imported 0 (list-length imported) skip-list-text-empty
-    in let class-method-names = collect-class-method-names-nr (mod.class-defs) 0 (list-length (mod.class-defs)) skip-list-text-empty
-    in let dict-placeholder-names = collect-dict-placeholder-names-nr (mod.class-defs) (mod.instance-defs) 0 (list-length (mod.class-defs)) skip-list-text-empty
-    in let all-top = skip-list-text-union (skip-list-text-union (skip-list-text-union (skip-list-text-union (skip-list-text-clone (top.names)) (effect-ops.op-names)) cited-names) class-method-names) dict-placeholder-names
-    in let sc = build-all-names-scope all-top (ctors.ctor-names) builtin-names
-    in let slug-cache = for a in assignments -> cite-key (a.chapter-slug)
-    in let cite-slugs = for c in (mod.citations) -> find-slug-for-cite-name (c.quire.value) (c.chapter-name.value) assignments slug-cache
-    in let expr-errs = resolve-all-defs sc (mod.defs) 0 (list-length (mod.defs)) [] colliding assignments (mod.citations) cite-slugs "" [] ceiling
-    in let class-errs = derived-class-name-errors (mod.class-defs) 0 (list-length (mod.class-defs)) []
-    in let ctor-list = deck-record (skip-list-text-to-list (ctors.ctor-names))
+  resolve-chapter-with-citations (mod) (imported) (dups) (assigns) (limit) =
+    let defs = mod.defs
+    in let n = list-length defs
+    in let top = collect-top-level-names defs 0 n skip-list-text-empty []
+    in let types = mod.type-defs
+    in let type-n = list-length types
+    in let ctors = collect-ctor-names types 0 type-n skip-list-text-empty skip-list-text-empty []
+    in let effects = mod.effect-defs
+    in let top-set = top.names
+    in let ctor-set = ctors.ctor-names
+    in let count = list-length effects
+    in let ops = collect-effect-op-names effects top-set ctor-set 0 count skip-list-text-empty []
+    in let cited = collect-cited-names imported 0 (list-length imported) skip-list-text-empty
+    in let classes = mod.class-defs
+    in let nclass = list-length classes
+    in let methods = collect-class-method-names-nr classes 0 nclass skip-list-text-empty
+    in let instances = mod.instance-defs
+    in let dicts = collect-dict-placeholder-names-nr classes instances 0 nclass skip-list-text-empty
+    in let with-ops = skip-list-text-union (skip-list-text-clone top-set) (ops.op-names)
+    in let with-cites = skip-list-text-union with-ops cited
+    in let with-methods = skip-list-text-union with-cites methods
+    in let all-top = skip-list-text-union with-methods dicts
+    in let sc = build-all-names-scope all-top ctor-set builtin-names
+    in let cache = for a in assigns -> cite-key (a.chapter-slug)
+    in let refs = mod.citations
+    in let slugs = for c in refs -> (
+      let quire = c.quire.value
+      in let name = c.chapter-name.value
+      in find-slug-for-cite-name quire name assigns cache)
+    in let expr-errs = resolve-all-defs sc defs 0 n [] dups assigns refs slugs "" [] limit
+    in let class-errs = derived-class-name-errors classes 0 nclass []
+    in let ctor-list = deck-record (skip-list-text-to-list ctor-set)
     in deck-record (ResolveResult {
-      bag = deck-record (bag-from-list (top.errors & ctors.errors & effect-ops.errors & expr-errs & class-errs)),
+      bag = deck-record (let prefix = top.errors & ctors.errors & ops.errors
+      in bag-from-list (prefix & expr-errs & class-errs)),
       top-level-names = top.names,
       type-names = ctors.type-names,
       ctor-names = ctor-list
-     })
+    })
 
   collect-cited-names : List ResolveResult, Integer, Integer, SkipListText -> SkipListText
   collect-cited-names (results) (i) (len) (acc) =
@@ -59984,7 +60147,9 @@ Section: Resolve Chapter
     in let name = cd.name.value
     in if name == "Eq" | name == "Show" | name == "Ord" then
       derived-class-name-errors cds (i + 1) len (errs & [
-        make-error cdx-class-shadows-derived ("class '" & name & "' has the name of a derived class, so a constraint naming it would never consult this class or its instances; rename the class") (cd.span)
+        let suffix = "' has the name of a derived class, so a constraint naming it would never consult this class or its instances; rename the class"
+        in let msg = "class '" & name & suffix
+        in make-error cdx-class-shadows-derived msg (cd.span)
       ])
     else derived-class-name-errors cds (i + 1) len errs
 
@@ -59992,7 +60157,10 @@ Section: Resolve Chapter
   collect-class-method-names-nr (cds) (i) (len) (acc) =
     if i == len then acc
     else let cd = list-at cds i
-    in collect-class-method-names-nr cds (i + 1) len (add-class-method-names-nr (cd.methods) 0 (list-length (cd.methods)) acc)
+    in let methods = cd.methods
+    in let count = list-length methods
+    in let names = add-class-method-names-nr methods 0 count acc
+    in collect-class-method-names-nr cds (i + 1) len names
 
   add-class-method-names-nr : List AEffectOpDef, Integer, Integer, SkipListText -> SkipListText
   add-class-method-names-nr (ops) (i) (len) (acc) =
@@ -60006,14 +60174,17 @@ Section: Resolve Chapter
     else let cd = list-at cds i
     in let ic = count-instances-nr ids (cd.name.value) 0 (list-length ids) 0
     in if ic > 1 then
-      collect-dict-placeholder-names-nr cds ids (i + 1) len (skip-list-text-insert acc ("__dict-of-" & (cd.name.value)))
+      let name = "__dict-of-" & cd.name.value
+      in let names = skip-list-text-insert acc name
+      in collect-dict-placeholder-names-nr cds ids (i + 1) len names
     else collect-dict-placeholder-names-nr cds ids (i + 1) len acc
 
   count-instances-nr : List AInstanceDef, Text, Integer, Integer, Integer -> Integer
   count-instances-nr (ids) (cname) (i) (len) (acc) =
     if i == len then acc
     else let id = list-at ids i
-    in count-instances-nr ids cname (i + 1) len (if (id.class-name.value) == cname then acc + 1 else acc)
+    in let count = if id.class-name.value == cname then acc + 1 else acc
+    in count-instances-nr ids cname (i + 1) len count
 
 Page 1
 
@@ -60911,7 +61082,10 @@ Section: Type Parsing
   report-bound-int-error : ParseState -> ParseState
   report-bound-int-error (st) =
     let tok = current st
-    in __record-set st "bag" (bag-add (st.bag) (make-error cdx-expected-token-kind ("expected integer literal in bound annotation, got '" & (token-text tok) & "'") (span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id))))
+    in let msg = "expected integer literal in bound annotation, got '" & (token-text tok) & "'"
+    in let span = span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id)
+    in let diag = make-error cdx-expected-token-kind msg span
+    in __record-set st "bag" (bag-add (st.bag) diag)
 
   parse-bound-between : TypeExpr, ParseState -> ParseTypeResult
   parse-bound-between (base) (st) =
@@ -60944,7 +61118,10 @@ Section: Type Parsing
     else if is-ident (current-kind st) & token-text (current st) == "and"
     then advance st
     else let tok = current st
-    in __record-set st "bag" (bag-add (st.bag) (make-error cdx-expected-token-kind ("expected 'and' in bound annotation, got '" & (token-text tok) & "'") (span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id))))
+    in let msg = "expected 'and' in bound annotation, got '" & (token-text tok) & "'"
+    in let span = span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id)
+    in let diag = make-error cdx-expected-token-kind msg span
+    in __record-set st "bag" (bag-add (st.bag) diag)
 
   parse-overflow-mode : ParseState -> (OverflowMode, ParseState)
   parse-overflow-mode (st) =
@@ -61003,7 +61180,10 @@ Section: Type Parsing
   make-fun-type-arrow : TypeExpr, SourceSpan, TypeExpr, ParseState -> ParseTypeResult
   make-fun-type-arrow (left) (arrow-span) (right) (st) =
     let st2 = when right
-      is FunType (p) (r) -> __record-set st "bag" (bag-add (st.bag) (make-error cdx-chained-arrow-type "Chained '->' in a type is not allowed; use commas for multiple parameters: 'A, B -> C' not 'A -> B -> C'" arrow-span))
+      is FunType (p) (r) ->
+        let msg = "Chained '->' in a type is not allowed; use commas for multiple parameters: 'A, B -> C' not 'A -> B -> C'"
+        in let diag = make-error cdx-chained-arrow-type msg arrow-span
+        in __record-set st "bag" (bag-add (st.bag) diag)
       is otherwise -> st
     in TypeOk (deck-record (FunType left right)) st2
 
@@ -61161,13 +61341,19 @@ Section: Type Parsing
     let tok = current st
     in let st2 = advance st
     in if is-dot (current-kind st2) then
-      let st3 = __record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-row-tail-decorated ("a row variable is a bare lowercase identifier; '" & token-text tok & "' cannot take a dotted sub-effect") (token-to-span tok)))
+      let msg = "a row variable is a bare lowercase identifier; '" & token-text tok & "' cannot take a dotted sub-effect"
+      in let diag = make-error cdx-row-tail-decorated msg (token-to-span tok)
+      in let st3 = __record-set st2 "bag" (bag-add (st2.bag) diag)
       in parse-dotted-effect st3 tok acc sacc tacc
     else if is-text-lit (current-kind st2) then
-      let st3 = __record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-row-tail-decorated ("a row variable is a bare lowercase identifier; '" & token-text tok & "' cannot take a scope literal") (token-to-span tok)))
+      let msg = "a row variable is a bare lowercase identifier; '" & token-text tok & "' cannot take a scope literal"
+      in let diag = make-error cdx-row-tail-decorated msg (token-to-span tok)
+      in let st3 = __record-set st2 "bag" (bag-add (st2.bag) diag)
       in parse-effect-names (advance st3) acc sacc (list-push tacc tok)
     else if list-length tacc > 0 then
-      let st3 = __record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-row-two-tails ("an effect row may name at most one row variable; found '" & token-text tok & "' after an earlier row variable") (token-to-span tok)))
+      let msg = "an effect row may name at most one row variable; found '" & token-text tok & "' after an earlier row variable"
+      in let diag = make-error cdx-row-two-tails msg (token-to-span tok)
+      in let st3 = __record-set st2 "bag" (bag-add (st2.bag) diag)
       in parse-effect-names st3 acc sacc tacc
     else parse-effect-names st2 acc sacc (list-push tacc tok)
 
@@ -61662,18 +61848,42 @@ Section: Type Definition Parsing
      state = st
     }
 
+  ctor-return-end : List Token, Integer between 0 and 4294967295, Integer, Integer -> Integer between 0 and 4294967295
+  ctor-return-end (tokens) (pos) (line) (column) =
+    if pos >= list-length tokens - 1 then pos
+    else let tok = list-at tokens pos
+    in when tok.kind
+      is Pipe -> pos
+      is Newline | Indent | Dedent -> ctor-return-end tokens (pos + 1) line column
+      is otherwise ->
+        if tok.line > line & tok.column <= column then pos
+        else ctor-return-end tokens (pos + 1) line column
+
   parse-ctor-fields : Token, LinkedList TypeExpr, ParseState, Token, List Token, LinkedList VariantCtorDef -> ParseTypeDefResult
   parse-ctor-fields (ctor-name) (fields) (st) (name-tok) (tparams) (acc) =
     if is-left-paren (current-kind st) then let st-in = advance st
     in let st-checked = if classify-paren-type st-in 0 False False == 2 then
-      __record-set st-in "bag" (bag-add (st-in.bag) (make-error cdx-ctor-field-comma "A constructor field written (A, B) has no arrow: write two fields as (A) (B), or one tuple field as ((A, B))" (token-to-span (current st))))
+      let msg = "A constructor field written (A, B) has no arrow: write two fields as (A) (B), or one tuple field as ((A, B))"
+      in let diag = make-error cdx-ctor-field-comma msg (token-to-span (current st))
+      in __record-set st-in "bag" (bag-add (st-in.bag) diag)
     else st-in
     in let field-result = parse-type st-checked
     in unwrap-ctor-field field-result ctor-name fields name-tok tparams acc
     else let st2 = skip-newlines st
     in if is-colon (current-kind st2) then
-      let ret-result = parse-type (advance st2) in unwrap-ctor-return ret-result ctor-name fields name-tok tparams acc
-    else let ctor = deck-record (VariantCtorDef { name = ctor-name, fields = deck-record (__linked-list-to-list fields), return-type = [] }) in parse-variant-ctors name-tok tparams (__linked-list-push acc ctor) st2
+      let colon = current st2
+      in let msg = "Constructor return annotations are not supported."
+      in let diag = make-error cdx-ctor-return-annotation-unsupported msg (token-to-span colon)
+      in let rejected = __record-set st2 "bag" (bag-add (st2.bag) diag)
+      in let next = advance rejected
+      in let stop = ctor-return-end (next.tokens) (next.pos) (colon.line) (name-tok.column)
+      in parse-ctor-fields ctor-name fields (__record-set next "pos" stop) name-tok tparams acc
+    else let ctor = deck-record (VariantCtorDef {
+      name = ctor-name,
+      fields = deck-record (__linked-list-to-list fields),
+      return-type = []
+    })
+    in parse-variant-ctors name-tok tparams (__linked-list-push acc ctor) st2
 
   unwrap-ctor-field : ParseTypeResult, Token, LinkedList TypeExpr, Token, List Token, LinkedList VariantCtorDef -> ParseTypeDefResult
   unwrap-ctor-field (r) (ctor-name) (fields) (name-tok) (tparams) (acc) =
@@ -61685,7 +61895,13 @@ Section: Type Definition Parsing
   unwrap-ctor-return : ParseTypeResult, Token, LinkedList TypeExpr, Token, List Token, LinkedList VariantCtorDef -> ParseTypeDefResult
   unwrap-ctor-return (r) (ctor-name) (fields) (name-tok) (tparams) (acc) =
     when r
-      is TypeOk (ty) (st) -> let ctor = deck-record (VariantCtorDef { name = ctor-name, fields = deck-record (__linked-list-to-list fields), return-type = [ty] }) in parse-variant-ctors name-tok tparams (__linked-list-push acc ctor) (skip-newlines st)
+      is TypeOk (ty) (st) ->
+        let ctor = deck-record (VariantCtorDef {
+          name = ctor-name,
+          fields = deck-record (__linked-list-to-list fields),
+          return-type = []
+        })
+        in parse-variant-ctors name-tok tparams (__linked-list-push acc ctor) (skip-newlines st)
 
 Section: Document Parsing
 
@@ -62058,9 +62274,11 @@ Section: Chapter Pagination
         make-error cdx-chapter-pagination ("Chapter '" & (o.po-chapter) & "' spans " & show k & " files, but this page carries no 'Page N of M' marker. Number the pages, or an accidental duplicate chapter name is indistinguishable from a deliberate page and the two merge silently.") (o.po-span)
       ])
     else if o.po-m /= k then
-      check-pagination-loop occs (i + 1) len (errs & [
-        make-error cdx-chapter-pagination ("Chapter '" & (o.po-chapter) & "' spans " & show k & " files but this page declares 'of " & show (o.po-m) & "'. The declared page count must equal the number of files the chapter spans.") (o.po-span)
-      ])
+      let prefix = "Chapter '" & (o.po-chapter) & "' spans " & show k
+      in let declared = prefix & " files but this page declares 'of " & show (o.po-m)
+      in let msg = declared & "'. The declared page count must equal the number of files the chapter spans."
+      in let diag = make-error cdx-chapter-pagination msg (o.po-span)
+      in check-pagination-loop occs (i + 1) len (errs & [diag])
     else if count-chapter-page-n occs (o.po-chapter) (o.po-n) 0 len 0 > 1 then
       check-pagination-loop occs (i + 1) len (errs & [
         make-error cdx-chapter-pagination ("Chapter '" & (o.po-chapter) & "' has two pages numbered " & show (o.po-n) & ". Each page of a chapter needs a distinct number.") (o.po-span)
@@ -62573,7 +62791,10 @@ Section: Chapter Pagination
 
   refuse-dropped-token : ParseState, Token -> ParseState
   refuse-dropped-token (st) (tok) =
-    __record-set st "bag" (bag-add (st.bag) (make-error cdx-top-level-token-dropped ("`" & token-text tok & "` at column " & integer-to-text (tok.column) & " begins no definition, so it would be dropped; indent a continuation past column 3") (token-to-span tok)))
+    let prefix = "`" & token-text tok & "` at column " & integer-to-text (tok.column)
+    in let msg = prefix & " begins no definition, so it would be dropped; indent a continuation past column 3"
+    in let diag = make-error cdx-top-level-token-dropped msg (token-to-span tok)
+    in __record-set st "bag" (bag-add (st.bag) diag)
 
  A type definition is tried first and the definition parse re-reads from
  the SAME state when it is not one -- st, not the type parser's returned
@@ -62791,7 +63012,11 @@ Section: Prose-Notation Consistency
     in if prose-name == def-name then
       check-prose-param-names prose-params def-params (i + 1) len acc
     else
-      list-push (check-prose-param-names prose-params def-params (i + 1) len acc) (make-warning cdx-prose-parameter-mismatch ("Prose parameter " & show (i + 1) & " is '" & prose-name & "' but notation has '" & def-name & "'") synthetic-span)
+      let rest = check-prose-param-names prose-params def-params (i + 1) len acc
+      in let prefix = "Prose parameter " & show (i + 1) & " is '" & prose-name
+      in let msg = prefix & "' but notation has '" & def-name & "'"
+      in let diag = make-warning cdx-prose-parameter-mismatch msg synthetic-span
+      in list-push rest diag
 
   check-prose-block-against-defs : ProseBlock, List Def, List TypeDef, List EffectDef, List Diagnostic -> List Diagnostic
   check-prose-block-against-defs (block) (defs) (type-defs) (effect-defs) (acc) =
@@ -63187,7 +63412,10 @@ Section: Parser State
       in let st2 = __record-set (__record-set st1 "stall" 0) "stall-pos" (0 - 1)
       in advance st2
     else
-      __record-set st "bag" (bag-add (st.bag) (make-error cdx-resource-exhausted ("compiler resource exhausted in parser." & op & " (budget " & integer-to-text max-parse-fuel & ")") (token-to-span (current st))))
+      let prefix = "compiler resource exhausted in parser." & op & " (budget "
+      in let msg = prefix & integer-to-text max-parse-fuel & ")"
+      in let diag = make-error cdx-resource-exhausted msg (token-to-span (current st))
+      in __record-set st "bag" (bag-add (st.bag) diag)
 
   token-to-span : Token -> SourceSpan
   token-to-span (tok) =
@@ -63237,7 +63465,12 @@ Section: TokenKind Predicates
   is-keyword : TokenKind -> Boolean
   is-keyword (k) =
     when k
-      is LetKeyword | InKeyword | BetweenKeyword | IfKeyword | IsKeyword | OtherwiseKeyword | ThenKeyword | ElseKeyword | WhenKeyword | WhereKeyword | SuchThatKeyword | ActKeyword | EndKeyword | RecordKeyword | CitesKeyword | GroundsKeyword | ClaimKeyword | ProofKeyword | QedKeyword | InductionKeyword | ForAllKeyword | ThereExistsKeyword | LinearKeyword | MutableKeyword | PunctualKeyword | UnitKeyword | EffectKeyword | ClassKeyword | InstanceKeyword | WithKeyword | WithTimeoutKeyword | TryingKeyword | LazyKeyword | ForKeyword | RevisedKeyword | TrueKeyword | FalseKeyword -> True
+      is LetKeyword | InKeyword | BetweenKeyword | IfKeyword | IsKeyword | OtherwiseKeyword | ThenKeyword |
+         ElseKeyword | WhenKeyword | WhereKeyword | SuchThatKeyword | ActKeyword | EndKeyword | RecordKeyword |
+         CitesKeyword | GroundsKeyword | ClaimKeyword | ProofKeyword | QedKeyword | InductionKeyword |
+         ForAllKeyword | ThereExistsKeyword | LinearKeyword | MutableKeyword | PunctualKeyword | UnitKeyword |
+         EffectKeyword | ClassKeyword | InstanceKeyword | WithKeyword | WithTimeoutKeyword | TryingKeyword |
+         LazyKeyword | ForKeyword | RevisedKeyword | TrueKeyword | FalseKeyword -> True
       is otherwise -> False
 
   is-revised-keyword : TokenKind -> Boolean
@@ -63261,7 +63494,8 @@ Section: TokenKind Predicates
   is-field-name-token : TokenKind -> Boolean
   is-field-name-token (k) =
     when k
-      is Identifier | ActKeyword | EndKeyword | QedKeyword | EffectKeyword | WhereKeyword | WithKeyword | LinearKeyword | ClaimKeyword | ProofKeyword | RecordKeyword | ClassKeyword | InstanceKeyword -> True
+      is Identifier | ActKeyword | EndKeyword | QedKeyword | EffectKeyword | WhereKeyword | WithKeyword |
+         LinearKeyword | ClaimKeyword | ProofKeyword | RecordKeyword | ClassKeyword | InstanceKeyword -> True
       is otherwise -> False
 
   is-type-ident : TokenKind -> Boolean
@@ -63527,7 +63761,12 @@ Section: TokenKind Predicates
   is-reserved-keyword : TokenKind -> Boolean
   is-reserved-keyword (k) =
     when k
-      is LetKeyword | InKeyword | BetweenKeyword | IfKeyword | IsKeyword | OtherwiseKeyword | ThenKeyword | ElseKeyword | WhenKeyword | WhereKeyword | SuchThatKeyword | ActKeyword | EndKeyword | RecordKeyword | CitesKeyword | GroundsKeyword | ClaimKeyword | ProofKeyword | QedKeyword | InductionKeyword | ForAllKeyword | ThereExistsKeyword | LinearKeyword | MutableKeyword | PunctualKeyword | UnitKeyword | LazyKeyword | EffectKeyword | WithKeyword | RevisedKeyword | TrueKeyword | FalseKeyword | ClassKeyword | InstanceKeyword -> True
+      is LetKeyword | InKeyword | BetweenKeyword | IfKeyword | IsKeyword | OtherwiseKeyword | ThenKeyword |
+         ElseKeyword | WhenKeyword | WhereKeyword | SuchThatKeyword | ActKeyword | EndKeyword | RecordKeyword |
+         CitesKeyword | GroundsKeyword | ClaimKeyword | ProofKeyword | QedKeyword | InductionKeyword |
+         ForAllKeyword | ThereExistsKeyword | LinearKeyword | MutableKeyword | PunctualKeyword | UnitKeyword |
+         LazyKeyword | EffectKeyword | WithKeyword | RevisedKeyword | TrueKeyword | FalseKeyword |
+         ClassKeyword | InstanceKeyword -> True
       is otherwise -> False
 
   is-minus : TokenKind -> Boolean
@@ -63605,7 +63844,8 @@ Section: TokenKind Predicates
   is-app-start : TokenKind -> Boolean
   is-app-start (k) =
     when k
-      is Identifier | TypeIdentifier | IntegerLiteral | NumberLiteral | TextLiteral | CharLiteral | TrueKeyword | FalseKeyword | LeftParen | LeftBracket | ActKeyword | WithKeyword | LazyKeyword -> True
+      is Identifier | TypeIdentifier | IntegerLiteral | NumberLiteral | TextLiteral | CharLiteral |
+         TrueKeyword | FalseKeyword | LeftParen | LeftBracket | ActKeyword | WithKeyword | LazyKeyword -> True
       is otherwise -> False
 
  A minus that touches the token after it is a negation and begins an
@@ -63626,7 +63866,8 @@ Section: TokenKind Predicates
   is-compound : Expr -> Boolean
   is-compound (e) =
     when e
-      is MatchExpr (s) (arms) | IfExpr (c) (t) (el) | LetExpr (binds) (body) | ActExpr (stmts) | FieldAssignExpr (l) (f) (r) | SeqExpr (a) (b) | LambdaExpr (ltok) (ps) (bd) | ForExpr (v) (l) (b) -> True
+      is MatchExpr (s) (arms) | IfExpr (c) (t) (el) | LetExpr (binds) (body) | ActExpr (stmts) |
+         FieldAssignExpr (l) (f) (r) | SeqExpr (a) (b) | LambdaExpr (ltok) (ps) (bd) | ForExpr (v) (l) (b) -> True
       is otherwise -> False
 
   is-type-arg-start : TokenKind -> Boolean
@@ -63669,7 +63910,10 @@ Section: Token Helpers
   expect (kind) (st) =
     if current-kind st == kind then advance st
     else let tok = current st
-    in __record-set st "bag" (bag-add (st.bag) (make-error cdx-expected-token-kind ("Expected token kind mismatch, got " & got-text st tok) (span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id))))
+    in let msg = "Expected token kind mismatch, got " & got-text st tok
+    in let span = span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id)
+    in let diag = make-error cdx-expected-token-kind msg span
+    in __record-set st "bag" (bag-add (st.bag) diag)
 
   expect-coded : TokenKind, Integer between 0 and 65535, Text, ParseState -> ParseState
   expect-coded (kind) (code) (msg) (st) =
@@ -63684,7 +63928,11 @@ Section: Token Helpers
   report-reserved-keyword : Text, ParseState -> ParseState
   report-reserved-keyword (context) (st) =
     let tok = current st
-    in __record-set st "bag" (bag-add (st.bag) (make-error cdx-reserved-keyword-as-identifier ("'" & (token-text tok) & "' is a reserved keyword and cannot be used as " & context & "; rename it") (span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id))))
+    in let prefix = "'" & (token-text tok) & "' is a reserved keyword and cannot be used as "
+    in let msg = prefix & context & "; rename it"
+    in let span = span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id)
+    in let diag = make-error cdx-reserved-keyword-as-identifier msg span
+    in __record-set st "bag" (bag-add (st.bag) diag)
 
   skip-newlines-pos : List Token, Integer between 0 and 4294967295, Integer -> Integer between 0 and 4294967295
   skip-newlines-pos (tokens) (pos) (len) =
@@ -63898,7 +64146,12 @@ Section: Expression Parsing
     in if is-left-paren (next-tok.kind) | is-left-bracket (next-tok.kind) | is-literal (next-tok.kind) then
       if next-tok.line > last-tok.line & next-tok.column > line-start-column (st.tokens) (st.pos - 1) (last-tok.line) then
         let span = span-at (next-tok.line) (next-tok.column) (next-tok.offset) (next-tok.length) (next-tok.file-id)
-        in __record-set st "bag" (bag-add (st.bag) (make-error cdx-multiline-application ("Application ended at newline; '" & token-text next-tok & "' is not parsed as an argument (column " & integer-to-text (next-tok.column) & ", application started at column " & integer-to-text app-col & "): a newline ends an application. Place all arguments on one line, or bind the value with a let.") span))
+        in let prefix = "Application ended at newline; '" & token-text next-tok
+        in let column = prefix & "' is not parsed as an argument (column " & integer-to-text (next-tok.column)
+        in let origin = column & ", application started at column " & integer-to-text app-col
+        in let msg = origin & "): a newline ends an application. Place all arguments on one line, or bind the value with a let."
+        in let diag = make-error cdx-multiline-application msg span
+        in __record-set st "bag" (bag-add (st.bag) diag)
       else st
     else st
 
@@ -63975,7 +64228,10 @@ Section: Expression Parsing
       then let st3 = skip-newlines (advance st2)
       in parse-revised-fields base [] st3
     else
-      ExprOk base (__record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-expected-token-kind ("Expected '{' after 'revised' (got '" & token-text (current st2) & "')") (token-to-span (current st2)))))
+      let msg = "Expected '{' after 'revised' (got '" & token-text (current st2) & "')"
+      in let diag = make-error cdx-expected-token-kind msg (token-to-span (current st2))
+      in let next = __record-set st2 "bag" (bag-add (st2.bag) diag)
+      in ExprOk base next
 
   parse-revised-fields : Expr, LinkedList RecordFieldExpr, ParseState -> ParseExprResult
   parse-revised-fields (base) (acc) (st) =
@@ -63983,7 +64239,10 @@ Section: Expression Parsing
       ExprOk (deck-record (RevisedExpr base (deck-record (__linked-list-to-list acc)))) (advance st)
     else if is-field-name-token (current-kind st) then parse-revised-field base acc st
     else
-      ExprOk (deck-record (RevisedExpr base (deck-record (__linked-list-to-list acc)))) (__record-set st "bag" (bag-add (st.bag) (make-error cdx-bad-field-syntax "Expected field name in revised expression" (token-to-span (current st)))))
+      let expr = deck-record (RevisedExpr base (deck-record (__linked-list-to-list acc)))
+      in let diag = make-error cdx-bad-field-syntax "Expected field name in revised expression" (token-to-span (current st))
+      in let next = __record-set st "bag" (bag-add (st.bag) diag)
+      in ExprOk expr next
 
   parse-revised-field : Expr, LinkedList RecordFieldExpr, ParseState -> ParseExprResult
   parse-revised-field (base) (acc) (st) =
@@ -64077,7 +64336,10 @@ Section: Compound Expression Parsing
       ExprOk (deck-record (RecordExpr type-name (deck-record (__linked-list-to-list acc)))) (advance st)
     else if is-field-name-token kind then parse-record-field type-name acc st
     else
-      ExprOk (deck-record (RecordExpr type-name (deck-record (__linked-list-to-list acc)))) (__record-set st "bag" (bag-add (st.bag) (make-error cdx-bad-field-syntax "Expected field name in record literal" (token-to-span (current st)))))
+      let expr = deck-record (RecordExpr type-name (deck-record (__linked-list-to-list acc)))
+      in let diag = make-error cdx-bad-field-syntax "Expected field name in record literal" (token-to-span (current st))
+      in let next = __record-set st "bag" (bag-add (st.bag) diag)
+      in ExprOk expr next
 
   parse-record-field : Token, LinkedList RecordFieldExpr, ParseState -> ParseExprResult
   parse-record-field (type-name) (acc) (st) =
@@ -64110,7 +64372,11 @@ Section: Compound Expression Parsing
     if is-right-bracket (current-kind st) then
       ExprOk (deck-record (ListExpr (deck-record (__linked-list-to-list acc)) sp)) (advance st)
     else if is-done st then
-      ExprOk (deck-record (ListExpr (deck-record (__linked-list-to-list acc)) sp)) (__record-set st "bag" (bag-add (st.bag) (make-error cdx-list-no-close "Unclosed list literal: expected ']' before end of input" (token-to-span (current st)))))
+      let expr = deck-record (ListExpr (deck-record (__linked-list-to-list acc)) sp)
+      in let msg = "Unclosed list literal: expected ']' before end of input"
+      in let diag = make-error cdx-list-no-close msg (token-to-span (current st))
+      in let next = __record-set st "bag" (bag-add (st.bag) diag)
+      in ExprOk expr next
     else let elem = parse-expr st
     in unwrap-expr-ok elem (finish-list-element acc sp)
 
@@ -64122,7 +64388,11 @@ Section: Compound Expression Parsing
     else if is-right-bracket (current-kind st2) then
       parse-list-elements (__linked-list-push acc e) sp st2
     else
-      ExprOk (deck-record (ListExpr (deck-record (__linked-list-to-list (__linked-list-push acc e))) sp)) (__record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-list-no-close "Unclosed list literal: expected ',' or ']'" (token-to-span (current st2)))))
+      let expr = deck-record (ListExpr (deck-record (__linked-list-to-list (__linked-list-push acc e))) sp)
+      in let msg = "Unclosed list literal: expected ',' or ']'"
+      in let diag = make-error cdx-list-no-close msg (token-to-span (current st2))
+      in let next = __record-set st2 "bag" (bag-add (st2.bag) diag)
+      in ExprOk expr next
 
   parse-if-expr : ParseState -> ParseExprResult
   parse-if-expr (st) =
@@ -64205,9 +64475,15 @@ Section: Compound Expression Parsing
     in if tok.column <= min-col then ExprOk b st
     else ExprOk b (__record-set st "bag" (bag-add (st.bag) (body-tokens-left-error b tok)))
 
+  body-tokens-left-tail : Text
+  body-tokens-left-tail =
+    "' is left inside its body, so it is not part of the definition. A newline ends an application; prose belongs at column 2."
+
   body-tokens-left-error : Expr, Token -> Diagnostic
   body-tokens-left-error (b) (tok) =
-    let left = make-error cdx-body-tokens-left ("The definition's expression has ended, and '" & token-text tok & "' is left inside its body, so it is not part of the definition. A newline ends an application; prose belongs at column 2.") (token-to-span tok)
+    let prefix = "The definition's expression has ended, and '" & token-text tok
+    in let msg = prefix & body-tokens-left-tail
+    in let left = make-error cdx-body-tokens-left msg (token-to-span tok)
     in when b
       is NameExpr (n) -> if token-text n == "do" then
         make-error cdx-not-codex-operator "`do` is not Codex; use act ... end" (token-to-span n)
@@ -64367,7 +64643,10 @@ Section: Compound Expression Parsing
     let st2 = skip-newlines (advance st)
     in if is-arrow (current-kind st2)
        then let tok = current st2
-       in let st3 = __record-set st2 "bag" (bag-add (st2.bag) (make-error cdx-match-no-arrow ("Expected pattern after '|' in match arm (got '" & (token-text tok) & "')") (span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id))))
+       in let msg = "Expected pattern after '|' in match arm (got '" & (token-text tok) & "')"
+       in let span = span-at (tok.line) (tok.column) (tok.offset) (tok.length) (tok.file-id)
+       in let diag = make-error cdx-match-no-arrow msg span
+       in let st3 = __record-set st2 "bag" (bag-add (st2.bag) diag)
        in let st4 = skip-newlines (advance st3)
        in let body = parse-expr-col st4 col
        in unwrap-expr-ok body (finish-alt-match scrut acc col ln pats)
@@ -64476,7 +64755,11 @@ Section: Compound Expression Parsing
     else if is-end-keyword (current-kind st) then
       let acc-list = deck-record (__linked-list-to-list acc)
       in if list-length acc-list == 0 then
-        ExprOk (deck-record (ActExpr acc-list)) (advance (__record-set st "bag" (bag-add (st.bag) (make-error cdx-empty-act "Empty act block: 'act end' must contain at least one statement" (token-to-span (current st))))))
+        let expr = deck-record (ActExpr acc-list)
+        in let msg = "Empty act block: 'act end' must contain at least one statement"
+        in let diag = make-error cdx-empty-act msg (token-to-span (current st))
+        in let next = __record-set st "bag" (bag-add (st.bag) diag)
+        in ExprOk expr (advance next)
       else
         ExprOk (deck-record (ActExpr acc-list)) (advance (check-discarded-literals acc-list 0 (list-length acc-list - 1) st))
     else if is-act-bind st then parse-act-bind-stmt acc st
@@ -65249,7 +65532,12 @@ Section: Deck Copies
       is HandleExpr (tok) (body) (clauses) -> HandleExpr (copy-sx-token b tok) (copy-sx-expr b body) (for c in clauses -> copy-sx-handleclause b c)
       is WithTimeoutExpr (tok) (budget) (handler) (body) -> WithTimeoutExpr (copy-sx-token b tok) (copy-sx-tokens b budget) (copy-sx-tokens b handler) (copy-sx-expr b body)
       is LambdaExpr (tok) (params) (body) -> LambdaExpr (copy-sx-token b tok) (copy-sx-tokens b params) (copy-sx-expr b body)
-      is TryExpr (tok) (t-stmts) (c-stmts) (f-stmts) -> TryExpr (copy-sx-token b tok) (for ts in t-stmts -> copy-sx-actstmt b ts) (for cs in c-stmts -> copy-sx-actstmt b cs) (for fs in f-stmts -> copy-sx-actstmt b fs)
+      is TryExpr (tok) (t-stmts) (c-stmts) (f-stmts) ->
+        let copied-token = copy-sx-token b tok
+        in let copied-try = for ts in t-stmts -> copy-sx-actstmt b ts
+        in let copied-fallback = for cs in c-stmts -> copy-sx-actstmt b cs
+        in let copied-failure = for fs in f-stmts -> copy-sx-actstmt b fs
+        in TryExpr copied-token copied-try copied-fallback copied-failure
       is FieldAssignExpr (target) (field) (value) -> FieldAssignExpr (copy-sx-expr b target) (copy-sx-token b field) (copy-sx-expr b value)
       is SeqExpr (first) (second) -> SeqExpr (copy-sx-expr b first) (copy-sx-expr b second)
       is LazyExpr (inner) -> LazyExpr (copy-sx-expr b inner)
@@ -71102,44 +71390,50 @@ Section: Punctual Mutual Recursion
 Section: Proof Acyclicity
 
 
-  type-mentions-proof : CodexType, Integer -> Boolean
-  type-mentions-proof (ty) (fuel) =
-    if fuel <= 0 then True
+ Whether a type states a proof: 0 no, 1 yes, 2 undecided because the walk
+ ran out of fuel. A function's result is walked at the same fuel, so a long
+ curried arity costs none and only nesting does.
+
+  tp-or : Integer, Integer -> Integer
+  tp-or (a) (b) = if a == 1 | b == 1 then 1 else if a == 2 | b == 2 then 2 else 0
+
+  type-proof-class : CodexType, Integer -> Integer
+  type-proof-class (ty) (fuel) =
+    if fuel <= 0 then 2
     else when ty
-     is ProofTy | PropEqTy (a) (b) -> True
-     is FunTy (p) (row) (r) -> type-mentions-proof p (fuel - 1) | type-mentions-proof r (fuel - 1)
-     is ListTy (e) -> type-mentions-proof e (fuel - 1)
-     is LinkedListTy (e) -> type-mentions-proof e (fuel - 1)
-     is ForAllTy (id) (b) -> type-mentions-proof b (fuel - 1)
-     is ForAllEff (id) (b) -> type-mentions-proof b (fuel - 1)
-     is EffectfulTy (effs) (sc) (r) -> type-mentions-proof r (fuel - 1)
-     is UnitTy (n) (inner) -> type-mentions-proof inner (fuel - 1)
-     is LinearTy (inner) -> type-mentions-proof inner (fuel - 1)
-     is VectorTy (n) (e) -> type-mentions-proof e (fuel - 1)
-     is TypeApply (f) (a) -> type-mentions-proof f (fuel - 1) | type-mentions-proof a (fuel - 1)
-     is ConstructedTy (n) (args) -> types-mention-proof args (fuel - 1) 0 (list-length args)
-     is SumTy (n) (args) (ctors) -> types-mention-proof args (fuel - 1) 0 (list-length args) | ctors-mention-proof ctors (fuel - 1) 0 (list-length ctors)
-     is RecordTy (n) (args) (fields) -> types-mention-proof args (fuel - 1) 0 (list-length args) | fields-mention-proof fields (fuel - 1) 0 (list-length fields)
-     is otherwise -> False
+     is ProofTy | PropEqTy (a) (b) -> 1
+     is FunTy (p) (row) (r) -> tp-or (type-proof-class p (fuel - 1)) (type-proof-class r fuel)
+     is ListTy (e) -> type-proof-class e (fuel - 1)
+     is LinkedListTy (e) -> type-proof-class e (fuel - 1)
+     is ForAllTy (id) (b) -> type-proof-class b (fuel - 1)
+     is ForAllEff (id) (b) -> type-proof-class b (fuel - 1)
+     is EffectfulTy (effs) (sc) (r) -> type-proof-class r (fuel - 1)
+     is UnitTy (n) (inner) -> type-proof-class inner (fuel - 1)
+     is LinearTy (inner) -> type-proof-class inner (fuel - 1)
+     is VectorTy (n) (e) -> type-proof-class e (fuel - 1)
+     is TypeApply (f) (a) -> tp-or (type-proof-class f (fuel - 1)) (type-proof-class a (fuel - 1))
+     is ConstructedTy (n) (args) -> types-proof-class args (fuel - 1) 0 (list-length args) 0
+     is SumTy (n) (args) (ctors) -> tp-or (types-proof-class args (fuel - 1) 0 (list-length args) 0) (ctors-proof-class ctors (fuel - 1) 0 (list-length ctors) 0)
+     is RecordTy (n) (args) (fields) -> tp-or (types-proof-class args (fuel - 1) 0 (list-length args) 0) (fields-proof-class fields (fuel - 1) 0 (list-length fields) 0)
+     is otherwise -> 0
 
-  types-mention-proof : List CodexType, Integer, Integer, Integer -> Boolean
-  types-mention-proof (ts) (fuel) (i) (len) =
-    if i >= len then False
-    else if type-mentions-proof (list-at ts i) fuel then True
-    else types-mention-proof ts fuel (i + 1) len
+  types-proof-class : List CodexType, Integer, Integer, Integer, Integer -> Integer
+  types-proof-class (ts) (fuel) (i) (len) (acc) =
+    if i >= len | acc == 1 then acc
+    else types-proof-class ts fuel (i + 1) len (tp-or acc (type-proof-class (list-at ts i) fuel))
 
-  ctors-mention-proof : List SumCtor, Integer, Integer, Integer -> Boolean
-  ctors-mention-proof (ctors) (fuel) (i) (len) =
-    if i >= len then False
-    else if types-mention-proof ((list-at ctors i).fields) fuel 0 (list-length ((list-at ctors i).fields)) then
-      True
-    else ctors-mention-proof ctors fuel (i + 1) len
+  ctors-proof-class : List SumCtor, Integer, Integer, Integer, Integer -> Integer
+  ctors-proof-class (ctors) (fuel) (i) (len) (acc) =
+    if i >= len | acc == 1 then acc
+    else ctors-proof-class ctors fuel (i + 1) len (tp-or acc (types-proof-class ((list-at ctors i).fields) fuel 0 (list-length ((list-at ctors i).fields)) 0))
 
-  fields-mention-proof : List RecordField, Integer, Integer, Integer -> Boolean
-  fields-mention-proof (fields) (fuel) (i) (len) =
-    if i >= len then False
-    else if type-mentions-proof ((list-at fields i).type-val) fuel then True
-    else fields-mention-proof fields fuel (i + 1) len
+  fields-proof-class : List RecordField, Integer, Integer, Integer, Integer -> Integer
+  fields-proof-class (fields) (fuel) (i) (len) (acc) =
+    if i >= len | acc == 1 then acc
+    else fields-proof-class fields fuel (i + 1) len (tp-or acc (type-proof-class ((list-at fields i).type-val) fuel))
+
+  type-mentions-proof : CodexType, Integer -> Boolean
+  type-mentions-proof (ty) (fuel) = type-proof-class ty fuel == 1
 
   build-proof-names : List ADef, List TypeBinding, Integer, Integer, List Text -> List Text
   build-proof-names (defs) (types) (i) (len) (acc) =
@@ -71148,6 +71442,14 @@ Section: Proof Acyclicity
     else if type-mentions-proof ((list-at types i).bound-type) 64
      then build-proof-names defs types (i + 1) len (list-push acc ((list-at defs i).name.value))
     else build-proof-names defs types (i + 1) len acc
+
+  proof-undecided : List ADef, List TypeBinding, Integer, Integer, UnificationState -> UnificationState
+  proof-undecided (defs) (types) (i) (len) (st) =
+    if i >= len then st
+    else if i >= list-length types then st
+    else if type-proof-class ((list-at types i).bound-type) 64 == 2 then
+      proof-undecided defs types (i + 1) len (__record-set st "bag" (bag-add (st.bag) (make-error cdx-proof-undecided ("'" & ((list-at defs i).name.value) & "' has a type nested more than 64 levels deep, so whether it states a proof cannot be decided; the definition is refused rather than guessed. Name an inner type (a record or a sum) to shorten the nesting.") ((list-at defs i).span))))
+    else proof-undecided defs types (i + 1) len st
 
   build-proof-edges : List ADef, List Text, Integer, Integer, List RtEdges -> List RtEdges
   build-proof-edges (defs) (names) (i) (len) (acc) =
@@ -71161,8 +71463,9 @@ Section: Proof Acyclicity
     else build-proof-edges defs names (i + 1) len acc
 
   check-proof-cycles : List ADef, List TypeBinding, UnificationState -> UnificationState
-  check-proof-cycles (defs) (types) (st) =
-    let names = build-proof-names defs types 0 (list-length defs) []
+  check-proof-cycles (defs) (types) (st0) =
+    let st = proof-undecided defs types 0 (list-length defs) st0
+    in let names = build-proof-names defs types 0 (list-length defs) []
     in if list-length names == 0 then st
     else let g = build-proof-edges defs names 0 (list-length defs) []
     in check-proof-cycles-loop g defs names 0 (list-length defs) st
