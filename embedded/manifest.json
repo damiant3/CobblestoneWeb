@@ -1374,8 +1374,12 @@
       "sha256": "88079a93051733adaa993adc56cc39185f81b47c73d2fee30e68f9305b6fb81d"
     },
     {
+      "path": "compile/mods.html",
+      "sha256": "5091df270f6c1db6229928f7beed5696afbe6500b2f264d64c0561ed50263834"
+    },
+    {
       "path": "compile/prism.html",
-      "sha256": "a9d1d9d9b8d563d6bf33b484c505d293742b5341c4d584d5bb29cabac4aa23d0"
+      "sha256": "74db0291e2940a674f35b2039f8dbdf9fd46cb74e088b5c686939c1d4370bfdf"
     },
     {
       "path": "data/index.html",
@@ -1391,7 +1395,7 @@
     },
     {
       "path": "fishtank/index.html",
-      "sha256": "2ebbe36950cb8d4f162a00526fe516fcf80b9834777ba07ffcbff1d5a4d277f0"
+      "sha256": "6a960ca16f4d52e22544de362e5ba8d484c298684748a164ebb877ba7bcff694"
     },
     {
       "path": "games/index.html",
@@ -1595,7 +1599,7 @@
     },
     {
       "path": "sparkstudio.html",
-      "sha256": "6467dc0cfbafc24b4a22b981bb75d433bdaaa1f4ca6d054af4b5f11cf886be00"
+      "sha256": "97647220240248baecbc2752aa5a296848e3940cb9d41666bca2825d43cb9033"
     },
     {
       "path": "starmap/index.html",
