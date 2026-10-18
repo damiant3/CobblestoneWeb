@@ -2950,7 +2950,6 @@ Chapter: Foreword--Sha256
   cites Foreword chapter Maybe
 
  SHA-256 cryptographic hash producing a 256-bit digest from a byte list.
- A Sha256State is a record containing eight 32-bit working variables a through h.
  To sha256 gives a List Integer digest from a byte list.
  To sha256-buf gives the same digest from len bytes at a raw buffer
  address, threading the hash as scalars and reclaiming per-block
@@ -2991,30 +2990,6 @@ Section: Constants
     1359893119, 2600822924, 528734635, 1541459225
   ]
 
-Section: Bitwise Helpers
-
-  rotr32 : Integer, Integer -> Integer
-  rotr32 (x) (n) =
-    w32 (bit-or (bit-shru (bit-and x mask32) n) (bit-shl x (32 - n)))
-
-  sigma0 : Integer -> Integer
-  sigma0 (x) = bit-xor (rotr32 x 7) (bit-xor (rotr32 x 18) (bit-shru (bit-and x mask32) 3))
-
-  sigma1 : Integer -> Integer
-  sigma1 (x) = bit-xor (rotr32 x 17) (bit-xor (rotr32 x 19) (bit-shru (bit-and x mask32) 10))
-
-  big-sigma0 : Integer -> Integer
-  big-sigma0 (x) = bit-xor (rotr32 x 2) (bit-xor (rotr32 x 13) (rotr32 x 22))
-
-  big-sigma1 : Integer -> Integer
-  big-sigma1 (x) = bit-xor (rotr32 x 6) (bit-xor (rotr32 x 11) (rotr32 x 25))
-
-  ch : Integer, Integer, Integer -> Integer
-  ch (x) (y) (z) = bit-xor (bit-and x y) (bit-and (bit-xor x mask32) z)
-
-  maj : Integer, Integer, Integer -> Integer
-  maj (x) (y) (z) = bit-xor (bit-and x y) (bit-xor (bit-and x z) (bit-and y z))
-
 Section: Message Schedule
 
   sha256-schedule : List Integer -> List Integer
@@ -3023,51 +2998,59 @@ Section: Message Schedule
   sha256-schedule-loop : List Integer, Integer -> List Integer
   sha256-schedule-loop (w) (t) =
     if t == 64 then w
-    else let s0 = sigma0 (list-at w (t - 15))
-    in let s1 = sigma1 (list-at w (t - 2))
-    in let val = w32 (list-at w (t - 16) + s0 + list-at w (t - 7) + s1)
+    else let x = bit-and (list-at w (t - 15)) mask32
+    in let x7 = bit-or (bit-shru x 7) (bit-shl x 25)
+    in let s0 = bit-xor (bit-xor x7 (bit-or (bit-shru x 18) (bit-shl x 14))) (bit-shru x 3)
+    in let y = bit-and (list-at w (t - 2)) mask32
+    in let y17 = bit-or (bit-shru y 17) (bit-shl y 15)
+    in let s1 = bit-xor (bit-xor y17 (bit-or (bit-shru y 19) (bit-shl y 13))) (bit-shru y 10)
+    in let val = w32 (list-at w (t - 16) + w32 s0 + list-at w (t - 7) + w32 s1)
     in sha256-schedule-loop (list-push w val) (t + 1)
 
 Section: Compression
 
-  Sha256State = record {
-    a : Integer, b : Integer, c : Integer, d : Integer,
-    e : Integer, f : Integer, g : Integer, h : Integer
-  }
+ The round functions are written out rather than called: on x86-64 a
+ helper call per rotate and per mask made compression 3.9 times slower
+ (CORE-11, measured 2026-10-16). Each rotate keeps bits above 32 and the
+ sum masks once, which is exact because every input is already 32 bits.
 
-  state-from-hash : List Integer -> Sha256State
-  state-from-hash (hs) = Sha256State {
-    a = list-at hs 0, b = list-at hs 1, c = list-at hs 2, d = list-at hs 3,
-    e = list-at hs 4, f = list-at hs 5, g = list-at hs 6, h = list-at hs 7
-  }
+  sha256-rounds : Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer,
+    List Integer, List Integer, Integer -> List Integer
+  sha256-rounds (a) (b) (c) (d) (e) (f) (g) (h) (hash) (w) (t) =
+    if t == 64 then sha256-add-state hash a b c d e f g h
+    else let e25 = bit-or (bit-shru e 25) (bit-shl e 7)
+    in let s1 = bit-xor (bit-xor (bit-or (bit-shru e 6) (bit-shl e 26)) (bit-or (bit-shru e 11) (bit-shl e 21))) e25
+    in let chv = bit-xor (bit-and e f) (bit-and (bit-xor e mask32) g)
+    in let t1 = h + w32 s1 + chv + list-at sha256-k t + list-at w t
+    in let a22 = bit-or (bit-shru a 22) (bit-shl a 10)
+    in let s0 = bit-xor (bit-xor (bit-or (bit-shru a 2) (bit-shl a 30)) (bit-or (bit-shru a 13) (bit-shl a 19))) a22
+    in let mj = bit-xor (bit-and a b) (bit-xor (bit-and a c) (bit-and b c))
+    in sha256-rounds (w32 (t1 + w32 s0 + mj)) a b c (w32 (d + t1)) e f g hash w (t + 1)
 
-  sha256-round : Sha256State, Integer, Integer -> Sha256State
-  sha256-round (s) (ki) (wi) =
-    let t1 = w32 (s.h + big-sigma1 (s.e) + ch (s.e) (s.f) (s.g) + ki + wi)
-    in let t2 = w32 (big-sigma0 (s.a) + maj (s.a) (s.b) (s.c))
-    in Sha256State {
-      a = w32 (t1 + t2), b = s.a, c = s.b, d = s.c,
-      e = w32 (s.d + t1), f = s.e, g = s.f, h = s.g
-    }
-
-  sha256-rounds : Sha256State, List Integer, List Integer, Integer -> Sha256State
-  sha256-rounds (s) (k) (w) (t) =
-    if t == 64 then s
-    else sha256-rounds (sha256-round s (list-at k t) (list-at w t)) k w (t + 1)
+  sha256-add-state : List Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer,
+    Integer -> List Integer
+  sha256-add-state (hash) (a) (b) (c) (d) (e) (f) (g) (h) =
+    let h0 = list-set-at hash 0 (w32 (list-at hash 0 + a))
+    in let h1 = list-set-at h0 1 (w32 (list-at h0 1 + b))
+    in let h2 = list-set-at h1 2 (w32 (list-at h1 2 + c))
+    in let h3 = list-set-at h2 3 (w32 (list-at h2 3 + d))
+    in let h4 = list-set-at h3 4 (w32 (list-at h3 4 + e))
+    in let h5 = list-set-at h4 5 (w32 (list-at h4 5 + f))
+    in let h6 = list-set-at h5 6 (w32 (list-at h5 6 + g))
+    in list-set-at h6 7 (w32 (list-at h6 7 + h))
 
   sha256-compress : List Integer, List Integer -> List Integer
   sha256-compress (hash) (block-words) =
     let w = sha256-schedule block-words
-    in let s0 = state-from-hash hash
-    in let sf = sha256-rounds s0 sha256-k w 0
-    in let h0 = list-set-at hash 0 (w32 (list-at hash 0 + sf.a))
-    in let h1 = list-set-at h0 1 (w32 (list-at h0 1 + sf.b))
-    in let h2 = list-set-at h1 2 (w32 (list-at h1 2 + sf.c))
-    in let h3 = list-set-at h2 3 (w32 (list-at h2 3 + sf.d))
-    in let h4 = list-set-at h3 4 (w32 (list-at h3 4 + sf.e))
-    in let h5 = list-set-at h4 5 (w32 (list-at h4 5 + sf.f))
-    in let h6 = list-set-at h5 6 (w32 (list-at h5 6 + sf.g))
-    in list-set-at h6 7 (w32 (list-at h6 7 + sf.h))
+    in let a = w32 (list-at hash 0)
+    in let b = w32 (list-at hash 1)
+    in let c = w32 (list-at hash 2)
+    in let d = w32 (list-at hash 3)
+    in let e = w32 (list-at hash 4)
+    in let f = w32 (list-at hash 5)
+    in let g = w32 (list-at hash 6)
+    in let h = w32 (list-at hash 7)
+    in sha256-rounds a b c d e f g h hash w 0
 
 Section: Padding
 
@@ -4131,7 +4114,7 @@ Section: Tier 2 Block Tables
 
   cce-tier2-base : Integer = 2176
 
-  cce-tier2-block-count : Integer = 10
+  cce-tier2-block-count : Integer = 11
 
   cce-tier2-block-table : List Integer
   cce-tier2-block-table = [
@@ -4144,7 +4127,8 @@ Section: Tier 2 Block Tables
     3584,     256,
     8192,     512,
     127744,   1024,
-    9728,     256
+    9728,     256,
+    9984,     192
   ]
 
   cce-tier2-block-unicode-base : Integer -> Integer
@@ -7305,7 +7289,8 @@ Section: Compile Flags
    cost-report : Boolean,
    no-lift : Boolean,
    fidelity : Boolean,
-   pipeline : List Text
+   pipeline : List Text,
+   deck-grow : List Text
   }
 
   compile-flags-default : CompileFlags
@@ -7319,7 +7304,8 @@ Section: Compile Flags
     cost-report = False,
     no-lift = False,
     fidelity = False,
-    pipeline = default-ir-pipeline
+    pipeline = default-ir-pipeline,
+    deck-grow = []
   }
 
  A floor is a guard band plus a workspace, and only the workspace scales. The
@@ -7344,6 +7330,15 @@ Section: Compile Flags
     if pct == 100 then floor / 100 * pct
     else let ws = (floor - band) / 100 * pct
     in band + (if ws < deck-min-workspace then deck-min-workspace else ws)
+
+  grow-factor : List Text, Text, Integer, Integer, Integer -> Integer
+  grow-factor (grows) (label) (i) (n) (acc) =
+    if i >= n then acc
+    else grow-factor grows label (i + 1) n (if list-at grows i == label then acc * 2 else acc)
+
+  grown-floor : CompileFlags, Text, Integer, Integer -> Integer
+  grown-floor (flags) (label) (floor) (band) =
+    scaled-floor (flags.deck-scale) floor band * grow-factor (flags.deck-grow) label 0 (list-length (flags.deck-grow)) 1
 
   deck-scale-of : Text -> Integer
   deck-scale-of (mode) =
@@ -7742,7 +7737,7 @@ Section: Frontend
   compile-lex : Text, Integer, CompileFlags -> LexResult
   compile-lex (source) (h0) (flags) =
     let mountain-base = init-phase-allocator
-    in let lex-deck-height = scaled-floor (flags.deck-scale) demand-lex-floor demand-lex-guard-band
+    in let lex-deck-height = grown-floor flags "LEX" demand-lex-floor demand-lex-guard-band
     in let lex-base = build lex-deck-height
     in let lex-phase = phase-start
     in let tok-result = tokenize-into source 1 (flags.prose) (lex-base + lex-deck-height)
@@ -7768,10 +7763,10 @@ Section: Frontend
   compile-parse : List Token, Text, Integer, List PhaseMetrics, CompileFlags -> ParseResult
   compile-parse (tokens) (source) (h0) (prior-metrics) (flags) =
     let h1 = __heap-save
-    in let parse-keep-height = scaled-floor (flags.deck-scale) demand-parse-keep-floor demand-parse-guard-band
+    in let parse-keep-height = grown-floor flags "PARSE-KEEP" demand-parse-keep-floor demand-parse-guard-band
     in let parse-base = build parse-keep-height
     in let parse-guard = pitch demand-parse-guard-band
-    in let parse-scratch-height = scaled-floor (flags.deck-scale) demand-parse-scratch-floor demand-parse-scratch-guard-band
+    in let parse-scratch-height = grown-floor flags "PARSE" demand-parse-scratch-floor demand-parse-scratch-guard-band
     in let scratch-base = build (parse-scratch-height + (if parse-guard < 0 then 1 else 0))
     in let scratch-ceiling = scratch-base + parse-scratch-height
     in let parse-phase = phase-start
@@ -7965,7 +7960,7 @@ Section: Frontend
     in let desugar-esc-bag = deck-record (escape-check-bag (flags.escape-check) desugar-metrics "DESUGAR")
     in let desugar-sealed = compact-phase flags poison-desugar
     in let h5 = __heap-save
-    in let scope-deck-height = scaled-floor (flags.deck-scale) demand-scope-floor demand-scope-guard-band
+    in let scope-deck-height = grown-floor flags "SCOPE" demand-scope-floor demand-scope-guard-band
     in let scope-base = build scope-deck-height
     in let scope-ceiling = scope-base + scope-deck-height
     in let scope-origin = __deck-pos
@@ -8025,11 +8020,220 @@ Section: Frontend
  catch. Reading CHECK's requirement off the first number understates it by 7 to
  29 per cent, measured over four units 2026-08-09.
 
+ A hosted compiler does not grow the keep: the guard cell that bounds the
+ arena is a fixed physical address a hosted process does not map.
+
   compile-type-check : ScopeResult, Integer, CompileFlags -> CompileChecked
   compile-type-check (sr) (source-len) (flags) =
+    let keep0 = scaled-floor (flags.deck-scale) demand-check-keep-floor 0
+    in let mark = __heap-save
+    in let deck0 = __deck-pos
+    in let check0 = scaled-floor (flags.deck-scale) demand-check-floor demand-check-guard-band
+    in compile-type-check-keep sr source-len flags keep0 check0 mark deck0 0 0
+
+  check-keep-retry : ScopeResult, Integer, CompileFlags, Integer, Integer, Integer, Integer, Integer, Integer -> CompileChecked
+  check-keep-retry (sr) (source-len) (flags) (keep-height) (check-height) (mark) (deck0) (grown) (cgrown) =
+    let restored = __heap-restore mark
+    in let reset = __deck-set deck0
+    in compile-type-check-keep sr source-len flags (keep-height * 2) check-height mark deck0 (grown + 1) cgrown
+
+  check-deck-retry : ScopeResult, Integer, CompileFlags, Integer, Integer, Integer, Integer, Integer, Integer -> CompileChecked
+  check-deck-retry (sr) (source-len) (flags) (keep-height) (check-height) (mark) (deck0) (grown) (cgrown) =
+    let restored = __heap-restore mark
+    in let reset = __deck-set deck0
+    in compile-type-check-keep sr source-len flags keep-height (check-height * 2) mark deck0 grown (cgrown + 1)
+
+  lowering-floors : CompileFlags -> Integer
+  lowering-floors (flags) =
+    let lower-keep = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
+    in let lower = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
+    in let resolve = scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band
+    in lower-keep + lower + resolve + scaled-floor (flags.deck-scale) demand-lift-floor demand-lift-guard-band
+
+  keep-grow-fits : CompileFlags, Integer, Integer, Integer -> Boolean
+  keep-grow-fits (flags) (keep-base) (next) (check-height) =
+    if hosted-kind /= 0 then False
+    else let lowering = lowering-floors flags
+    in let headroom = if lowering > check-height then lowering else check-height
+    in deck-grow-fits keep-base next headroom
+
+  deck-grow-fits : Integer, Integer, Integer -> Boolean
+  deck-grow-fits (base) (next) (headroom) =
+    if hosted-kind /= 0 then False
+    else let guard-base = peek-qword guard-page-base-cell 0
+    in guard-base >= guard-page-plausible-floor & base + next + headroom < guard-base
+
+  deck-grown-notes : Text, Integer, Integer, List Diagnostic -> List Diagnostic
+  deck-grown-notes (label) (height) (n) (acc) =
+    if n <= 0 then acc
+    else let msg = label & " deck grown to " & show height & " bytes; phase repeated"
+    in let note = make-info cdx-deck-grown msg synthetic-span
+    in deck-grown-notes label (height / 2) (n - 1) ([note] & acc)
+
+ The emit deck's own sizing (`compile-cdx`), so a grown deck before emit
+ leaves emit the room it will ask for.
+
+  emit-deck-headroom : List IRDef -> Integer
+  emit-deck-headroom (defs) = list-length defs * 65536 + 29360128
+
+  ResolveRun = record {
+   defs : List IRDef,
+   stds : List TypeBinding,
+   metrics : PhaseMetrics,
+   short : Boolean,
+   height : Integer,
+   grown : Integer
+  }
+
+  resolve-run : CompileChecked, List IRDef, CompileFlags, Integer, Integer -> ResolveRun
+  resolve-run (checked) (defs) (flags) (height) (grown) =
+    let mark = __heap-save
+    in let deck0 = __deck-pos
+    in let resolve-base = build height
+    in let resolve-ceiling = resolve-base + height
+    in let resolve-phase = phase-start
+    in let type-map = deck-record (build-type-def-map (checked.scoped.type-defs) 0 (list-length (checked.scoped.type-defs)) [])
+    in let stds = deck-record (sort-bindings (type-map & checked.all-bindings))
+    in let resolved = deck-record (rewrite-ir-defs stds defs resolve-ceiling)
+    in let short = list-length resolved < list-length defs | deck-short-of resolve-ceiling demand-resolve-guard-band | __deck-pos - resolve-base > height
+    in let after = scaled-floor (flags.deck-scale) demand-lift-floor demand-lift-guard-band + emit-deck-headroom defs
+    in if short & deck-grow-fits resolve-base (height * 2) after then
+      let restored = __heap-restore mark
+      in let reset = __deck-set deck0
+      in resolve-run checked defs flags (height * 2) (grown + 1)
+    else ResolveRun {
+     defs = resolved,
+     stds = stds,
+     metrics = phase-measure resolve-phase "RESOLVE",
+     short = short,
+     height = height,
+     grown = grown
+    }
+
+  LowerRun = record {
+   ir-raw : IRChapter,
+   passed : IRPassResult,
+   keep-base : Integer,
+   keep-end : Integer,
+   keep-height : Integer,
+   lower-height : Integer,
+   keep-sat : Boolean,
+   lower-short : Boolean,
+   metrics : PhaseMetrics,
+   keep-grown : Integer,
+   lower-grown : Integer
+  }
+
+  lower-run : CompileChecked, CompileFlags, Boolean, Integer, Integer, Integer, Integer -> LowerRun
+  lower-run (checked) (flags) (run-passes) (keep-height) (lower-height) (keep-grown) (lower-grown) =
+    let mark = __heap-save
+    in let deck0 = __deck-pos
+    in let lower-keep-base = build keep-height
+    in let lower-base = build lower-height
+    in let lower-ceiling = lower-base + lower-height
+    in let set-lo = __deck-set lower-keep-base
+    in let lower-origin = __deck-pos
+    in let lower-phase = phase-start
+    in let set-ls = __deck-set lower-base
+    in let (ir-raw, lower-keep-end) = deck-record (lower-chapter
+      (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names)
+      (checked.renames) (checked.colliding) (checked.assignments)
+      lower-ceiling run-passes lower-keep-base (lower-keep-base + keep-height))
+    in let keep-sat = lower-keep-end + demand-lower-guard-band >= lower-keep-base + keep-height
+    in let passed = if run-passes then
+      deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
+    else IRPassResult { chapter = ir-raw, violations = [], infos = [] }
+    in let lower-end = __deck-pos
+    in let lower-short = list-length (ir-raw.defs) < list-length (checked.scoped.defs) | lower-end - lower-origin > lower-height
+    in let next-keep = if keep-sat then keep-height * 2 else keep-height
+    in let next-lower = if lower-short then lower-height * 2 else lower-height
+    in let resolve-h = scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band
+    in let after = resolve-h + scaled-floor (flags.deck-scale) demand-lift-floor demand-lift-guard-band + emit-deck-headroom (ir-raw.defs)
+    in if (keep-sat | lower-short) & deck-grow-fits lower-keep-base (next-keep + next-lower) after then
+      let restored = __heap-restore mark
+      in let reset = __deck-set deck0
+      in let kg = if keep-sat then keep-grown + 1 else keep-grown
+      in let lg = if lower-short then lower-grown + 1 else lower-grown
+      in lower-run checked flags run-passes next-keep next-lower kg lg
+    else LowerRun {
+     ir-raw = ir-raw,
+     passed = passed,
+     keep-base = lower-keep-base,
+     keep-end = lower-keep-end,
+     keep-height = keep-height,
+     lower-height = lower-height,
+     keep-sat = keep-sat,
+     lower-short = lower-short,
+     metrics = phase-measure lower-phase "LOWER",
+     keep-grown = keep-grown,
+     lower-grown = lower-grown
+    }
+
+  lower-run-bags : LowerRun, CompileFlags -> DiagnosticBag
+  lower-run-bags (lw) (flags) =
+    let ov = if lw.lower-short then deck-overflow-bag "LOWER"
+    else if lw.keep-sat then deck-overflow-bag "LOWER-KEEP" else no-overflow-bag
+    in let trace = if flags.phase-trace then
+      let lk-used = "LOWER-KEEP used=" & integer-to-text (lw.keep-end - lw.keep-base)
+      in let lk-msg = lk-used & " of " & integer-to-text (lw.keep-height)
+      in bag-from-list [make-warning cdx-escape-violation lk-msg synthetic-span]
+    else no-overflow-bag
+    in let keep-notes = deck-grown-notes "LOWER-KEEP" (lw.keep-height) (lw.keep-grown) []
+    in bag-merge-all [ov, trace, bag-from-list (keep-notes & deck-grown-notes "LOWER" (lw.lower-height) (lw.lower-grown) [])]
+
+  resolve-run-bag : ResolveRun -> DiagnosticBag
+  resolve-run-bag (rr) =
+    let ov = if rr.short then deck-overflow-bag "RESOLVE" else no-overflow-bag
+    in bag-merge-all [ov, bag-from-list (deck-grown-notes "RESOLVE" (rr.height) (rr.grown) [])]
+
+  LiftRun = record {
+   chapter : IRChapter,
+   metrics : PhaseMetrics,
+   short : Boolean,
+   height : Integer,
+   grown : Integer
+  }
+
+ `lift-lambdas` writes its answer into the chapter record it is handed, so
+ every attempt lifts a chapter record of its own.
+
+  lift-run : IRChapter, List IRDef, Integer, Integer -> LiftRun
+  lift-run (ir) (defs) (height) (grown) =
+    let mark = __heap-save
+    in let deck0 = __deck-pos
+    in let lift-base = build height
+    in let lift-ceiling = lift-base + height
+    in let lift-phase = phase-start
+    in let lifted = deck-record (lift-lambdas (IRChapter {
+     name = ir.name,
+     defs = defs,
+     effect-op-names = ir.effect-op-names,
+     span = ir.span
+    }) lift-ceiling)
+    in let short = deck-short-of lift-ceiling demand-lift-guard-band | __deck-pos - lift-base > height
+    in if short & deck-grow-fits lift-base (height * 2) (emit-deck-headroom defs) then
+      let restored = __heap-restore mark
+      in let reset = __deck-set deck0
+      in lift-run ir defs (height * 2) (grown + 1)
+    else LiftRun {
+     chapter = lifted,
+     metrics = phase-measure lift-phase "LIFT",
+     short = short,
+     height = height,
+     grown = grown
+    }
+
+  keep-grown-notes : Integer, Integer, List Diagnostic -> List Diagnostic
+  keep-grown-notes (height) (n) (acc) =
+    if n <= 0 then acc
+    else let msg = "CHECK-KEEP deck grown to " & show height & " bytes; type check repeated"
+    in let note = make-info cdx-deck-grown msg synthetic-span
+    in keep-grown-notes (height / 2) (n - 1) ([note] & acc)
+
+  compile-type-check-keep : ScopeResult, Integer, CompileFlags, Integer, Integer, Integer, Integer, Integer, Integer -> CompileChecked
+  compile-type-check-keep (sr) (source-len) (flags) (keep-height) (check-height) (mark) (deck0) (grown) (cgrown) =
     let check-units = count-typecheck-units (sr.scoped.type-defs) 0 (list-length (sr.scoped.type-defs)) 0
-    in let check-deck-height = scaled-floor (flags.deck-scale) demand-check-floor demand-check-guard-band
-    in let keep-height = scaled-floor (flags.deck-scale) demand-check-keep-floor 0
+    in let check-deck-height = check-height
     in let keep-base = build keep-height
     in let check-base = build check-deck-height
     in let check-ceiling = check-base + check-deck-height
@@ -8039,7 +8243,9 @@ Section: Frontend
       (sr.scoped) (sr.renames) (sr.colliding) (sr.assignments)
       check-ceiling check-base keep-base (keep-base + keep-height - 4194304)
       (if flags.poison-compact then poison-check else 0) (flags.fidelity))
-    in let batch-bag = if flags.phase-trace then
+    in if check-result.keep-overflow & keep-grow-fits flags keep-base (keep-height * 2) check-deck-height then
+      check-keep-retry sr source-len flags keep-height check-deck-height mark deck0 grown cgrown
+    else let batch-bag = if flags.phase-trace then
       deck-record (bag-from-list [
         make-warning cdx-escape-violation (check-result.batch-note) synthetic-span
       ])
@@ -8055,17 +8261,23 @@ Section: Frontend
     in let check-sat = if deck-short-of check-ceiling demand-check-guard-band then 1 else 0
     in let check-metrics = phase-measure check-phase "CHECK"
     in let check-ov = check-deck-overflow (check-end - check-origin) check-deck-height
-    in let check-ov-bag = if check-ov == 1 | check-sat == 1 then
+    in if (check-ov == 1 | check-sat == 1) & deck-grow-fits check-base (check-deck-height * 2) (lowering-floors flags) then
+      check-deck-retry sr source-len flags keep-height check-deck-height mark deck0 grown cgrown
+    else let check-ov-bag = if check-ov == 1 | check-sat == 1 then
       deck-overflow-bag "CHECK"
     else no-overflow-bag
     in let check-esc-bag = escape-check-bag (flags.escape-check) check-metrics "CHECK"
     in let cost-bag = deck-record (cost-growth-bag (flags.cost-report) (sr.scoped.defs) (check-result.state))
+    in let check-grown = deck-record (deck-grown-notes "CHECK" check-deck-height cgrown [])
+    in let early-grown = deck-record (early-grown-notes flags (flags.deck-grow) 0 (list-length (flags.deck-grow)) [])
+    in let grown-bag = deck-record (bag-from-list (early-grown & check-grown & keep-grown-notes keep-height grown []))
     in let check-bag = deck-record (bag-merge-all [
       check-bag0,
       check-ov-bag,
       check-esc-bag,
       cost-bag,
-      batch-bag
+      batch-bag,
+      grown-bag
     ])
     in let check-heap-marks = deck-record (list-push (sr.heap-marks) h8)
     in let check-phase-metrics = deck-record (list-push (sr.phase-metrics) check-metrics)
@@ -8161,7 +8373,10 @@ Section: Frontend
     }))
     in let keep-metrics = phase-measure keep-phase "CHECK-KEEP"
     in let keep-ov = check-deck-overflow (keep-metrics.deck-end - keep-metrics.deck-origin) keep-height
-    in let keep-ov-bag = if keep-ov == 1 | keep-metrics.deck-end >= mc.mc-ceiling | check-result.keep-overflow then
+    in let keep-short = keep-ov == 1 | keep-metrics.deck-end >= mc.mc-ceiling | check-result.keep-overflow
+    in if keep-short & keep-grow-fits flags keep-base (keep-height * 2) check-deck-height then
+      check-keep-retry sr source-len flags keep-height check-deck-height mark deck0 grown cgrown
+    else let keep-ov-bag = if keep-short then
       deck-overflow-bag "CHECK-KEEP"
     else no-overflow-bag
     in let keep-metrics-bag = if flags.phase-trace then
@@ -8247,9 +8462,88 @@ Section: Frontend
     in let sealed = compact-phase flags poison-check
     in result
 
+  early-floor : CompileFlags, Text -> Integer
+  early-floor (flags) (label) =
+    if label == "LEX" then grown-floor flags label demand-lex-floor demand-lex-guard-band
+    else if label == "PARSE-KEEP" then grown-floor flags label demand-parse-keep-floor demand-parse-guard-band
+    else if label == "PARSE" then grown-floor flags label demand-parse-scratch-floor demand-parse-scratch-guard-band
+    else if label == "SCOPE" then grown-floor flags label demand-scope-floor demand-scope-guard-band
+    else grown-floor flags label demand-frontend-keep-floor demand-frontend-keep-guard-band
+
+  early-grown-notes : CompileFlags, List Text, Integer, Integer, List Diagnostic -> List Diagnostic
+  early-grown-notes (flags) (grows) (i) (n) (acc) =
+    if i >= n then acc
+    else let label = list-at grows i
+    in let msg = label & " deck grown to " & show (early-floor flags label) & " bytes; front end repeated"
+    in early-grown-notes flags grows (i + 1) n (acc & [make-info cdx-deck-grown msg synthetic-span])
+
+ DESUGAR and DESUGAR-KEEP both write the frontend keep deck, so either one
+ grows that deck.
+
+  early-label-of : Text -> Text
+  early-label-of (m) =
+    if text-starts-with m "Deck overflow in LEX;" then "LEX"
+    else if text-starts-with m "Deck overflow in PARSE;" then "PARSE"
+    else if text-starts-with m "Deck overflow in PARSE-KEEP;" then "PARSE-KEEP"
+    else if text-starts-with m "Deck overflow in DESUGAR;" then "FRONTEND-KEEP"
+    else if text-starts-with m "Deck overflow in DESUGAR-KEEP;" then "FRONTEND-KEEP"
+    else if text-starts-with m "Deck overflow in SCOPE;" then "SCOPE"
+    else ""
+
+  early-overflow-label : List Diagnostic, Integer, Integer -> Text
+  early-overflow-label (ds) (i) (n) =
+    if i >= n then ""
+    else let d = list-at ds i
+    in let lbl = if d.code == cdx-deck-overflow then early-label-of (d.message) else ""
+    in if lbl /= "" then lbl else early-overflow-label ds (i + 1) n
+
+ The front end's peak is the frontend keep under either the PARSE pair (LEX's
+ tokens still live) or SCOPE with CHECK or the lowering decks above it; every
+ later deck starts at a compacted cursor no higher than these.
+
+  early-grow-fits : CompileFlags, Integer -> Boolean
+  early-grow-fits (flags) (mark) =
+    let fk = early-floor flags "FRONTEND-KEEP"
+    in let parse-pair = early-floor flags "PARSE-KEEP" + demand-parse-guard-band + early-floor flags "PARSE"
+    in let front = fk + early-floor flags "LEX" + parse-pair
+    in let ck = scaled-floor (flags.deck-scale) demand-check-keep-floor 0
+    in let check = scaled-floor (flags.deck-scale) demand-check-floor demand-check-guard-band
+    in let low = lowering-floors flags
+    in let back = fk + early-floor flags "SCOPE" + ck + (if low > check then low else check)
+    in deck-grow-fits mark (if front > back then front else back) 0
+
+  with-deck-grow : CompileFlags, Text -> CompileFlags
+  with-deck-grow (flags) (label) =
+    CompileFlags {
+      prose = flags.prose,
+      escape-check = flags.escape-check,
+      poison-compact = flags.poison-compact,
+      deck-scale = flags.deck-scale,
+      phase-trace = flags.phase-trace,
+      wire-trace = flags.wire-trace,
+      cost-report = flags.cost-report,
+      no-lift = flags.no-lift,
+      fidelity = flags.fidelity,
+      pipeline = flags.pipeline,
+      deck-grow = flags.deck-grow & [label]
+    }
+
   compile-checked : Text, Text, CompileFlags -> CompileChecked
   compile-checked (source) (chapter-name) (flags) =
-    let fk-height = scaled-floor (flags.deck-scale) demand-frontend-keep-floor demand-frontend-keep-guard-band
+    let mark = __heap-save
+    in let deck0 = __deck-pos
+    in let checked = compile-checked-once source chapter-name flags
+    in let ds = checked.bag.diagnostics
+    in let label = if bag-has-errors (checked.bag) then early-overflow-label ds 0 (list-length ds) else ""
+    in if label == "" then checked
+    else if early-grow-fits (with-deck-grow flags label) mark == False then checked
+    else let restored = __heap-restore mark
+    in let reset = __deck-set deck0
+    in compile-checked source chapter-name (with-deck-grow flags label)
+
+  compile-checked-once : Text, Text, CompileFlags -> CompileChecked
+  compile-checked-once (source) (chapter-name) (flags) =
+    let fk-height = grown-floor flags "FRONTEND-KEEP" demand-frontend-keep-floor demand-frontend-keep-guard-band
     in let fk-base = build fk-height
     in let h0 = __heap-save
     in let lr = compile-lex source h0 flags
@@ -8281,30 +8575,11 @@ Section: Frontend
   compile-frontend-passes (source) (chapter-name) (flags) (run-passes) =
     let checked = compile-checked source chapter-name flags
     in if bag-has-errors (checked.bag) then halted-frontend (checked.bag) (checked.heap-marks)
-    else let lower-keep-height = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
-    in let lower-keep-base = build lower-keep-height
-    in let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
-    in let lower-base = build lower-deck-height
-    in let lower-ceiling = lower-base + lower-deck-height
-    in let set-lo = __deck-set lower-keep-base
-    in let lower-origin = __deck-pos
-    in let lower-phase = phase-start
-    in let set-ls = __deck-set lower-base
-    in let (ir-raw, lower-keep-end) = deck-record (lower-chapter
-      (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names)
-      (checked.renames) (checked.colliding) (checked.assignments)
-      lower-ceiling run-passes lower-keep-base (lower-keep-base + lower-keep-height))
-    in let lower-keep-sat = lower-keep-end + demand-lower-guard-band >= lower-keep-base + lower-keep-height
-    in let lower-keep-bag = deck-record (
-      if flags.phase-trace then
-        let lk-used = "LOWER-KEEP used=" & integer-to-text (lower-keep-end - lower-keep-base)
-        in let lk-msg = lk-used & " of " & integer-to-text lower-keep-height
-        in bag-from-list [make-warning cdx-escape-violation lk-msg synthetic-span]
-      else no-overflow-bag
-    )
-    in let passed = if run-passes then
-      deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
-    else IRPassResult { chapter = ir-raw, violations = [], infos = [] }
+    else let keep-h0 = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
+    in let lower-h0 = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
+    in let lw = lower-run checked flags run-passes keep-h0 lower-h0 0 0
+    in let passed = lw.passed
+    in let lower-height = lw.lower-height
     in let ir-passed = passed.chapter
     in let ir = passed.chapter
     in let tm = deck-record (IRTextMeta {
@@ -8317,12 +8592,7 @@ Section: Frontend
      ground-effects = checked.scoped.ground-effects,
      method-templates = ""
     })
-    in let lower-end = __deck-pos
-    in let lower-sat = if list-length (ir-raw.defs) < list-length (checked.scoped.defs) then
-      1
-    else 0
-    in let lower-metrics = phase-measure lower-phase "LOWER"
-    in let lower-ov = check-deck-overflow (lower-end - lower-origin) lower-deck-height
+    in let lower-metrics = lw.metrics
     in let lp-root = address-of ir
     in let lower-precise-bag = deck-record (precise-escape-bag (flags.escape-check) lp-root "IRChapter" lower-metrics "LOWER")
     in let blank-ir = IRChapter {
@@ -8332,35 +8602,28 @@ Section: Frontend
       span = ir.span
     }
     in let pm1 = deck-record (list-push (checked.phase-metrics) lower-metrics)
-    in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then
-      deck-overflow-bag "LOWER"
-    else if lower-keep-sat then deck-overflow-bag "LOWER-KEEP" else no-overflow-bag
     in let lower-esc-bag = escape-check-bag (flags.escape-check) lower-metrics "LOWER"
     in let fe-bag = deck-record (
-      let lower-bags = bag-merge-all [lower-ov-bag, lower-keep-bag]
+      let lower-bags = deck-record (lower-run-bags lw flags)
       in frontend-bag-with-passes (checked.bag) lower-bags lower-esc-bag lower-precise-bag passed
     )
     in let lower-sealed = compact-phase flags poison-lower
-    in let resolved-defs = if run-passes then
-      let resolve-deck-height = scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band
-      in let resolve-base = build resolve-deck-height
-      in let resolve-ceiling = resolve-base + resolve-deck-height
-      in let scoped-tds = checked.scoped.type-defs
-      in let type-map = deck-record (build-type-def-map scoped-tds 0 (list-length scoped-tds) [])
-      in let stds = deck-record (sort-bindings (type-map & checked.all-bindings))
-      in deck-record (rewrite-ir-defs stds (ir.defs) resolve-ceiling)
-    else ir.defs
+    in let runs = if run-passes then
+      [resolve-run checked (ir.defs) flags (scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band) 0]
+    else []
+    in let resolved-defs = if run-passes then (list-at runs 0).defs else ir.defs
+    in let resolve-bag = if run-passes then deck-record (resolve-run-bag (list-at runs 0)) else no-overflow-bag
     in let ir-resolved = __record-set ir "defs" resolved-defs
     in let result = deck-record (CompileFrontend {
      type-defs = checked.scoped.type-defs,
      text-meta = tm,
      method-inputs = method-capture-inputs (checked.scoped) (checked.all-bindings) (checked.renames) (text-length source),
-     method-height = lower-deck-height,
+     method-height = lower-height,
       ir = ir-resolved,
      cdx-ir = blank-ir,
      sorted-type-defs = [],
      renames = checked.renames,
-     bag = fe-bag,
+     bag = bag-merge-all [fe-bag, resolve-bag],
      heap-marks = checked.heap-marks,
      phase-metrics = pm1,
      fid-types = checked.ust.fid-types
@@ -8372,63 +8635,26 @@ Section: Frontend
   compile-frontend-cdx (source) (chapter-name) (flags) =
     let checked = compile-checked source chapter-name flags
     in if bag-has-errors (checked.bag) then halted-frontend (checked.bag) (checked.heap-marks)
-    else let lower-keep-height = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
-    in let lower-keep-base = build lower-keep-height
-    in let lower-deck-height = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
-    in let lower-base = build lower-deck-height
-    in let lower-ceiling = lower-base + lower-deck-height
-    in let set-lo = __deck-set lower-keep-base
-    in let lower-origin = __deck-pos
-    in let lower-phase = phase-start
-    in let set-ls = __deck-set lower-base
-    in let (ir-raw, lower-keep-end) = deck-record (lower-chapter
-      (checked.scoped) (checked.all-bindings) (checked.ust) (checked.ctor-names)
-      (checked.renames) (checked.colliding) (checked.assignments)
-      lower-ceiling True lower-keep-base (lower-keep-base + lower-keep-height))
-    in let lower-keep-sat = lower-keep-end + demand-lower-guard-band >= lower-keep-base + lower-keep-height
-    in let lower-keep-bag = deck-record (
-      if flags.phase-trace then
-        let lk-used = "LOWER-KEEP used=" & integer-to-text (lower-keep-end - lower-keep-base)
-        in let lk-msg = lk-used & " of " & integer-to-text lower-keep-height
-        in bag-from-list [make-warning cdx-escape-violation lk-msg synthetic-span]
-      else no-overflow-bag
-    )
-    in let passed = deck-record (run-ir-pipeline (flags.pipeline) ir-raw (flags.phase-trace))
+    else let keep-h0 = scaled-floor (flags.deck-scale) demand-lower-keep-floor 0
+    in let lower-h0 = scaled-floor (flags.deck-scale) demand-lower-floor demand-lower-guard-band
+    in let lw = lower-run checked flags True keep-h0 lower-h0 0 0
+    in let lower-bags = deck-record (lower-run-bags lw flags)
+    in let passed = lw.passed
     in let ir = passed.chapter
     in let ir-check-bag = deck-record (ir-check-violation-bag (passed.violations))
     in let occ-report-bag = deck-record (occ-info-bag (passed.infos))
-    in let lower-end = __deck-pos
-    in let lower-sat = if list-length (ir-raw.defs) < list-length (checked.scoped.defs) then
-      1
-    else 0
-    in let lower-metrics = phase-measure lower-phase "LOWER"
-    in let lower-ov = check-deck-overflow (lower-end - lower-origin) lower-deck-height
+    in let lower-metrics = lw.metrics
     in let lp-root = address-of ir
     in let lower-precise-bag = deck-record (precise-escape-bag (flags.escape-check) lp-root "IRChapter" lower-metrics "LOWER")
     in let lower-sealed = compact-phase flags poison-lower
-    in let resolve-deck-height = scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band
-    in let resolve-base = build resolve-deck-height
-    in let resolve-ceiling = resolve-base + resolve-deck-height
-    in let resolve-phase = phase-start
-    in let type-map = deck-record (build-type-def-map (checked.scoped.type-defs) 0 (list-length (checked.scoped.type-defs)) [])
-    in let stds = deck-record (sort-bindings (type-map & checked.all-bindings))
-    in let resolved-defs = deck-record (rewrite-ir-defs stds (ir.defs) resolve-ceiling)
-    in let resolve-sat = if deck-short-of resolve-ceiling demand-resolve-guard-band then 1 else 0
-    in let resolve-metrics = phase-measure resolve-phase "RESOLVE"
-    in let resolve-ov = check-deck-overflow (resolve-metrics.deck-end - resolve-metrics.deck-origin) resolve-deck-height
-    in let lift-deck-height = scaled-floor (flags.deck-scale) demand-lift-floor demand-lift-guard-band
-    in let lift-base = build lift-deck-height
-    in let lift-ceiling = lift-base + lift-deck-height
-    in let lift-phase = phase-start
-    in let cdx-chapter = deck-record (lift-lambdas (IRChapter {
-     name = ir.name,
-     defs = resolved-defs,
-     effect-op-names = ir.effect-op-names,
-     span = ir.span
-    }) lift-ceiling)
-    in let lift-sat = if deck-short-of lift-ceiling demand-lift-guard-band then 1 else 0
-    in let lift-metrics = phase-measure lift-phase "LIFT"
-    in let lift-ov = check-deck-overflow (lift-metrics.deck-end - lift-metrics.deck-origin) lift-deck-height
+    in let rr = resolve-run checked (ir.defs) flags (scaled-floor (flags.deck-scale) demand-resolve-floor demand-resolve-guard-band) 0
+    in let resolved-defs = rr.defs
+    in let stds = rr.stds
+    in let resolve-metrics = rr.metrics
+    in let lr = lift-run ir resolved-defs (scaled-floor (flags.deck-scale) demand-lift-floor demand-lift-guard-band) 0
+    in let cdx-chapter = lr.chapter
+    in let lift-metrics = lr.metrics
+    in let lift-deck-height = lr.height
     in let tm = deck-record (IRTextMeta {
      chapter-title = checked.scoped.chapter-title,
      prose = checked.scoped.prose,
@@ -8448,15 +8674,10 @@ Section: Frontend
     in let pm1 = deck-record (list-push (checked.phase-metrics) lower-metrics)
     in let pm2 = deck-record (list-push pm1 resolve-metrics)
     in let pm3 = deck-record (list-push pm2 lift-metrics)
-    in let lower-ov-bag = if lower-ov == 1 | lower-sat == 1 then
-      deck-overflow-bag "LOWER"
-    else if lower-keep-sat then deck-overflow-bag "LOWER-KEEP" else no-overflow-bag
-    in let resolve-ov-bag = if resolve-ov == 1 | resolve-sat == 1 then
-      deck-overflow-bag "RESOLVE"
-    else no-overflow-bag
-    in let lift-ov-bag = if lift-ov == 1 | lift-sat == 1 then
-      deck-overflow-bag "LIFT"
-    else no-overflow-bag
+    in let resolve-ov-bag = if rr.short then deck-overflow-bag "RESOLVE" else no-overflow-bag
+    in let lift-ov-bag = if lr.short then deck-overflow-bag "LIFT" else no-overflow-bag
+    in let resolve-grown = deck-record (deck-grown-notes "RESOLVE" (rr.height) (rr.grown) [])
+    in let late-grown-bag = deck-record (bag-from-list (resolve-grown & deck-grown-notes "LIFT" (lr.height) (lr.grown) []))
     in let lower-esc-bag = escape-check-bag (flags.escape-check) lower-metrics "LOWER"
     in let resolve-esc-bag = escape-check-bag (flags.escape-check) resolve-metrics "RESOLVE"
     in let lift-esc-bag = escape-check-bag (flags.escape-check) lift-metrics "LIFT"
@@ -8510,10 +8731,10 @@ Section: Frontend
       lir-report-bag,
       lir-probe-bag,
       lir-narrow-bag,
-      lower-ov-bag,
-      lower-keep-bag,
+      lower-bags,
       resolve-ov-bag,
       lift-ov-bag,
+      late-grown-bag,
       lower-esc-bag,
       resolve-esc-bag,
       lift-esc-bag,
@@ -8953,7 +9174,7 @@ Section: Text Compilation
 Section: Binary Compilation
 
   compile-to-cdx : CompileFrontend -> EmitChapterResult
-  compile-to-cdx (fe) = compile-to-cdx-with-exit-mode fe Exit False False WatchdogProgress 0 False False False
+  compile-to-cdx (fe) = compile-to-cdx-with-exit-mode fe Exit False False WatchdogProgress 0 False False False False
 
   cdx-emit-roots : List Text
   cdx-emit-roots = ["opening", "fat16-servicer-read", "fat16-servicer-write"]
@@ -8982,8 +9203,8 @@ Section: Binary Compilation
   ]
 
   compile-to-cdx-with-exit-mode : CompileFrontend, X86_64ExitMode, Boolean, Boolean, X86_64WatchdogMode,
-    Integer between 0 and 2, Boolean, Boolean, Boolean -> EmitChapterResult
-  compile-to-cdx-with-exit-mode (fe) (exit-mode) (poison) (trace) (wd-mode) (hosted-target) (avx-local) (census) (cover) =
+    Integer between 0 and 2, Boolean, Boolean, Boolean, Boolean -> EmitChapterResult
+  compile-to-cdx-with-exit-mode (fe) (exit-mode) (poison) (trace) (wd-mode) (hosted-target) (avx-local) (census) (cover) (pe-link) =
     if bag-has-errors (fe.bag) then
       EmitChapterResult {
         header-bytes = [],
@@ -9001,7 +9222,7 @@ Section: Binary Compilation
     in let dropped = ir-dropped-budgeted-punctuals all-defs (pruned.defs)
     in let emit-input = ir-chapter-with-proofs pruned proofs
     in let emit-result = if list-length (fe.method-inputs.classes) == 0 then
-      x86-64-emit-cdx-with-exit-mode emit-input (fe.sorted-type-defs) exit-mode poison trace wd-mode dropped hosted-target avx-local census cover
+      x86-64-emit-cdx-with-exit-mode emit-input (fe.sorted-type-defs) exit-mode poison trace wd-mode dropped hosted-target avx-local census cover pe-link
     else let scan-copy = IRChapter {
       name = emit-input.name,
       defs = emit-input.defs,
@@ -9020,7 +9241,7 @@ Section: Binary Compilation
         symbol-map = []
       }
     else
-      x86-64-emit-cdx-with-exit-mode emit-input (method-runtime-bindings (fe.sorted-type-defs) materialized) exit-mode poison trace wd-mode dropped hosted-target avx-local census cover
+      x86-64-emit-cdx-with-exit-mode emit-input (method-runtime-bindings (fe.sorted-type-defs) materialized) exit-mode poison trace wd-mode dropped hosted-target avx-local census cover pe-link
     in EmitChapterResult {
      header-bytes = emit-result.header-bytes,
      content-buf = emit-result.content-buf,
@@ -9284,7 +9505,7 @@ Section: Entry Point
       let cm-avx = has-mode-flag mode "avx-local"
       in let cm-census = has-mode-flag mode "callcensus"
       in let cm-cover = has-mode-flag mode "cover"
-      in let result = compile-to-cdx-with-exit-mode fe exit-mode poison trace wd-mode hosted-target cm-avx cm-census cm-cover
+      in let result = compile-to-cdx-with-exit-mode fe exit-mode poison trace wd-mode hosted-target cm-avx cm-census cm-cover (has-mode-flag mode "pe-base")
       in act
        if prof then print-line-uni ("PROF-END: " & show (prof-dump 0))
        else print-line-uni ""
@@ -9669,7 +9890,8 @@ Section: Entry Point
       cost-report = has-mode-flag mode "cost-report",
       no-lift = has-mode-flag mode "no-lift",
       fidelity = has-mode-flag mode "fidelity",
-      pipeline = pipeline-of mode
+      pipeline = pipeline-of mode,
+      deck-grow = []
     }
 
  The volume is resolved from the disk's own GPT rather than assumed to
@@ -10079,9 +10301,14 @@ Section: Entry Point
 
   admit-quotations : SourceSplit, Text, Text, CompileFlags, Integer, Integer, Text -> [Console, FileSystem] Nothing
   admit-quotations (split) (cmd) (mode) (flags) (keep-base) (keep-height) (prefix) =
-    if check-deck-overflow (text-length prefix * 2 + 4096) keep-height == 1
-    then refuse-quotations (bag-errors (deck-overflow-bag "QUOTE-KEEP"))
-    else let dset = __deck-set keep-base
+    let need = text-length prefix * 2 + 4096
+    in if check-deck-overflow need keep-height == 0 then admit-quotations-at split cmd mode flags keep-base prefix
+    else if deck-grow-fits __heap-save need 0 then admit-quotations-at split cmd mode flags (build need) prefix
+    else refuse-quotations (bag-errors (deck-overflow-bag "QUOTE-KEEP"))
+
+  admit-quotations-at : SourceSplit, Text, Text, CompileFlags, Integer, Text -> [Console, FileSystem] Nothing
+  admit-quotations-at (split) (cmd) (mode) (flags) (keep-base) (prefix) =
+    let dset = __deck-set keep-base
     in let kept = deck-record (copy-sx-text keep-base prefix)
     in let sealed = compact-phase flags poison-parse
     in compile-plain (kept & split.sp-body) cmd mode flags
@@ -14064,6 +14291,8 @@ Section: Infrastructure
 
   cdx-image-overlaps-serial-ring : Integer = 9013
 
+  cdx-deck-grown : Integer = 9014
+
 Section: Lexer
   cdx-invalid-tab-escape : Integer = 5
 
@@ -14525,6 +14754,7 @@ Section: Registry
     mk-cdx cdx-text-ordering-banned "TextOrderingBanned" sev-error phase-type-checker "< > <= >= was applied to a Text or character operand. Encoding order is not collation and neither is a pointer: on Text these compared the operands by address. Use text-collate for alphabetical order, or text-compare for code-point order; for a character compare char-code c as an Integer.",
     mk-cdx cdx-order-compare-on-text "OrderCompareOnText" sev-error phase-codegen "The ordering comparator was handed a Text or character operand. On Text a machine cmp compares ADDRESSES, so the answer depends on allocation order and not on content; the build halts rather than emit it.",
     mk-cdx cdx-image-overlaps-serial-ring "ImageOverlapsSerialRing" sev-error phase-codegen "A bare-metal program's code and rodata, loaded at bare-metal-load-addr, reach serial-ring-buf-addr. The host preloads input there and the serial interrupt writes there, so code past that address is overwritten at the first input byte; the build halts rather than emit it.",
+    mk-cdx cdx-deck-grown "DeckGrown" sev-info phase-infrastructure "A phase ran again with a doubled deck after its deck overflowed.",
     mk-cdx cdx-vec-lane-out-of-range "VecLaneOutOfRange" sev-error phase-type-checker "A literal lane index is outside the vector. vec-extract takes a Vector 2 and vec4-extract a Vector 4, so the lane count is fixed by the builtin's own type and the index is decidable here rather than at runtime."
   ]
 
@@ -15627,11 +15857,11 @@ Section: Full CCE Conversion
   cce-tier1-usize (block) = list-at cce-tier1-blocks (block * 2 + 1)
 
   cce-tier2-ubase-c : Integer = 2176
-  cce-tier2-count : Integer = 10
+  cce-tier2-count : Integer = 11
 
   cce-tier2-blocks : List Integer
   cce-tier2-blocks = [12288, 64, 12352, 96, 12448, 96, 19968, 20992, 13312, 6592, 44032, 11172,
-    3584, 256, 8192, 512, 127744, 1024, 9728, 256]
+    3584, 256, 8192, 512, 127744, 1024, 9728, 256, 9984, 192]
 
   cce-tier2-ubase : Integer -> Integer
   cce-tier2-ubase (block) = list-at cce-tier2-blocks (block * 2)
@@ -16755,6 +16985,7 @@ Section: Record Types
    builtin-emitters : List BuiltinX86Emitter,
    emit-work : Integer between 0 and 4294967295,
    exit-mode : X86_64ExitMode,
+   pe-link : Boolean,
    watchdog-mode : X86_64WatchdogMode,
    opening-ret-type : CodexType,
    state-local : Integer,
@@ -16863,6 +17094,17 @@ Section: Constants
 
   bare-metal-load-addr : Integer = 1048576
 
+ A payload compiled with the `pe-base` mode flag, for the UEFI PE stub
+ (`build/cdx-to-pe.ps1`), links at 32 MiB because firmware owns the low band: under QEMU
+ OVMF the free range at 1 MiB ends at 0x7FFFFF, ACPI NVS holds 0x800000-0x8FFFFF
+ and boot-services data runs to 0x177FFFF (UEFI shell `memmap`, 2026-10-16), so
+ a payload past 7 MiB cannot load at 1 MiB. 32 MiB is the first 2 MiB-aligned
+ address above that band with room to spare, and it clears the serial ring at
+ 15 MiB and the bare-metal heap at 16 MiB. The stub refuses at boot when the
+ firmware's map does not show the range free (COMPILER-130).
+
+  uefi-load-addr : Integer = 33554432
+
   bare-metal-stack-top : Integer = bare-metal-ram-size
 
   bare-metal-page-count : Integer = (bare-metal-ram-size + 2097151) / 2097152
@@ -16943,7 +17185,8 @@ Section: Rodata Tables
     228, 161, 28, 109, 255, 255,
     228, 163, 28, 126, 255, 255,
     228, 167, 28, 79, 1, 0,
-    228, 168, 28, 126, 255, 255]
+    228, 168, 28, 126, 255, 255,
+    164, 169, 28, 126, 255, 255]
 
   tier2-rodata-offset : Integer = 288
 
@@ -16952,7 +17195,7 @@ Section: Rodata Tables
   cce-to-unicode-hi-table : List Integer
   cce-to-unicode-hi-table = for x in cce-to-unicode-table -> int-mod (x / 256) 256
 
-  cce-to-unicode-hi-rodata-offset : Integer = 348
+  cce-to-unicode-hi-rodata-offset : Integer = 354
 
   init-rodata : List Integer = cce-to-unicode-byte-table & unicode-to-cce-byte-table & tier1-block-rodata & tier2-rodata & cce-to-unicode-hi-table
 
@@ -16974,7 +17217,10 @@ Section: State Helpers
  patched for its own address rather than copied down to ours at startup.
 
   st-load-base : CodegenState -> Integer
-  st-load-base (st) = if st-windows st then hosted-win-load-addr else bare-metal-load-addr
+  st-load-base (st) = if st-windows st then hosted-win-load-addr else st-native-base st
+
+  st-native-base : CodegenState -> Integer
+  st-native-base (st) = if st.pe-link then uefi-load-addr else bare-metal-load-addr
 
  The arena moves for the same reason the cells did: a fixed request low down is
  refused from a freshly loaded image. Linux keeps the bare-metal base, which its
@@ -17033,6 +17279,7 @@ Section: State Helpers
     builtin-emitters = x86-builtin-emitters,
     emit-work = 0,
     exit-mode = ExitRepl,
+    pe-link = False,
     watchdog-mode = WatchdogProgress,
     opening-ret-type = NothingTy,
     state-local = 0 - 1,
@@ -17247,6 +17494,7 @@ Section: State Helpers
      builtin-emitters = st.builtin-emitters,
      emit-work = new-emit-work,
      exit-mode = st.exit-mode,
+     pe-link = st.pe-link,
      watchdog-mode = st.watchdog-mode,
      opening-ret-type = st.opening-ret-type,
      state-local = 0 - 1,
@@ -26147,7 +26395,7 @@ Section: ISR Stubs
     in let st2 = emit-isr-stubs-loop st1r 0 common-handler-offset
     in IsrStubResult {
      state = st2,
-     first-stub-vaddr = __narrow (bare-metal-load-addr + first-stub-offset)
+     first-stub-vaddr = __narrow (st-native-base st1 + first-stub-offset)
   }
 
 Section: IDT Construction
@@ -26488,6 +26736,31 @@ Section: Runtime Init Builtin
  10-byte mov rax imm64, push, retfq) so the return vaddr is a fixed
  13 bytes past the measurement point regardless of immediate width.
 
+  emit-com1-ring-init : CodegenState -> CodegenState
+  emit-com1-ring-init (st) =
+    let st24 = emit-out-byte st 1019 128
+    in let st25 = emit-out-byte st24 1016 1
+    in let st26 = emit-out-byte st25 1017 0
+    in let st27 = emit-out-byte st26 1019 3
+    in let st28 = emit-out-byte st27 1018 199
+    in let st29 = emit-out-byte st28 1020 11
+    in let st29a = emit-com2-init st29
+    in let st30 = emit-out-byte st29a 1017 1
+    in let st31m = st-append-code st30 (li reg-rdi serial-primed-magic-addr)
+    in let st31n = st-append-code st31m (mov-load reg-rax reg-rdi 0)
+    in let st31o = st-append-code st31n (cmp-ri reg-rax serial-primed-magic)
+    in let primed-skip = st31o.code-len
+    in let st31p = st-append-code st31o (jcc cc-e 0)
+    in let st31 = st-append-code st31p (li reg-rdi serial-write-pos-addr)
+    in let st32 = st-append-code st31 (li reg-rax 0)
+    in let st33 = st-append-code st32 (mov-store reg-rdi reg-rax 0)
+    in let st33a = patch-jcc-at st33 primed-skip (st33.code-len)
+    in let st33b = st-append-code st33a (li reg-rax 0)
+    in let st33c = st-append-code st33b (li reg-rdi serial-primed-magic-addr)
+    in let st33d = st-append-code st33c (mov-store reg-rdi reg-rax 0)
+    in let st34 = st-append-code st33d (li reg-rdi serial-read-pos-addr)
+    in st-append-code st34 (mov-store reg-rdi reg-rax 0)
+
   emit-runtime-init-fn : CodegenState, Integer, Integer, Integer -> CodegenState
   emit-runtime-init-fn (st) (first-stub-vaddr) (syscall-handler-offset) (grant-mask) =
     let st0 = record-func-offset st "runtime-init"
@@ -26515,7 +26788,7 @@ Section: Runtime Init Builtin
     in let r7 = st-append-code r6 (add-ri reg-rsp 16)
     in let f0 = st-append-code r7 (li reg-rax 8)
     in let f1 = st-append-code f0 (push-r reg-rax)
-    in let after = bare-metal-load-addr + f1.code-len + 13
+    in let after = st-native-base f1 + f1.code-len + 13
     in let b0 = bit-and after 255
     in let b1 = bit-and (bit-shru after 8) 255
     in let b2 = bit-and (bit-shru after 16) 255
@@ -26541,7 +26814,7 @@ Section: Runtime Init Builtin
     in let i3 = st-append-code i2 (li reg-rax 1)
     in let i4 = st-append-code i3 (mov-store-byte reg-rdi reg-rax 0)
     in let m0 = emit-write-msr i4 3221225601 (8 * 4294967296)
-    in let m1 = emit-write-msr m0 3221225602 (bare-metal-load-addr + syscall-handler-offset)
+    in let m1 = emit-write-msr m0 3221225602 (st-native-base m0 + syscall-handler-offset)
     in let m2 = emit-write-msr m1 3221225604 512
     in let m3 = st-append-code m2 (li reg-rcx 3221225600)
     in let m4 = st-append-code m3 [15, 50]
@@ -26567,7 +26840,8 @@ Section: Runtime Init Builtin
     in let z14 = st-append-code z13 (li reg-rdi prof-cursor-addr)
     in let z15 = st-append-code z14 (mov-store reg-rdi reg-rax 0)
     in let slices = emit-slice-table-init z15
-    in let s0 = emit-interrupt-setup slices
+    in let com1 = if slices.pe-link then emit-com1-ring-init slices else slices
+    in let s0 = emit-interrupt-setup com1
     in let e0 = st-append-code s0 (li reg-rax 0)
     in st-append-code e0 [195]
 
@@ -26964,12 +27238,12 @@ Section: SMP Initialization
     in let blob-skip-pos = st5b.code-len
     in let sb0 = st-append-code st5b (jmp 0)
     in let tramp-pos = sb0.code-len
-    in let sb1 = st-append-code sb0 (ap-tramp-blob (bare-metal-load-addr + ap-entry-pos))
+    in let sb1 = st-append-code sb0 (ap-tramp-blob (st-native-base sb0 + ap-entry-pos))
     in let sb2 = patch-jmp-at sb1 blob-skip-pos (sb1.code-len)
     in let id0 = st-append-code sb2 (li reg-rdi ap-id-next-addr)
     in let id1 = st-append-code id0 (li reg-rax 1)
     in let id2 = st-append-code id1 (mov-store reg-rdi reg-rax 0)
-    in let cp0 = st-append-code id2 (li reg-rsi (bare-metal-load-addr + tramp-pos))
+    in let cp0 = st-append-code id2 (li reg-rsi (st-native-base id2 + tramp-pos))
     in let cp1 = st-append-code cp0 (li reg-rdi ap-trampoline-addr)
     in let cp2 = st-append-code cp1 (li reg-rcx ap-tramp-size)
     in let cp3 = st-append-code cp2 cld
@@ -29276,7 +29550,8 @@ Section: Builtin Emission
     let k = cover-arm-slot (st.cover-arm-map) (cover-arm-literal (list-at args 0))
     in let saved = if st.cover & k >= 0 then st-append-code (fc-evict-reg st reg-r11) (push-r reg-r11) else st
     in let arm-disp = (st.cover-arms + k) * 8
-    in let st0 = if st.cover & k >= 0 then st-append-code (emit-cover-base saved reg-r11 arm-disp) ([73, 255, 3] & pop-r reg-r11)
+    in let st0 = if st.cover & k >= 0 then (let base = emit-cover-base saved reg-r11 arm-disp
+      in st-append-code base ([73, 255, 3] & pop-r reg-r11))
       else st
     in let rd = alloc-temp st0
     in EmitResult { state = st-append-code (rd.state) (li (rd.reg) 0), reg = rd.reg }
@@ -31153,7 +31428,7 @@ Section: Bare-Metal Start
       in let st14s = emit-set-boot-scope st14 0 proc-scope-offset fs-scope
       in let st14n = emit-set-boot-scope st14s 0 proc-net-scope-offset net-scope
       in let st15 = emit-grant-capability st14n 1 cap-console
-      in let syscall-vaddr = bare-metal-load-addr + syscall-handler-offset
+      in let syscall-vaddr = st-native-base st15 + syscall-handler-offset
       in let st16 = emit-write-msr st15 3221225601 (8 * 4294967296)
       in let st17 = emit-write-msr st16 3221225602 syscall-vaddr
       in let st18 = emit-write-msr st17 3221225604 512
@@ -31164,28 +31439,7 @@ Section: Bare-Metal Start
       in let st23 = emit-idt-entries st22 first-stub-vaddr
       in let st23a = emit-load-idt st23
       in let st23b = emit-load-tss st23a
-      in let st24 = emit-out-byte st23b 1019 128
-      in let st25 = emit-out-byte st24 1016 1
-      in let st26 = emit-out-byte st25 1017 0
-      in let st27 = emit-out-byte st26 1019 3
-      in let st28 = emit-out-byte st27 1018 199
-      in let st29 = emit-out-byte st28 1020 11
-      in let st29a = emit-com2-init st29
-      in let st30 = emit-out-byte st29a 1017 1
-      in let st31m = st-append-code st30 (li reg-rdi serial-primed-magic-addr)
-      in let st31n = st-append-code st31m (mov-load reg-rax reg-rdi 0)
-      in let st31o = st-append-code st31n (cmp-ri reg-rax serial-primed-magic)
-      in let primed-skip = st31o.code-len
-      in let st31p = st-append-code st31o (jcc cc-e 0)
-      in let st31 = st-append-code st31p (li reg-rdi serial-write-pos-addr)
-      in let st32 = st-append-code st31 (li reg-rax 0)
-      in let st33 = st-append-code st32 (mov-store reg-rdi reg-rax 0)
-      in let st33a = patch-jcc-at st33 primed-skip (st33.code-len)
-      in let st33b = st-append-code st33a (li reg-rax 0)
-      in let st33c = st-append-code st33b (li reg-rdi serial-primed-magic-addr)
-      in let st33d = st-append-code st33c (mov-store reg-rdi reg-rax 0)
-      in let st34 = st-append-code st33d (li reg-rdi serial-read-pos-addr)
-      in let st35 = st-append-code st34 (mov-store reg-rdi reg-rax 0)
+      in let st35 = emit-com1-ring-init st23b
       in let st35p = emit-blit-probe st35
       in let st35a = emit-control-string st35p [66, 79, 79, 84, 58, 83, 48, 45, 72, 87, 10]
       in let st35v = emit-avx-admit st35a True
@@ -31431,6 +31685,7 @@ Section: Finalize
     builtin-emitters = x86-builtin-emitters,
     emit-work = 0,
     exit-mode = ExitRepl,
+    pe-link = False,
     watchdog-mode = WatchdogProgress,
     opening-ret-type = NothingTy,
     state-local = 0 - 1,
@@ -31961,7 +32216,7 @@ Section: Binary Debug Map (MAP1)
     in build-map-entries offsets names str-offsets code-len (i + 1) count ent5
 
   x86-64-emit-cdx : IRChapter, List TypeBinding -> EmitChapterResult
-  x86-64-emit-cdx (m) (tdefs) = x86-64-emit-cdx-with-exit-mode m tdefs Exit False False WatchdogProgress [] 0 False False False
+  x86-64-emit-cdx (m) (tdefs) = x86-64-emit-cdx-with-exit-mode m tdefs Exit False False WatchdogProgress [] 0 False False False False
 
  The emit deck's flat term is 28 MB. Bare metal spends 23.65 MB of it on a
  three-definition subject and 23.71 MB on sixty-one, so the per-definition
@@ -31981,8 +32236,8 @@ Section: Binary Debug Map (MAP1)
  than taught a second ordering.
 
   x86-64-emit-cdx-with-exit-mode : IRChapter, List TypeBinding, X86_64ExitMode, Boolean, Boolean, X86_64WatchdogMode,
-    List IRDef, Integer between 0 and 2, Boolean, Boolean, Boolean -> EmitChapterResult
-  x86-64-emit-cdx-with-exit-mode (m) (tdefs) (exit-mode) (poison) (trace) (wd-mode) (unchecked) (hosted-target) (avx-local) (census) (cover) =
+    List IRDef, Integer between 0 and 2, Boolean, Boolean, Boolean, Boolean -> EmitChapterResult
+  x86-64-emit-cdx-with-exit-mode (m) (tdefs) (exit-mode) (poison) (trace) (wd-mode) (unchecked) (hosted-target) (avx-local) (census) (cover) (pe-link) =
     let emit-deck = emit-build (list-length (m.defs) * 65536 + 29360128)
     in let de = __deck-enter
     in let tramp = bare-metal-trampoline
@@ -31990,7 +32245,8 @@ Section: Binary Debug Map (MAP1)
     in let st-mode0 = __record-set st0 "exit-mode" exit-mode
     in let st-mode1 = __record-set st-mode0 "hosted-target" hosted-target
     in let st-mode = __record-set st-mode1 "stack-guard" (hosted-target == 0)
-    in let st-poison = __record-set st-mode "poison-alloc" poison
+    in let st-pe = __record-set st-mode "pe-link" pe-link
+    in let st-poison = __record-set st-pe "poison-alloc" poison
     in let st-trace = __record-set st-poison "trace-alloc" trace
     in let st-wd0 = __record-set st-trace "watchdog-mode" wd-mode
     in let st-wd1 = __record-set st-wd0 "avx-local" avx-local
@@ -34376,11 +34632,13 @@ Section: Pattern Matching
      cg-state = st1a,
      end-patches = []
   }
-   in let mbs-final = emit-match-branch-loop mbs (scrut-loc.reg) (result-loc.reg) branches 0 (list-length branches) scrut-ty saved-tail
+   in let branch-count = list-length branches
+   in let mbs-final = emit-match-branch-loop mbs (scrut-loc.reg) (result-loc.reg) branches 0 branch-count scrut-ty saved-tail
    in let st-end = patch-match-end-jumps (mbs-final.cg-state) (mbs-final.end-patches) 0
    in load-local st-end (result-loc.reg)
 
-  emit-match-branch-loop : MatchBranchState, Integer, Integer, List IRBranch, Integer, Integer, CodexType, Boolean -> MatchBranchState
+  emit-match-branch-loop : MatchBranchState, Integer, Integer, List IRBranch, Integer, Integer,
+    CodexType, Boolean -> MatchBranchState
   emit-match-branch-loop (mbs) (scrut-loc) (result-loc) (branches) (i) (total) (scrut-ty) (tail) =
     if i == total then mbs
     else let b = list-at branches i
@@ -35033,7 +35291,7 @@ Section: I/O Boundary Helpers
     in let st12 = emit-load-rodata-addr st11 reg-rsi tier2-rodata-offset
     in let st13 = st-append-code st12 (li reg-rbx 0)
     in let scan-top = st13.code-len
-    in let st14 = st-append-code st13 (cmp-ri reg-rbx 10)
+    in let st14 = st-append-code st13 (cmp-ri reg-rbx 11)
     in let scan-done-pos = st14.code-len
     in let st15 = st-append-code st14 (jcc cc-ge 0)
     in let st16 = st-append-code st15 (mov-rr reg-rax reg-rbx)
@@ -43536,6 +43794,13 @@ Section: LIR Instruction Selection (x86-64)
      is LoMul -> st-append-code st (imul-rr pd pr & jcc cc-no 2 & [15, 11])
      is LoRem -> st
      is LoDiv -> st
+     is LoAnd -> st-append-code st (and-rr pd pr)
+     is LoOr -> st-append-code st (or-rr pd pr)
+     is LoXor -> st-append-code st (xor-rr64 pd pr)
+     is LoShl -> st
+     is LoShr -> st
+     is LoShru -> st
+     is LoListAt -> st
 
  A remainder never reaches these: `lir-sel-bin` routes `LoRem` to `idiv`
  before the two-operand ALU is consulted, because a remainder is not one. The
@@ -43550,6 +43815,13 @@ Section: LIR Instruction Selection (x86-64)
      is LoMul -> st-append-code st (imul-rri pd pd k & jcc cc-no 2 & [15, 11])
      is LoRem -> st
      is LoDiv -> st
+     is LoAnd -> st-append-code st (and-ri pd k)
+     is LoOr -> st-append-code st (or-ri pd k)
+     is LoXor -> st-append-code st (li lir-scratch2 k & xor-rr64 pd lir-scratch2)
+     is LoShl -> st-append-code st (shl-ri pd k)
+     is LoShr -> st-append-code st (sar-ri pd k)
+     is LoShru -> st-append-code st (shr-ri pd k)
+     is LoListAt -> st
 
   lir-alu-gen : CodegenState, LirOp, Integer, LirValue, List Location -> CodegenState
   lir-alu-gen (st) (op) (w) (rhs) (assign) =
@@ -43692,10 +43964,36 @@ Section: LIR Instruction Selection (x86-64)
     if lir-is-imm r then st-append-code st (imul-rri w (lir-lea-src l assign) (lir-imm-val r))
     else st-append-code st (imul-rri w (lir-lea-src r assign) (lir-imm-val l))
 
-  lir-sel-bin : CodegenState, LirOp, Integer, LirValue, LirValue, List Location -> CodegenState
+ `list-at` with the tree emitter's bounds and view rule (`emit-list-at-builtin`):
+ the index must satisfy 0 <= i < [p+0] or the instruction traps, a negative
+ capacity cell at [p-8] marks a tail view whose base is [p+8], and the element
+ is at base + 8i + 8. The index works in R11 and the list in R8, neither of
+ which the allocator hands out, so no operand is overwritten before it is read.
+
+  lir-sel-list-at : CodegenState, Integer, LirValue, LirValue, List Location -> CodegenState
+  lir-sel-list-at (st) (dst) (l) (r) (assign) =
+    let st1 = lir-load-into st lir-scratch-reg r assign
+    in let st2 = lir-load-into st1 lir-scratch2 l assign
+    in let neg-guard = cmp-ri lir-scratch-reg 0 & jcc cc-ge 2 & [15, 11]
+    in let len-guard = [77, 57, 24] & jcc cc-g 2 & [15, 11]
+    in let view-base = mov-load lir-scratch2 lir-scratch2 8
+    in let view-test = [73, 131, 120, 248, 0] & jcc cc-ge (list-length view-base) & view-base
+    in let addr = shl-ri lir-scratch-reg 3 & view-test & add-rr lir-scratch-reg lir-scratch2
+    in let st3 = st-append-code st2 (neg-guard & len-guard & addr)
+    in when (list-at assign dst)
+     is LocReg (pr) -> st-append-code st3 (mov-load (list-at lir-phys pr) lir-scratch-reg 8)
+     is LocSlot (ks) ->
+      st-append-code st3 (mov-load lir-scratch-reg lir-scratch-reg 8 & mov-store reg-rsp lir-scratch-reg (lir-slot-off ks))
   lir-sel-bin (st) (op) (dst) (l) (r) (assign) =
     if lir-op-divides op then lir-sel-rem st op dst l r assign
+    else if lir-op-indexes op then lir-sel-list-at st dst l r assign
     else lir-sel-alu st op dst l r assign
+
+  lir-op-indexes : LirOp -> Boolean
+  lir-op-indexes (op) =
+    when op
+     is LoListAt -> True
+     is otherwise -> False
 
   lir-sel-alu : CodegenState, LirOp, Integer, LirValue, LirValue, List Location -> CodegenState
   lir-sel-alu (st) (op) (dst) (l) (r) (assign) =
@@ -43838,9 +44136,28 @@ Section: LIR Instruction Selection (x86-64)
     if i < 6 then st
     else lir-push-stack-args (lir-push-arg st (list-at argvals i) assign (pushed * 8)) argvals (i - 1) (pushed + 1) assign
 
+ A shared constant (`Emit/X86_64Chapter.codex`, `emit-shared-consts`) is one
+ table in the data segment, so a reference loads its address through the same
+ rodata fixup `emit-shared-const-ref` uses instead of calling the nullary
+ function that would rebuild it.
+
+  lir-sel-shared-const : CodegenState, Integer, Integer, List Location -> CodegenState
+  lir-sel-shared-const (st) (dst) (roff) (assign) =
+    let w = when (list-at assign dst)
+     is LocReg (pr) -> list-at lir-phys pr
+     is LocSlot (ks) -> lir-scratch-reg
+    in let patch = st.code-len + 2
+    in let st1 = st-append-code st (mov-ri64 w 0)
+    in let st2 = __record-set (__record-set st1 "rf-poffsets" (list-push (st1.rf-poffsets) patch)) "rf-roffsets" (list-push (st1.rf-roffsets) roff)
+    in when (list-at assign dst)
+     is LocReg (pr) -> st2
+     is LocSlot (ks) -> st-append-code st2 (mov-store reg-rsp w (lir-slot-off ks))
+
   lir-sel-call : CodegenState, Integer, Text, List LirValue, List Location -> CodegenState
   lir-sel-call (st) (dst) (name) (argvals) (assign) =
-    let na = list-length argvals
+    let shared = if list-length argvals == 0 then cs-find (st.shared-consts) name else 0 - 1
+    in if shared >= 0 then lir-sel-shared-const st dst shared assign
+    else let na = list-length argvals
     in let nstack = if na > 6 then na - 6 else 0
     in let st0 = lir-push-stack-args st argvals (na - 1) 0 assign
     in let st1 = lir-place-args st0 argvals 0 (na - nstack) assign (nstack * 8)
@@ -44574,7 +44891,9 @@ Section: LIR Dispatch
 
   lir-call-target-ok : CodegenState, Text, Integer -> Boolean
   lir-call-target-ok (st) (name) (nargs) =
-    (lookup-x86-arity (st.user-arities) name == nargs) & (is-builtin (st.builtin-names) name == False)
+    if name == "__list_set_at" then nargs == 3
+    else if name == "__list_snoc" then nargs == 2
+    else (lookup-x86-arity (st.user-arities) name == nargs) & (is-builtin (st.builtin-names) name == False)
 
   lir-calls-ok-insns : CodegenState, List LirInsn, Integer, Integer -> Boolean
   lir-calls-ok-insns (st) (insns) (i) (n) =
@@ -44639,6 +44958,19 @@ Section: LIR Dispatch
     in let vh2 = vh1 & ". The selector's output would not compute the program; the build halts rather than write it."
     in st-add-error st code vh2 synthetic-span
 
+  lir-bits-free : CodegenState -> Boolean
+  lir-bits-free (st) =
+    let ua = st.user-arities
+    in if lookup-x86-arity ua "bit-and" >= 0 then False
+    else if lookup-x86-arity ua "bit-or" >= 0 then False
+    else if lookup-x86-arity ua "bit-xor" >= 0 then False
+    else if lookup-x86-arity ua "bit-shl" >= 0 then False
+    else if lookup-x86-arity ua "bit-shr" >= 0 then False
+    else if lookup-x86-arity ua "bit-shru" >= 0 then False
+    else if lookup-x86-arity ua "list-at" >= 0 then False
+    else if lookup-x86-arity ua "list-set-at" >= 0 then False
+    else lookup-x86-arity ua "list-push" < 0
+
   lir-emit-try : CodegenState, IRDef -> LirEmitTry
   lir-emit-try (st) (def) =
     if def.is-punctual then lir-not-handled st
@@ -44646,7 +44978,7 @@ Section: LIR Dispatch
       lir-not-handled st
     else if lir-ty-needs-guard (return-bound-of (def.type-val) (list-length (def.params))) then
       lir-not-handled st
-    else let r = lower-def-to-lir def
+    else let r = lower-def-to-lir-bits def (lir-bits-free st)
     in if r.ok == False then lir-not-handled st
     else if lir-calls-ok st ((r.func).blocks) 0 (list-length ((r.func).blocks)) == False then
       lir-not-handled st
@@ -50642,6 +50974,13 @@ Section: Representation
     | LoMul
     | LoRem
     | LoDiv
+    | LoAnd
+    | LoOr
+    | LoXor
+    | LoShl
+    | LoShr
+    | LoShru
+    | LoListAt
 
  The six comparison conditions a branch tests. A comparison sets flags
  (`LiCmp`) and the following conditional branch reads them -- the fused
@@ -50773,7 +51112,8 @@ Section: Lowering
    tail : Boolean,
    fname : Text,
    np : Integer,
-   header : Integer
+   header : Integer,
+   bits : Boolean
   }
 
   loop-notail : LirLoopCtx -> LirLoopCtx
@@ -50785,7 +51125,8 @@ Section: Lowering
         tail = False,
         fname = lc.fname,
         np = lc.np,
-        header = lc.header
+        header = lc.header,
+        bits = lc.bits
       }
 
  A back-edge fires only for a tail call to this very function with exactly
@@ -50835,6 +51176,68 @@ Section: Lowering
   lir-op-wraps (op) (t) =
     when op
      is IrAddInt | IrSubInt | IrMulInt -> int-ty-wraps t
+     is otherwise -> False
+
+  lir-is-bit-name : Text -> Boolean
+  lir-is-bit-name (n) =
+    if n == "bit-and" then True
+    else if n == "bit-or" then True
+    else if n == "bit-xor" then True
+    else if n == "bit-shl" then True
+    else if n == "bit-shr" then True
+    else n == "bit-shru"
+
+  lir-bit-op-of : Text -> LirOp
+  lir-bit-op-of (n) =
+    if n == "bit-and" then LoAnd
+    else if n == "bit-or" then LoOr
+    else if n == "bit-xor" then LoXor
+    else if n == "bit-shl" then LoShl
+    else if n == "bit-shr" then LoShr
+    else LoShru
+
+  lir-op-shifts : LirOp -> Boolean
+  lir-op-shifts (op) =
+    when op
+     is LoShl -> True
+     is LoShr -> True
+     is LoShru -> True
+     is otherwise -> False
+
+ A shift count reaches the instruction only as an immediate from 0 to 63,
+ where it means what the tree emitter's CL form means; any other count keeps
+ the function on the tree path.
+
+  lir-shift-count-ok : LirValue -> Boolean
+  lir-shift-count-ok (v) =
+    when v
+     is LvImm (k) -> k >= 0 & k <= 63
+     is LvReg (r) -> False
+
+  lower-lir-bitop : List LirEnvEntry, LirOp, IRExpr, IRExpr, Integer, List LirBlock, Integer, List LirInsn, Integer, Integer,
+    LirLoopCtx -> LowerRes
+  lower-lir-bitop (env) (op) (l) (r) (counter) (blocks) (cur) (curi) (bctr) (depth) (lc) =
+    let rl = lower-lir-expr env l counter blocks cur curi bctr (depth + 1) (loop-notail lc)
+    in if rl.ok == False then rl
+    else let rr = lower-lir-expr env r (rl.counter) (rl.blocks) (rl.cur) (rl.curi) (rl.bctr) (depth + 1) (loop-notail lc)
+    in if rr.ok == False then rr
+    else if lir-op-shifts op & lir-shift-count-ok (rr.val) == False then lower-fail (rr.counter) (rr.blocks) (rr.cur) (rr.curi) (rr.bctr)
+    else let dst = rr.counter
+    in LowerRes {
+     val = LvReg dst,
+     counter = dst + 1,
+     blocks = rr.blocks,
+     cur = rr.cur,
+     curi = list-push (rr.curi) (deck-record (LiBin op dst (rl.val) (rr.val))),
+     bctr = rr.bctr,
+     ok = True,
+     term = False
+    }
+
+  lir-list-elem-ok : CodexType -> Boolean
+  lir-list-elem-ok (ty) =
+    when ty
+     is IntegerTy (lo) (hi) (mode) | BooleanTy | CharTy -> True
      is otherwise -> False
 
   lir-op-whitelisted : IRBinaryOp -> Boolean
@@ -50989,7 +51392,7 @@ Section: Lowering
      }
      is IrName (n) (t) (s) ->
       let i = lir-env-find env n 0 (list-length env)
-      in if i < 0 then lower-fail counter blocks cur curi bctr
+      in if i < 0 then lower-call-args env [] 0 0 n counter blocks cur curi bctr [] (depth + 1) (loop-notail lc)
       else
         LowerRes {
           val = (list-at env i).val,
@@ -51091,7 +51494,15 @@ Section: Lowering
       else if lir-env-find env root 0 (list-length env) >= 0 then
         lower-fail counter blocks cur curi bctr
       else let args = lir-apply-args e []
-      in if lir-backedge-fires lc root (list-length args) then
+      in if lc.bits & list-length args == 2 & lir-is-bit-name root then
+        lower-lir-bitop env (lir-bit-op-of root) (list-at args 0) (list-at args 1) counter blocks cur curi bctr depth lc
+      else if lc.bits & list-length args == 2 & root == "list-at" & lir-list-elem-ok t then
+        lower-lir-bitop env LoListAt (list-at args 0) (list-at args 1) counter blocks cur curi bctr depth lc
+      else if lc.bits & list-length args == 3 & root == "list-set-at" then
+        lower-call-args env args 0 3 "__list_set_at" counter blocks cur curi bctr [] (depth + 1) (loop-notail lc)
+      else if lc.bits & list-length args == 2 & root == "list-push" then
+        lower-call-args env args 0 2 "__list_snoc" counter blocks cur curi bctr [] (depth + 1) (loop-notail lc)
+      else if lir-backedge-fires lc root (list-length args) then
         lower-backedge env args 0 (list-length args) counter blocks cur curi bctr [] (depth + 1) lc
       else
         lower-call-args env args 0 (list-length args) root counter blocks cur curi bctr [] (depth + 1) (loop-notail lc)
@@ -51735,11 +52146,18 @@ Section: Lowering
  unreachable then, and it costs nothing to emit, but it keeps the block ids
  dense, which every table indexed by id depends on.
 
+ `bits` is True only when the program defines none of the six bitwise
+ builtin names and no `list-at`, because a definition beats a builtin: the
+ selector knows the user arities and passes the answer down.
+
   lower-def-to-lir : IRDef -> LowerFuncRes
-  lower-def-to-lir (d) =
+  lower-def-to-lir (d) = lower-def-to-lir-bits d False
+
+  lower-def-to-lir-bits : IRDef, Boolean -> LowerFuncRes
+  lower-def-to-lir-bits (d) (bits) =
     let np = list-length (d.params)
     in let env0 = lir-seed-params (d.params) 0 np []
-    in let lc0 = LirLoopCtx { active = True, tail = True, fname = d.name, np = np, header = 0 }
+    in let lc0 = LirLoopCtx { active = True, tail = True, fname = d.name, np = np, header = 0, bits = bits }
     in let r = lower-lir-expr env0 (d.body) np [] 0 [] 1 0 lc0
     in if r.ok == False then LowerFuncRes { func = lir-empty-func (d.name), ok = False }
     else let blocks-final = list-push (r.blocks) (deck-record (LirBlock {
@@ -53775,6 +54193,13 @@ Section: Dump and Pass
      is LoMul -> "mul"
      is LoRem -> "rem"
      is LoDiv -> "div"
+     is LoAnd -> "and"
+     is LoOr -> "or"
+     is LoXor -> "xor"
+     is LoShl -> "shl"
+     is LoShr -> "sar"
+     is LoShru -> "shr"
+     is LoListAt -> "list-at"
 
   lir-cond-text : LirCond -> Text
   lir-cond-text (c) =
@@ -56647,38 +57072,76 @@ Section: Leaf Inlining
     else if list-at params i == n then i
     else leaf-param-index params n (i + 1)
 
-  leaf-body-ok : IRExpr, List Text, Integer -> Integer
-  leaf-body-ok (e) (params) (fuel) =
+  is-leaf-bit-op : Text -> Boolean
+  is-leaf-bit-op (n) =
+    if n == "bit-and" then True
+    else if n == "bit-or" then True
+    else if n == "bit-xor" then True
+    else if n == "bit-shl" then True
+    else if n == "bit-shr" then True
+    else n == "bit-shru"
+
+  leaf-bit-op-bound : List Text, Integer -> Boolean
+  leaf-bit-op-bound (bound) (i) =
+    if i == list-length bound then False
+    else if is-leaf-bit-op (list-at bound i) then True
+    else leaf-bit-op-bound bound (i + 1)
+
+  leaf-body-ok : IRExpr, List Text, List InlineLeaf, Integer -> Integer
+  leaf-body-ok (e) (params) (consts) (fuel) =
     if fuel <= 0 then 0 - 1
     else when e
      is IrIntLit (v) (sp) -> fuel - 1
-     is IrName (n) (ty) (sp) -> if leaf-param-index params n 0 >= 0 then fuel - 1 else 0 - 1
+     is IrName (n) (ty) (sp) ->
+      if leaf-param-index params n 0 >= 0 then fuel - 1
+      else if find-leaf-def consts n 0 >= 0 then fuel - 1
+      else 0 - 1
      is IrBinary (op) (l) (r) (ty) (sp) ->
       if is-inline-int-op op then
-        let lf = leaf-body-ok l params (fuel - 1)
-        in if lf < 0 then 0 - 1 else leaf-body-ok r params lf
+        let lf = leaf-body-ok l params consts (fuel - 1)
+        in if lf < 0 then 0 - 1 else leaf-body-ok r params consts lf
       else 0 - 1
+     is IrApply (f) (a) (ty) (sp) ->
+      let args = inline-apply-args e []
+      in if is-leaf-bit-op (inline-apply-root e) == False then 0 - 1
+      else if list-length args /= 2 then 0 - 1
+      else let lf = leaf-body-ok (list-at args 0) params consts (fuel - 1)
+      in if lf < 0 then 0 - 1 else leaf-body-ok (list-at args 1) params consts lf
      is otherwise -> 0 - 1
 
-  collect-leaf-defs : List IRDef, Integer, List InlineLeaf -> List InlineLeaf
-  collect-leaf-defs (defs) (i) (acc) =
+  collect-const-defs : List IRDef, Integer, List InlineLeaf -> List InlineLeaf
+  collect-const-defs (defs) (i) (acc) =
+    if i == list-length defs then acc
+    else let d = list-at defs i
+    in if list-length (d.params) == 0 & ir-is-int-lit (d.body) & is-plain-int (d.type-val) then
+      collect-const-defs defs (i + 1) (list-push acc (deck-record (InlineLeaf {
+        il-name = d.name,
+        il-params = [],
+        il-ptys = [],
+        il-rty = d.type-val,
+        il-body = d.body
+      })))
+    else collect-const-defs defs (i + 1) acc
+
+  collect-leaf-defs : List IRDef, Integer, List InlineLeaf, List InlineLeaf -> List InlineLeaf
+  collect-leaf-defs (defs) (i) (consts) (acc) =
     if i == list-length defs then acc
     else let d = list-at defs i
     in let pnames = for p in (d.params) -> p.name
     in let np = list-length pnames
     in let ok = if d.name == "deck-record" then 0 - 1
     else if has-bounded-boundary d then 0 - 1
-    else if np >= 1 & np <= 3 then leaf-body-ok (d.body) pnames 12
+    else if np >= 1 & np <= 3 then leaf-body-ok (d.body) pnames consts 12
     else 0 - 1
     in if ok >= 0 then
-      collect-leaf-defs defs (i + 1) (list-push acc (deck-record (InlineLeaf {
+      collect-leaf-defs defs (i + 1) consts (list-push acc (deck-record (InlineLeaf {
         il-name = d.name,
         il-params = pnames,
         il-ptys = for p in (d.params) -> p.type-val,
         il-rty = peel-applied-return (d.type-val) (list-length (d.params)),
-        il-body = d.body
+        il-body = inline-expr (d.body) consts pnames
       })))
-    else collect-leaf-defs defs (i + 1) acc
+    else collect-leaf-defs defs (i + 1) consts acc
 
  A function with a bounded parameter or return is enforced by
  runtime guards at its callee entry and epilogue (bounded
@@ -56699,6 +57162,15 @@ Section: Leaf Inlining
     else if is-bounded-int ((list-at ps i).type-val) then True
     else any-bounded-param ps (i + 1)
 
+  is-plain-int : CodexType -> Boolean
+  is-plain-int (ty) =
+    when ty
+     is IntegerTy (lo) (hi) (mode) ->
+      when mode
+       is OvError -> when int-ty-default is IntegerTy (dlo) (dhi) (dm) -> lo == dlo & hi == dhi is otherwise -> False
+       is otherwise -> False
+     is otherwise -> False
+
   is-bounded-int : CodexType -> Boolean
   is-bounded-int (ty) =
     when ty
@@ -56717,11 +57189,27 @@ Section: Leaf Inlining
      is ForAllEff (id) (b) -> return-bound-in b n
      is otherwise -> ty
 
+ The candidate lists are sorted by name, because every name reference in
+ the program is looked up: a linear scan made the self-compile 6 per cent
+ slower once the integer constants joined the list (profiled 2026-10-16).
+
+  compare-leaf-names : InlineLeaf, InlineLeaf -> Integer
+  compare-leaf-names (a) (b) = text-compare (a.il-name) (b.il-name)
+
+  bsearch-leaf-pos : List InlineLeaf, Text, Integer, Integer -> Integer
+  bsearch-leaf-pos (cands) (name) (lo) (hi) =
+    if lo >= hi then lo
+    else let mid = lo + (hi - lo) / 2
+    in if text-compare name ((list-at cands mid).il-name) <= 0 then bsearch-leaf-pos cands name lo mid
+    else bsearch-leaf-pos cands name (mid + 1) hi
+
   find-leaf-def : List InlineLeaf, Text, Integer -> Integer
   find-leaf-def (cands) (n) (i) =
-    if i == list-length cands then 0 - 1
-    else if (list-at cands i).il-name == n then i
-    else find-leaf-def cands n (i + 1)
+    let len = list-length cands
+    in let pos = bsearch-leaf-pos cands n 0 len
+    in if pos >= len then 0 - 1
+    else if (list-at cands pos).il-name == n then pos
+    else 0 - 1
 
   inline-apply-root : IRExpr -> Text
   inline-apply-root (e) =
@@ -56761,7 +57249,31 @@ Section: Leaf Inlining
       let idx = leaf-param-index params n 0
       in if idx >= 0 then list-at args idx else e
      is IrBinary (op) (l) (r) (ty) (sp) -> deck-record (IrBinary op (subst-leaf l params args) (subst-leaf r params args) ty sp)
+     is IrApply (f) (a) (ty) (sp) -> deck-record (IrApply (subst-leaf f params args) (subst-leaf a params args) ty sp)
      is otherwise -> e
+
+ An argument that is not a name or a literal is bound once, ahead of the
+ body, rather than copied into each use. The bound name cannot capture: a
+ leaf body has no free names but its parameters, and builtins.
+
+  leaf-let-name : Text -> Text
+  leaf-let-name (p) = "__leaf-" & p
+
+  leaf-site-args : List IRExpr, List Text, List CodexType, Integer, List IRExpr -> List IRExpr
+  leaf-site-args (args) (params) (ptys) (i) (acc) =
+    if i == list-length args then acc
+    else let a = list-at args i
+    in let name = leaf-let-name (list-at params i)
+    in let use = if leaf-arg-simple a then a else deck-record (IrName name (ir-expr-type a) synthetic-span)
+    in leaf-site-args args params ptys (i + 1) (acc & [use])
+
+  leaf-wrap-lets : IRExpr, List IRExpr, List Text, List CodexType, Integer -> IRExpr
+  leaf-wrap-lets (body) (args) (params) (ptys) (i) =
+    if i < 0 then body
+    else let a = list-at args i
+    in let wrapped = if leaf-arg-simple a then body
+      else deck-record (IrLet (leaf-let-name (list-at params i)) (ir-expr-type a) a body synthetic-span)
+    in leaf-wrap-lets wrapped args params ptys (i - 1)
 
   inline-apply-site : IRExpr, List InlineLeaf, List Text -> IRExpr
   inline-apply-site (e) (cands) (bound) =
@@ -56773,8 +57285,11 @@ Section: Leaf Inlining
     else let cand = list-at cands ci
     in let args = inline-apply-args e []
     in if list-length args /= list-length (cand.il-params) then e
-    else if leaf-args-simple args 0 == False then e
-    else fold-rem-expr (subst-leaf (cand.il-body) (cand.il-params) args)
+    else if leaf-bit-op-bound bound 0 then e
+    else if leaf-args-simple args 0 then fold-rem-expr (subst-leaf (cand.il-body) (cand.il-params) args)
+    else let uses = leaf-site-args args (cand.il-params) (cand.il-ptys) 0 []
+    in let body = fold-rem-expr (subst-leaf (cand.il-body) (cand.il-params) uses)
+    in leaf-wrap-lets body args (cand.il-params) (cand.il-ptys) (list-length args - 1)
 
  Remainder recognition over substituted bodies. The truncated-mod
  idiom X - (X / Y) * Y computes with three operations what idiv
@@ -56888,6 +57403,7 @@ Section: Leaf Inlining
   has-leaf-call : IRExpr, List InlineLeaf -> Boolean
   has-leaf-call (e) (cands) =
     when e
+     is IrName (n) (ty) (sp) -> find-leaf-def cands n 0 >= 0
      is IrApply (f) (a) (ty) (sp) ->
       if find-leaf-def cands (inline-apply-root e) 0 >= 0 then True
       else if has-leaf-call f cands then True
@@ -56953,9 +57469,18 @@ Section: Leaf Inlining
       let inlined = deck-record (IrDoExec (inline-expr ev cands bound) esp)
       in inline-act-stmts ss cands bound (i + 1) (list-push acc inlined)
 
+  inline-const-ref : IRExpr, Text, List InlineLeaf, List Text -> IRExpr
+  inline-const-ref (e) (n) (cands) (bound) =
+    if leaf-param-index bound n 0 >= 0 then e
+    else let ci = find-leaf-def cands n 0
+    in if ci < 0 then e
+    else let cand = list-at cands ci
+    in if list-length (cand.il-params) == 0 then cand.il-body else e
+
   inline-expr : IRExpr, List InlineLeaf, List Text -> IRExpr
   inline-expr (e) (cands) (bound) =
     when e
+     is IrName (n) (ty) (sp) -> inline-const-ref e n cands bound
      is IrApply (f) (a) (ty) (sp) ->
       let nf = inline-expr f cands bound
       in let na = inline-expr a cands bound
@@ -56997,7 +57522,8 @@ Section: Leaf Inlining
 
   inline-leaf-calls-in-chapter : IRChapter -> IRChapter
   inline-leaf-calls-in-chapter (ch) =
-    let cands = collect-leaf-defs (ch.defs) 0 []
+    let consts = sort-by (collect-const-defs (ch.defs) 0 []) compare-leaf-names
+    in let cands = sort-by (collect-leaf-defs (ch.defs) 0 consts ([] & consts)) compare-leaf-names
     in if list-length cands == 0 then ch
     else
       __record-set ch "defs" (for d in (ch.defs) -> inline-leaf-def cands d)
@@ -57401,7 +57927,7 @@ Section: Single-Caller Inlining
 
   inline-single-caller-in-chapter : IRChapter -> IRChapter
   inline-single-caller-in-chapter (ch) =
-    let local = collect-once-defs (ch.defs) 0 []
+    let local = sort-by (collect-once-defs (ch.defs) 0 []) compare-leaf-names
     in if list-length local == 0 then ch
     else let counts = count-refs-chapter (ch.defs) local (zeros-for (list-length local) []) 0
     in let cands = keep-single-caller local counts 0 []

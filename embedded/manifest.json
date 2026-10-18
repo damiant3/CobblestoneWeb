@@ -4,37 +4,37 @@
     {
       "name": "games",
       "assets": 35,
-      "encodedBytes": 1808659
+      "encodedBytes": 1809027
     },
     {
       "name": "c64",
       "assets": 1,
-      "encodedBytes": 248960
+      "encodedBytes": 248988
     },
     {
       "name": "data",
       "assets": 1,
-      "encodedBytes": 82558
+      "encodedBytes": 82438
     },
     {
       "name": "mathbook",
       "assets": 1,
-      "encodedBytes": 70866
+      "encodedBytes": 70490
     },
     {
       "name": "safari",
       "assets": 1,
-      "encodedBytes": 2110386
+      "encodedBytes": 2110534
     },
     {
       "name": "spark",
       "assets": 1,
-      "encodedBytes": 48852
+      "encodedBytes": 48872
     },
     {
       "name": "starmap",
       "assets": 2,
-      "encodedBytes": 5091566
+      "encodedBytes": 5091582
     },
     {
       "name": "fishtank",
@@ -49,7 +49,7 @@
     {
       "name": "fireworks",
       "assets": 3,
-      "encodedBytes": 72282
+      "encodedBytes": 71946
     },
     {
       "name": "globe",
@@ -64,219 +64,219 @@
     {
       "name": "compiler",
       "assets": 3,
-      "encodedBytes": 2428759
+      "encodedBytes": 2446271
     }
   ],
   "assets": [
     {
       "pack": "games",
       "path": "games/backgammon.wasm",
-      "bytes": 34582,
-      "sha256": "2c8994b82a456262953b58a9b0e288b8c143da70a1678e0d916f377f7a3fa5c2"
+      "bytes": 34591,
+      "sha256": "74405da6444441bccd79e5cbd60f89408e05ecfe250a8b27844558b3bb0213ca"
     },
     {
       "pack": "games",
       "path": "games/battleship.wasm",
-      "bytes": 29427,
-      "sha256": "6123e06d73b8c6b44af8f2a640e9ef1053d990573fa0eaa2f4791e44b085da8f"
+      "bytes": 29439,
+      "sha256": "4b33771f14db7d36c3aac6118c70b8b4764fce798043171dfd83d124639fb4f6"
     },
     {
       "pack": "games",
       "path": "games/blackjack.wasm",
-      "bytes": 35133,
-      "sha256": "a09979e2c82a807562b14a4466e3f84232a57d1c4132cc6cf42daa990e09e236"
+      "bytes": 35135,
+      "sha256": "e662618df9987cc83e6fc6c000f84b65da83ab0462127dc1d73c5ac24149e03d"
     },
     {
       "pack": "games",
       "path": "games/bridge.wasm",
-      "bytes": 38362,
-      "sha256": "f1b51cc23617ac339b3ada0adeecd5d88222a345efd2c7cfbdbad04284c21697"
+      "bytes": 38387,
+      "sha256": "c954f553311e87b60268a83546c40bb3282b676ebc2457ffdadf7be5d7ef83c7"
     },
     {
       "pack": "games",
       "path": "games/checkers.wasm",
-      "bytes": 30192,
-      "sha256": "14a572444b69c17cd9b80527fb48dee441a221a2aa536b9aa2a8f6806b4bae10"
+      "bytes": 30209,
+      "sha256": "36d57c558df199f6a505910a7ae69287666b73fc882a9e9cbb90b3aecc21a230"
     },
     {
       "pack": "games",
       "path": "games/chess.wasm",
-      "bytes": 39127,
-      "sha256": "85ec2abf613de8c696348316b341474e8571937a3c55cad51b9755b5a9260a3f"
+      "bytes": 39171,
+      "sha256": "8f88cbaaf203d45e29fec2541231c6d1ebd4f71831f459ef049fe968c44d4d3b"
     },
     {
       "pack": "games",
       "path": "games/connect4.wasm",
-      "bytes": 26956,
-      "sha256": "09f9d7cc5e10e0181d9971b499392a6a930a6a2e3b6df552254bdc85803d632a"
+      "bytes": 26969,
+      "sha256": "57110f5488d43e6181ba28fb26d43695bac9ca1eb07f1bf0e28c6bcd10fe28f1"
     },
     {
       "pack": "games",
       "path": "games/crazyeights.wasm",
-      "bytes": 33202,
-      "sha256": "20f1572cd9a72774c55f195cc67d5ab6ae688255f31ecc322b04e75998f0574a"
+      "bytes": 33215,
+      "sha256": "be122a3bb8dbec7e112f8c85fa0e7cb5d7a684f8b50568135a31f679714cdd71"
     },
     {
       "pack": "games",
       "path": "games/dotsandboxes.wasm",
-      "bytes": 27230,
-      "sha256": "9c7d1afbd47dfbcd7575260006f2f8a4be91b19ff3b943658e333419e49bc38a"
+      "bytes": 27243,
+      "sha256": "3ac51327888ad73a68e8a14de03461b67e6e1e3d24d216c5666519a23f6de281"
     },
     {
       "pack": "games",
       "path": "games/game2048.wasm",
-      "bytes": 28495,
-      "sha256": "0791042fe40941953507f5393092b33fe5e1099a5065417d215dfb4e937fd5db"
+      "bytes": 28508,
+      "sha256": "83ea9f6a367cbad266e226f36cdb492aac77c2c61a1f6c3b02f08d47be4c4d9c"
     },
     {
       "pack": "games",
       "path": "games/go.wasm",
-      "bytes": 32919,
-      "sha256": "321bcd9f11209e831e172f8fb6bfc2e74dd489d403416510f2aac26c26ec7ae1"
+      "bytes": 32960,
+      "sha256": "d4aa08bb27a7f8e98e6e48871996e435b2bbf50d030de1dc08a07f38c741f0f9"
     },
     {
       "pack": "games",
       "path": "games/gofish.wasm",
-      "bytes": 30828,
-      "sha256": "565ad738fc600296bf05dd37d51d0a7225d3cffd1e655e8da0ca8c0b94fed3ba"
+      "bytes": 30841,
+      "sha256": "ba26ffb5443cc971e3f6683371ca4d0ce0ec5e24a4d9a7d16cacfa4ad3774c89"
     },
     {
       "pack": "games",
       "path": "games/hexgame.wasm",
-      "bytes": 27996,
-      "sha256": "61552b0c0ea4072b092fa3d1e00ed255469008bbbae2a823003232d25bfa96bb"
+      "bytes": 28009,
+      "sha256": "ce9230758d1b467d3bee51cafcb922272039a160a36c5e43e9aa0f28f092fcd1"
     },
     {
       "pack": "games",
       "path": "games/hexwar.wasm",
-      "bytes": 55792,
-      "sha256": "778249b9dbf59afcdfa33a1402b8a329ef5ca03004d5e50d83a4cdc0cd0285eb"
+      "bytes": 55805,
+      "sha256": "718fb7e8bed3b6506866fb58f1d04f33abb19af6171bf7a3f5715b96c987e160"
     },
     {
       "pack": "games",
       "path": "games/klondike.wasm",
-      "bytes": 35157,
-      "sha256": "d526ec8a9c60cd4f7aa1552a246d4006f50410dc8bf7d98992c93eebe312dcb1"
+      "bytes": 35202,
+      "sha256": "a208b0ba7e4ae312edf1c01ad6f0e7d95e26abe8a0913719e5bd78d4eba35cfe"
     },
     {
       "pack": "games",
       "path": "games/liarsdice.wasm",
-      "bytes": 29098,
-      "sha256": "481e82e5a1d9fa8212d8f48cc4b43e05d163e17adfe9fb39945446bfa4a5da2d"
+      "bytes": 29139,
+      "sha256": "b0fdcd0c476cc83c7bdfefea0e5db1ab9b4465f7424d7fffc6b38fa5e360649a"
     },
     {
       "pack": "games",
       "path": "games/life.wasm",
-      "bytes": 25901,
-      "sha256": "2b32180c25f25acb9f845826d9713f7f2e5dd035e93993eb3c566cd9ef9466c8"
+      "bytes": 25936,
+      "sha256": "32cdb4211af7b56fd9f70bdeb45b3d43988037b7d72bf6a42e79984787556816"
     },
     {
       "pack": "games",
       "path": "games/mahjong.wasm",
-      "bytes": 26420,
-      "sha256": "44563d1e70197c30a6a93ebc646af6b94f5ced44a4e7d89d5ac1d4ab32a477d7"
+      "bytes": 26248,
+      "sha256": "c9f547988f07daba3dd7757370c54bdd188d87c1b3f171cfe318572d7838e716"
     },
     {
       "pack": "games",
       "path": "games/mancala.wasm",
-      "bytes": 28029,
-      "sha256": "8bc86dc639be7b20be8f1cf68a0c0412939fe452987bab5e0e2bc4825c33764e"
+      "bytes": 28042,
+      "sha256": "73f9f7ac04cff812c80760e3dbe557f9eff131dcd85bc992860cb3e22a6dfa29"
     },
     {
       "pack": "games",
       "path": "games/mastermind.wasm",
-      "bytes": 26335,
-      "sha256": "fe76de1db554edefb11fcf97aca074de5bfcb32e5affe5ba1c73443795dee50b"
+      "bytes": 26348,
+      "sha256": "a3b823e087b6aedb35193e106e6f5d813f8f6d3800ff1cef59f199cdfa6a8d91"
     },
     {
       "pack": "games",
       "path": "games/minesweeper.wasm",
-      "bytes": 28213,
-      "sha256": "f628b4a39003faee1290ca234eac14cc613815b4f83563f7165596e852f644c3"
+      "bytes": 28225,
+      "sha256": "046c2689af03d1c67cd91b4f38e2fc41758d521a580159bcc3b1d8841e9f8eaf"
     },
     {
       "pack": "games",
       "path": "games/monopoly.wasm",
-      "bytes": 43476,
-      "sha256": "c05c613bca372f75be610d50f0ce426d617fc52a1e3728a2b13782888c7f249f"
+      "bytes": 43363,
+      "sha256": "1b7e314dc44b29ac87d3adfb3124e4594c75d98f506e5680bfa46d486a0f8bd2"
     },
     {
       "pack": "games",
       "path": "games/othello.wasm",
-      "bytes": 27834,
-      "sha256": "fcc6b776913482050c989b146aaa0c81adb48894f064171556e9c06ee032e650"
+      "bytes": 27847,
+      "sha256": "fdb27615ef6c4d8e85a918f5a302e11fa99b0d87cb3215c40d40e704117d4564"
     },
     {
       "pack": "games",
       "path": "games/pinochle.wasm",
-      "bytes": 40351,
-      "sha256": "5e44803e435d9e361a8ccb47dbeefef017d98baf28aed8b1a9260d003d8a2ecc"
+      "bytes": 40372,
+      "sha256": "d44df6c68610f4d08da5e5c5c37efe4a572a21d6519cbd70c0fabfe93095cbbb"
     },
     {
       "pack": "games",
       "path": "games/poker.wasm",
-      "bytes": 40059,
-      "sha256": "50c14b4fa3976af5427510ebf3508578892e6c832df9f8d2ed7c85b9d5755aa0"
+      "bytes": 40073,
+      "sha256": "9a80cd61d92a472479cdead39cea2376f60e43adf8ee90006e1103710103d5ca"
     },
     {
       "pack": "games",
       "path": "games/pokervariants.wasm",
-      "bytes": 59895,
-      "sha256": "493c4fd50576f33af17aa40355d07b81edee46805190dfb80b5b67da2919f1a7"
+      "bytes": 59907,
+      "sha256": "5b247aa8f967c75166b363df136453ba79038452763b4d8ef816cbab03846a59"
     },
     {
       "pack": "games",
       "path": "games/risk.wasm",
-      "bytes": 37405,
-      "sha256": "21cc659a688563147e07b03e603dcef2625ffd816cc7240ffdf92d26f5aa8095"
+      "bytes": 37378,
+      "sha256": "65021920307b9e226f64b2ae992a6e50c1b780bbbdf3342e269470d3751ff836"
     },
     {
       "pack": "games",
       "path": "games/royalur.wasm",
-      "bytes": 28662,
-      "sha256": "99b5950deda46f8afb1ae52a96db44b1d8ed5107aa602b7f07169894c5c8c33a"
+      "bytes": 28675,
+      "sha256": "8a1ea2ec2f03eed085733125c62be2130ea27044345d2d8714a8a3aaa7045630"
     },
     {
       "pack": "games",
       "path": "games/rps.wasm",
-      "bytes": 25840,
-      "sha256": "016222dc715895a69bfa1a3727af071a01206b57a9d06d6eb129c494d5cc8de5"
+      "bytes": 25853,
+      "sha256": "faa442912af5cb0c5edbc8872598af8bc63c234c2591f6b31214ab64e4998552"
     },
     {
       "pack": "games",
       "path": "games/setgame.wasm",
-      "bytes": 28724,
-      "sha256": "0ac47fbca9b559a0b670a7078e34ab9a52664248bee22ccca1059e64c654889b"
+      "bytes": 28737,
+      "sha256": "e0feb8f2f025356c00d0da0c648cc4ce4eb24c7d89807ea1333df9807f235387"
     },
     {
       "pack": "games",
       "path": "games/spider.wasm",
-      "bytes": 39581,
-      "sha256": "d5783762e536d6eed9492065a264e7b9a47b8fca6bbecabf998778eb16c54573"
+      "bytes": 39615,
+      "sha256": "aa23ea0da29df325cdf85354cc6b9b9f46cfaed82b45fa4f4c9eee3831cea919"
     },
     {
       "pack": "games",
       "path": "games/sudoku.wasm",
-      "bytes": 29236,
-      "sha256": "8217f6ce5b9474d634f35ead96ef25349d6484fa8001fddb1adc0b3f6a0e7218"
+      "bytes": 29249,
+      "sha256": "f5e1697eb3690a0340ded85f9714b471ef9fda86724e8af015692e4fede72163"
     },
     {
       "pack": "games",
       "path": "games/tictactoe.wasm",
-      "bytes": 26502,
-      "sha256": "c8c597c8abbd1d7c9a6fd7476a07017159ae6800d05f51e49f539fb4a2303d11"
+      "bytes": 26515,
+      "sha256": "6cd358c029ad5cfd72970271759bf680858580e397bb87b21d77547a02c583cb"
     },
     {
       "pack": "games",
       "path": "games/war.wasm",
-      "bytes": 27862,
-      "sha256": "a7c5a873cf863293e3728e5437b350e38d8f970f32aafda7853473d6985adbc4"
+      "bytes": 27875,
+      "sha256": "1444e731037f17088368bf330936de13e0d5a94a168b0ebf92c4fbc7384fac37"
     },
     {
       "pack": "games",
       "path": "games/yahtzee.wasm",
-      "bytes": 29318,
-      "sha256": "a12caefbef0b9cd7b63763c9843b187644a40b11a5546f4a725f9d83e61670b1"
+      "bytes": 29331,
+      "sha256": "037eb5d207a2464759f7e0bf18505ce8d6a97dbc59bf07e34f4c32cbd8b7dfc8"
     },
     {
       "pack": "games",
@@ -295,32 +295,32 @@
     {
       "pack": "c64",
       "path": "c64/c64.wasm",
-      "bytes": 186633,
-      "sha256": "0feea01edbf8edc131d1f29e4f8b96e896245aa27d0655212f9bb98542187b42"
+      "bytes": 186653,
+      "sha256": "419b758f9761b46b8a20c0a2f38ed6d79fc4b33482e89a8be52bbffece12f4e3"
     },
     {
       "pack": "data",
       "path": "data/data.wasm",
-      "bytes": 61830,
-      "sha256": "73201b5046120b94cc2d90397e574338d36ca0567268f71f087a83e9fcd7ddd3"
+      "bytes": 61740,
+      "sha256": "6141a77911b34c875f00045f1df1c6da22761970f3aa1605bf28e8d5ef4a1049"
     },
     {
       "pack": "mathbook",
       "path": "mathbook/mathbook.wasm",
-      "bytes": 53055,
-      "sha256": "c0e281534e94be44519ae8f997b274699c22e08ba6032c5fcc9c8fde21e803c2"
+      "bytes": 52772,
+      "sha256": "05a33bfc6b8e6996e3a9952a72ef6d83e3aa96aa2681e1c72a1307f9fbb45fcc"
     },
     {
       "pack": "safari",
       "path": "safari/safari.wasm",
-      "bytes": 1582698,
-      "sha256": "f0b1d8688e90d7d5feaa0a6defe5c78de60358691f06476f6974331a9717d04e"
+      "bytes": 1582807,
+      "sha256": "55d86821c5ce9af81c98514c66a277b7df1d030cba02a3509d21d3abb368447d"
     },
     {
       "pack": "spark",
       "path": "spark/spark.wasm",
-      "bytes": 36549,
-      "sha256": "d209cab0dcff796768e7b15748ac9685f111aaf4c72d5000ba869d380b2717dd"
+      "bytes": 36562,
+      "sha256": "f1a94751b20503177597a41bfc93f2eda4fd147343aabbb49c7642e305d86230"
     },
     {
       "pack": "starmap",
@@ -331,8 +331,8 @@
     {
       "pack": "starmap",
       "path": "starmap/starmap.wasm",
-      "bytes": 22675,
-      "sha256": "e4c930adaa95b7510f09b31e3a725b48bdbee3fa116739bb9d052420edab459c"
+      "bytes": 22688,
+      "sha256": "d473795c18daa3186464f833552f8d2be248a764734022055556288e8854fba8"
     },
     {
       "pack": "fishtank",
@@ -961,8 +961,8 @@
     {
       "pack": "fireworks",
       "path": "fireworks/web/fireworks-show.wasm",
-      "bytes": 31507,
-      "sha256": "3316a5f4ae0330d2fdf637bbbade1ecf4ac4a2e4923d3e1a91da7ccff6b9ecc2"
+      "bytes": 31256,
+      "sha256": "b5023d9bcc1600e61b05a0260cce60c4cc2dca0823c69c2c8ccc67f4adbe88a0"
     },
     {
       "pack": "globe",
@@ -1003,20 +1003,20 @@
     {
       "pack": "compiler",
       "path": "compile/codex-compiler.wasm",
-      "bytes": 1467166,
-      "sha256": "d9f00660c6da000726092d561b55d004d795cf34d84c96e0a26d59f646374b09"
+      "bytes": 1477028,
+      "sha256": "8d81d61bada264990a459d56a6632101459c4f53296a1b5a337782022384c42f"
     },
     {
       "pack": "compiler",
       "path": "compile/wasm-stdio.wasm",
-      "bytes": 262037,
-      "sha256": "afea8ff893d2743363bff44bede33ddb2455827b12ff177ab4d32d6fa40b2cd8"
+      "bytes": 263510,
+      "sha256": "035888eb16e73563d52f1ba6f7d7c1a8a019105623a8ca9e40888f9c11d4c201"
     },
     {
       "pack": "compiler",
       "path": "compile/wgsl-stdio.wasm",
-      "bytes": 92189,
-      "sha256": "08b96be05867f1f63a5591f84cf4ff11f9aab7e7be701eeefd0906dbd7e509c9"
+      "bytes": 93988,
+      "sha256": "5ab78f54b7256b371e3aa49b38970a59b7a9030bf7be495b8a9eecbf40446fe9"
     }
   ],
   "pages": [
@@ -1379,7 +1379,7 @@
     },
     {
       "path": "compile/prism.html",
-      "sha256": "2c4df154b74fa440ce48598b8606ddf787d7a86c9b0edf44b7acf6af14f24ff4"
+      "sha256": "6a37f70869103cf3fe3472c82e1543f0c2a71c889cbdc924729fe637ed581223"
     },
     {
       "path": "data/index.html",
@@ -1571,15 +1571,15 @@
     },
     {
       "path": "imagegen-browser.html",
-      "sha256": "c781df55a83d01a99c7f9d55173289255803867cb749514e695ff1aa6d3690cc"
+      "sha256": "f3daf16deb31fee9b8876aadb600040017d2d1b7d07a8448f772c4c77e465acf"
     },
     {
       "path": "imagegen.html",
-      "sha256": "24017f950f805181beb19ad997a1217b80c2fac43b8a79add993d607b3b75766"
+      "sha256": "f590eed3954597c28bd9d8b1d21af8b7e4c65a6e3470e0b8cd208f16526db06d"
     },
     {
       "path": "landing.html",
-      "sha256": "7af4c548564d7e109afda6e92fa1e73cab8a7a6cb8e4a655606054bcea1ce856"
+      "sha256": "f603b0f31448736a00b7bf052dd38476e2b7177e06b37d2008285037b5e5b207"
     },
     {
       "path": "mathbook/index.html",
@@ -1599,15 +1599,19 @@
     },
     {
       "path": "sparkstudio.html",
-      "sha256": "da6c55f29f1d5ad83f646db7f59eb983ebcbd9234c3ed1891f05865d420bcecc"
+      "sha256": "8ecdb40613d3960be24f1a30bc3d04024f329e803f8a400cdf66520d433f6883"
     },
     {
       "path": "starmap/index.html",
       "sha256": "6ac89d2904dfbe853395d2a55ad74993da934784020890160b180741edbcd4af"
     },
     {
+      "path": "uoaix-desk.html",
+      "sha256": "29d7e20e885fb18d26c5026ce368411affc39bd9a36e4b31b2edbf928f1de659"
+    },
+    {
       "path": "uoaix.html",
-      "sha256": "df07d026a6b247f6541bf0ee90a03c2e72ae63493b8effdc8dc4d864f90fb113"
+      "sha256": "1ca95e38ef85ddbb5c60f83c38b60be891e80ff9baeeaab19559eaa785d67056"
     }
   ]
 }
